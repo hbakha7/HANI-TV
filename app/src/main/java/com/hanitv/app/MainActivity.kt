@@ -66,7 +66,7 @@ class MainActivity : Activity() {
         urlInput = EditText(this).apply {
             hint = "https://example.com/video.m3u8"
             textSize = 14f
-            singleLine = true
+            
             inputType = InputType.TYPE_CLASS_TEXT or
                 InputType.TYPE_TEXT_VARIATION_URI
             setTextColor(Color.BLACK)
