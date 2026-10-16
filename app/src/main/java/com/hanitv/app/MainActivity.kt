@@ -34,7 +34,8 @@ class MainActivity : Activity() {
         val channel: String,
         val serverName: String,
         val url: String,
-        val referer: String = ""
+        val referer: String = "",
+        val displayName: String = serverName
     )
 
     private val channelGroups = linkedMapOf(
@@ -109,11 +110,6 @@ class MainActivity : Activity() {
             setTypeface(null, Typeface.BOLD)
         })
 
-        // Hidden admin entry: long-press the HANI TV header to open server management.
-        header.setOnLongClickListener {
-            showAdminPinDialog()
-            true
-        }
         root.addView(header)
 
         val scroll = ScrollView(this)
@@ -191,6 +187,8 @@ class MainActivity : Activity() {
         channelGroups.keys.forEach { category ->
             addCategoryCard(category)
         }
+        addSectionCard("⚙️", "إدارة السيرفرات وروابط القنوات") { showServerManager() }
+
         addText("الأفلام والمسلسلات", 21f, white, true, 12)
         addSectionCard("🎬", "تصفح الأفلام والمسلسلات") {
             Toast.makeText(
@@ -208,6 +206,7 @@ class MainActivity : Activity() {
         channelGroups.keys.forEach { category ->
             addCategoryCard(category)
         }
+        addSectionCard("⚙️", "إدارة السيرفرات وروابط القنوات") { showServerManager() }
         addBackButton()
     }
 
@@ -353,58 +352,31 @@ class MainActivity : Activity() {
     private fun openChannel(channelName: String) {
         val options = sources.filter { it.channel == channelName }
         if (options.isEmpty()) {
-            Toast.makeText(this, "لا توجد روابط محفوظة لهذه القناة. يمكن للمدير إضافتها بالضغط مطولاً على العنوان.", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "لا توجد روابط محفوظة لهذه القناة. افتح إدارة السيرفرات لإضافة رابط.", Toast.LENGTH_LONG).show()
             return
         }
-        // Start the first configured source and pass the full list to the player.
-        // The player must read the "servers_json" extra to show in-player server circles.
-        launchPlayer(options.first(), options)
+        launchPlayer(options, 0)
     }
 
-    private fun launchPlayer(source: StreamSource, options: List<StreamSource>) {
-        val serverArray = JSONArray()
-        options.forEachIndexed { index, item ->
-            serverArray.put(JSONObject().apply {
-                put("name", item.serverName.ifBlank { "Server ${index + 1}" })
-                put("url", item.url)
-                put("referer", item.referer)
-            })
-        }
+    private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
+        val safeIndex = selectedIndex.coerceIn(0, options.lastIndex)
+        val source = options[safeIndex]
         val intent = Intent().apply {
             setClassName("com.service103.iptvplayer", "com.service103.iptvplayer.MainActivity")
             putExtra("url", source.url)
             putExtra("name", source.channel)
             if (source.referer.isNotBlank()) putExtra("referer", source.referer)
             putExtra("referrer", source.referer)
-            putExtra("servers_json", serverArray.toString())
-            putExtra("server_count", options.size)
-            putStringArrayListExtra("server_names", ArrayList(options.mapIndexed { index, item -> item.serverName.ifBlank { "Server ${index + 1}" } }))
+            putStringArrayListExtra("server_names", ArrayList(options.map { it.displayName.ifBlank { it.serverName } }))
             putStringArrayListExtra("server_urls", ArrayList(options.map { it.url }))
             putStringArrayListExtra("server_referers", ArrayList(options.map { it.referer }))
+            putExtra("selected_server_index", safeIndex)
         }
         try {
             startActivity(intent)
         } catch (_: Exception) {
             Toast.makeText(this, "تعذر فتح 103 IPTV Player. تأكد من تثبيته وأن اسم الحزمة صحيح.", Toast.LENGTH_LONG).show()
         }
-    }
-
-    private fun showAdminPinDialog() {
-        val input = EditText(this).apply {
-            hint = "رمز الإدارة"
-            inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD
-            setTextColor(white)
-        }
-        AlertDialog.Builder(this)
-            .setTitle("إدارة HANI TV")
-            .setMessage("أدخل رمز الإدارة")
-            .setView(input)
-            .setPositiveButton("دخول") { _, _ ->
-                if (input.text.toString() == "1031") showServerManager()
-                else Toast.makeText(this, "رمز الإدارة غير صحيح", Toast.LENGTH_SHORT).show()
-            }
-            .setNegativeButton("إلغاء", null)
-            .show()
     }
 
     private fun showServerManager() {
@@ -469,7 +441,8 @@ class MainActivity : Activity() {
         }
         val channelNames = channelGroups.values.flatten().map { it.first }
         val channelInput = field("اسم القناة (مثال: SPORT 1)", existing?.channel ?: channelNames.first())
-        val serverInput = field("اسم السيرفر (مثال: السيرفر 2)", existing?.serverName ?: "السيرفر الأساسي")
+        val serverInput = field("اسم السيرفر للإدارة (مثال: السيرفر الاحتياطي)", existing?.serverName ?: "السيرفر الأساسي")
+        val displayNameInput = field("الاسم الذي يظهر داخل المشغّل", existing?.displayName ?: existing?.serverName ?: "السيرفر الأساسي")
         val urlInput = field("رابط البث الكامل", existing?.url ?: "")
         val refererInput = field("Referer (اختياري)", existing?.referer ?: "")
         AlertDialog.Builder(this)
@@ -482,6 +455,7 @@ class MainActivity : Activity() {
                     dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
                         val channel = channelInput.text.toString().trim()
                         val server = serverInput.text.toString().trim()
+                        val displayName = displayNameInput.text.toString().trim()
                         val url = urlInput.text.toString().trim()
                         val referer = refererInput.text.toString().trim()
                         if (channel.isBlank() || server.isBlank() || url.isBlank() ||
@@ -489,7 +463,7 @@ class MainActivity : Activity() {
                             Toast.makeText(this, "أدخل اسم القناة والسيرفر ورابطًا يبدأ بـ http:// أو https://", Toast.LENGTH_LONG).show()
                             return@setOnClickListener
                         }
-                        val item = StreamSource(channel, server, url, referer)
+                        val item = StreamSource(channel, server, url, referer, displayName.ifBlank { server })
                         if (editIndex >= 0 && editIndex < sources.size) sources[editIndex] = item else sources.add(item)
                         saveSources()
                         dialog.dismiss()
@@ -514,7 +488,8 @@ class MainActivity : Activity() {
                 val item = array.getJSONObject(i)
                 sources.add(StreamSource(
                     item.optString("channel"), item.optString("serverName"),
-                    item.optString("url"), item.optString("referer")
+                    item.optString("url"), item.optString("referer"),
+                    item.optString("displayName", item.optString("serverName"))
                 ))
             }
         } catch (_: Exception) {
@@ -530,6 +505,7 @@ class MainActivity : Activity() {
                 put("serverName", source.serverName)
                 put("url", source.url)
                 put("referer", source.referer)
+                put("displayName", source.displayName)
             })
         }
         prefs.edit().putString("sources_json", array.toString()).apply()
