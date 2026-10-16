@@ -378,6 +378,9 @@ class MainActivity : Activity() {
             putExtra("referrer", source.referer)
             putExtra("servers_json", serverArray.toString())
             putExtra("server_count", options.size)
+            putStringArrayListExtra("server_names", ArrayList(options.mapIndexed { index, item -> item.serverName.ifBlank { "Server ${index + 1}" } }))
+            putStringArrayListExtra("server_urls", ArrayList(options.map { it.url }))
+            putStringArrayListExtra("server_referers", ArrayList(options.map { it.referer }))
         }
         try {
             startActivity(intent)
