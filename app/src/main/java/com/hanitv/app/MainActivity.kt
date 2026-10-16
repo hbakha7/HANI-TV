@@ -3,151 +3,84 @@ package com.hanitv.app
 import android.app.Activity
 import android.os.Bundle
 import android.graphics.Color
+import android.graphics.Typeface
 import android.view.Gravity
-import android.view.ViewGroup
 import android.view.View
+import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
-import android.widget.EditText
-import android.widget.Button
 import android.widget.Toast
-import android.text.InputType
-import androidx.media3.common.MediaItem
-import androidx.media3.common.MimeTypes
-import androidx.media3.common.Player
-import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.ui.PlayerView
 
 class MainActivity : Activity() {
 
-    private var player: ExoPlayer? = null
-    private lateinit var playerView: PlayerView
-    private lateinit var urlInput: EditText
+    private val bg = Color.rgb(12, 12, 15)
+    private val panel = Color.rgb(25, 25, 30)
+    private val red = Color.rgb(210, 20, 35)
+    private val white = Color.WHITE
+    private val gray = Color.rgb(175, 175, 185)
 
-    private val categories = listOf(
-        "القنوات الرياضية",
-        "القنوات العربية",
-        "القنوات الإخبارية",
-        "قنوات الأطفال",
-        "قنوات الترفيه",
-        "الفيديوهات"
-    )
+    private lateinit var content: LinearLayout
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        window.statusBarColor = Color.rgb(120, 0, 0)
-        window.navigationBarColor = Color.BLACK
+        window.statusBarColor = bg
+        window.navigationBarColor = bg
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(Color.rgb(245, 245, 245))
+            setBackgroundColor(bg)
+            layoutDirection = View.LAYOUT_DIRECTION_LTR
         }
 
-        val header = TextView(this).apply {
-            text = "HANI TV"
-            textSize = 25f
-            gravity = Gravity.CENTER
-            setTextColor(Color.WHITE)
-            setBackgroundColor(Color.rgb(170, 0, 0))
-            setPadding(16, 18, 16, 18)
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(18), dp(15), dp(18), dp(15))
+            setBackgroundColor(Color.rgb(18, 18, 22))
         }
+
+        val logo = TextView(this).apply {
+            text = "HANI "
+            textSize = 26f
+            setTextColor(white)
+            setTypeface(null, Typeface.BOLD)
+        }
+
+        val logoTv = TextView(this).apply {
+            text = "TV"
+            textSize = 26f
+            setTextColor(red)
+            setTypeface(null, Typeface.BOLD)
+        }
+
+        header.addView(logo)
+        header.addView(logoTv)
+        val spacer = View(this)
+        header.addView(
+            spacer,
+            LinearLayout.LayoutParams(0, 1, 1f)
+        )
+
+        val status = TextView(this).apply {
+            text = "●"
+            textSize = 17f
+            setTextColor(red)
+        }
+        header.addView(status)
         root.addView(header)
 
-        val urlLabel = TextView(this).apply {
-            text = "أدخل رابط الفيديو الذي تملك حق تشغيله"
-            textSize = 16f
-            setTextColor(Color.rgb(120, 0, 0))
-            setPadding(12, 10, 12, 6)
-        }
-        root.addView(urlLabel)
-
-        urlInput = EditText(this).apply {
-            hint = "https://example.com/video.m3u8"
-            textSize = 14f
-            
-            inputType = InputType.TYPE_CLASS_TEXT or
-                InputType.TYPE_TEXT_VARIATION_URI
-            setTextColor(Color.BLACK)
-            setHintTextColor(Color.GRAY)
-            setPadding(12, 8, 12, 8)
-            setBackgroundColor(Color.WHITE)
+        val scroll = ScrollView(this).apply {
+            isFillViewport = true
         }
 
-        root.addView(
-            urlInput,
-            LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-            ).apply {
-                setMargins(10, 0, 10, 8)
-            }
-        )
-
-        val playButton = Button(this).apply {
-            text = "تشغيل الفيديو"
-            setTextColor(Color.WHITE)
-            setBackgroundColor(Color.rgb(170, 0, 0))
-            setOnClickListener {
-                playVideo(urlInput.text.toString().trim())
-            }
-        }
-
-        root.addView(
-            playButton,
-            LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-            ).apply {
-                setMargins(10, 0, 10, 8)
-            }
-        )
-
-        playerView = PlayerView(this).apply {
-            useController = true
-            setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
-            setBackgroundColor(Color.BLACK)
-        }
-
-        root.addView(
-            playerView,
-            LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                dp(230)
-            ).apply {
-                setMargins(0, 0, 0, 8)
-            }
-        )
-
-        val scroll = ScrollView(this)
-        val list = LinearLayout(this).apply {
+        content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(10, 8, 10, 12)
+            setPadding(dp(16), dp(16), dp(16), dp(24))
         }
 
-        categories.forEach { category ->
-            val item = TextView(this).apply {
-                text = category
-                textSize = 20f
-                gravity = Gravity.CENTER
-                setTextColor(Color.rgb(140, 0, 0))
-                setBackgroundColor(Color.WHITE)
-                setPadding(12, 18, 12, 18)
-            }
-
-            val params = LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-            ).apply {
-                bottomMargin = 8
-            }
-
-            list.addView(item, params)
-        }
-
-        scroll.addView(list)
-
+        scroll.addView(content)
         root.addView(
             scroll,
             LinearLayout.LayoutParams(
@@ -158,60 +91,240 @@ class MainActivity : Activity() {
         )
 
         setContentView(root)
+        showHome()
     }
 
-    private fun playVideo(url: String) {
-        if (!url.startsWith("https://") &&
-            !url.startsWith("http://")) {
-            Toast.makeText(
-                this,
-                "أدخل رابط فيديو صحيحًا يبدأ بـ http أو https",
-                Toast.LENGTH_LONG
-            ).show()
-            return
+    private fun showHome() {
+        content.removeAllViews()
+
+        addText("مرحباً بك في HANI TV", 23f, white, true)
+        addText(
+            "وجهتك لمتابعة المحتوى المفضل لديك",
+            14f, gray, false, 6
+        )
+
+        val hero = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(20), dp(24), dp(20), dp(24))
+            setBackgroundColor(Color.rgb(75, 12, 22))
         }
 
-        try {
-            if (player == null) {
-                player = ExoPlayer.Builder(this).build()
-                playerView.player = player
-            }
+        hero.addView(TextView(this).apply {
+            text = "HANI TV"
+            textSize = 32f
+            setTextColor(white)
+            setTypeface(null, Typeface.BOLD)
+        })
 
-            val mediaItemBuilder = MediaItem.Builder().setUri(url)
+        hero.addView(TextView(this).apply {
+            text = "عالم من الترفيه في مكان واحد"
+            textSize = 17f
+            setTextColor(white)
+            setPadding(0, dp(8), 0, dp(14))
+        })
 
-            if (url.substringBefore("?")
-                    .lowercase()
-                    .endsWith(".m3u8")) {
-                mediaItemBuilder.setMimeType(MimeTypes.APPLICATION_M3U8)
-            }
-
-            player?.apply {
-                setMediaItem(mediaItemBuilder.build())
-                prepare()
-                playWhenReady = true
-            }
-        } catch (e: Exception) {
-            Toast.makeText(
-                this,
-                "تعذر تشغيل الرابط: ${e.message ?: "خطأ غير معروف"}",
-                Toast.LENGTH_LONG
-            ).show()
+        val explore = makeButton("استكشف الأقسام")
+        explore.setOnClickListener {
+            showCategories()
         }
+        hero.addView(explore)
+
+        content.addView(
+            hero,
+            LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply {
+                bottomMargin = dp(24)
+            }
+        )
+
+        addText("الأقسام الرئيسية", 21f, white, true, 4)
+
+        val sections = listOf(
+            "⚽" to "القنوات الرياضية",
+            "📺" to "القنوات العربية",
+            "🌍" to "القنوات الإخبارية",
+            "🧸" to "قنوات الأطفال",
+            "🎭" to "قنوات الترفيه",
+            "🎬" to "الأفلام والمسلسلات"
+        )
+
+        sections.forEach { (emoji, title) ->
+            addSectionCard(emoji, title) {
+                showSection(title)
+            }
+        }
+
+        addText(
+            "اختر قسماً للمتابعة",
+            13f, gray, false, 16
+        )
+    }
+
+    private fun showCategories() {
+        content.removeAllViews()
+        addText("جميع الأقسام", 24f, white, true, 12)
+
+        val sections = listOf(
+            "القنوات الرياضية",
+            "القنوات العربية",
+            "القنوات الإخبارية",
+            "قنوات الأطفال",
+            "قنوات الترفيه",
+            "الأفلام والمسلسلات"
+        )
+
+        sections.forEach { title ->
+            addSectionCard("▶", title) {
+                showSection(title)
+            }
+        }
+
+        addBackButton()
+    }
+
+    private fun showSection(title: String) {
+        content.removeAllViews()
+        addText(title, 24f, white, true, 12)
+
+        val message = TextView(this).apply {
+            text = "سيُضاف محتوى هذا القسم عند ربط مصادر المحتوى."
+            textSize = 16f
+            setTextColor(gray)
+            gravity = Gravity.CENTER
+            setPadding(dp(20), dp(28), dp(20), dp(28))
+            setBackgroundColor(panel)
+        }
+
+        content.addView(
+            message,
+            LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply {
+                bottomMargin = dp(16)
+            }
+        )
+
+        addText(
+            "لا توجد قنوات أو فيديوهات مضافة بعد.",
+            14f, gray, false, 8
+        )
+
+        addBackButton()
+    }
+
+    private fun addSectionCard(
+        emoji: String,
+        title: String,
+        action: () -> Unit
+    ) {
+        val card = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(16), dp(18), dp(16), dp(18))
+            setBackgroundColor(panel)
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { action() }
+        }
+
+        val icon = TextView(this).apply {
+            text = emoji
+            textSize = 25f
+            gravity = Gravity.CENTER
+        }
+
+        card.addView(
+            icon,
+            LinearLayout.LayoutParams(dp(45), dp(42))
+        )
+
+        val label = TextView(this).apply {
+            text = title
+            textSize = 17f
+            setTextColor(white)
+            setTypeface(null, Typeface.BOLD)
+            setPadding(dp(10), 0, 0, 0)
+        }
+
+        card.addView(
+            label,
+            LinearLayout.LayoutParams(0, -2, 1f)
+        )
+
+        card.addView(TextView(this).apply {
+            text = "‹"
+            textSize = 28f
+            setTextColor(red)
+        })
+
+        content.addView(
+            card,
+            LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply {
+                bottomMargin = dp(10)
+            }
+        )
+    }
+
+    private fun addText(
+        value: String,
+        size: Float,
+        color: Int,
+        bold: Boolean,
+        top: Int = 0
+    ) {
+        val text = TextView(this).apply {
+            this.text = value
+            textSize = size
+            setTextColor(color)
+            if (bold) setTypeface(null, Typeface.BOLD)
+            setPadding(0, dp(top), 0, dp(8))
+        }
+
+        content.addView(text)
+    }
+
+    private fun makeButton(label: String): TextView {
+        return TextView(this).apply {
+            text = label
+            textSize = 16f
+            gravity = Gravity.CENTER
+            setTextColor(white)
+            setTypeface(null, Typeface.BOLD)
+            setPadding(dp(20), dp(12), dp(20), dp(12))
+            setBackgroundColor(red)
+            isClickable = true
+            isFocusable = true
+        }
+    }
+
+    private fun addBackButton() {
+        val back = makeButton("العودة للرئيسية")
+        back.setOnClickListener { showHome() }
+
+        content.addView(
+            back,
+            LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply {
+                topMargin = dp(12)
+            }
+        )
     }
 
     private fun dp(value: Int): Int {
         return (value * resources.displayMetrics.density).toInt()
     }
 
-    override fun onStop() {
-        super.onStop()
-        player?.pause()
-    }
-
-    override fun onDestroy() {
-        playerView.player = null
-        player?.release()
-        player = null
-        super.onDestroy()
+    @Deprecated("Deprecated in Android")
+    override fun onBackPressed() {
+        showHome()
     }
 }
