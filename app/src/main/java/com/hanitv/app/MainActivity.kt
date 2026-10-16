@@ -109,6 +109,11 @@ class MainActivity : Activity() {
             setTypeface(null, Typeface.BOLD)
         })
 
+        // Hidden admin entry: long-press the HANI TV header to open server management.
+        header.setOnLongClickListener {
+            showAdminPinDialog()
+            true
+        }
         root.addView(header)
 
         val scroll = ScrollView(this)
@@ -186,8 +191,6 @@ class MainActivity : Activity() {
         channelGroups.keys.forEach { category ->
             addCategoryCard(category)
         }
-        addSectionCard("⚙️", "إدارة السيرفرات وروابط القنوات") { showServerManager() }
-
         addText("الأفلام والمسلسلات", 21f, white, true, 12)
         addSectionCard("🎬", "تصفح الأفلام والمسلسلات") {
             Toast.makeText(
@@ -205,7 +208,6 @@ class MainActivity : Activity() {
         channelGroups.keys.forEach { category ->
             addCategoryCard(category)
         }
-        addSectionCard("⚙️", "إدارة السيرفرات وروابط القنوات") { showServerManager() }
         addBackButton()
     }
 
@@ -351,35 +353,55 @@ class MainActivity : Activity() {
     private fun openChannel(channelName: String) {
         val options = sources.filter { it.channel == channelName }
         if (options.isEmpty()) {
-            Toast.makeText(this, "لا توجد روابط محفوظة لهذه القناة. افتح إدارة السيرفرات لإضافة رابط.", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "لا توجد روابط محفوظة لهذه القناة. يمكن للمدير إضافتها بالضغط مطولاً على العنوان.", Toast.LENGTH_LONG).show()
             return
         }
-        if (options.size == 1) {
-            launchPlayer(options[0])
-            return
-        }
-        val labels = options.map { "${it.serverName}  •  ${it.url}" }.toTypedArray()
-        AlertDialog.Builder(this)
-            .setTitle("اختر سيرفر ${channelName}")
-            .setItems(labels) { _, which -> launchPlayer(options[which]) }
-            .setNegativeButton("إلغاء", null)
-            .show()
+        // Start the first configured source and pass the full list to the player.
+        // The player must read the "servers_json" extra to show in-player server circles.
+        launchPlayer(options.first(), options)
     }
 
-    private fun launchPlayer(source: StreamSource) {
+    private fun launchPlayer(source: StreamSource, options: List<StreamSource>) {
+        val serverArray = JSONArray()
+        options.forEachIndexed { index, item ->
+            serverArray.put(JSONObject().apply {
+                put("name", item.serverName.ifBlank { "Server ${index + 1}" })
+                put("url", item.url)
+                put("referer", item.referer)
+            })
+        }
         val intent = Intent().apply {
             setClassName("com.service103.iptvplayer", "com.service103.iptvplayer.MainActivity")
             putExtra("url", source.url)
             putExtra("name", source.channel)
             if (source.referer.isNotBlank()) putExtra("referer", source.referer)
-            // Alternate key names help compatibility with player builds that read a URL extra.
             putExtra("referrer", source.referer)
+            putExtra("servers_json", serverArray.toString())
+            putExtra("server_count", options.size)
         }
         try {
             startActivity(intent)
         } catch (_: Exception) {
             Toast.makeText(this, "تعذر فتح 103 IPTV Player. تأكد من تثبيته وأن اسم الحزمة صحيح.", Toast.LENGTH_LONG).show()
         }
+    }
+
+    private fun showAdminPinDialog() {
+        val input = EditText(this).apply {
+            hint = "رمز الإدارة"
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD
+            setTextColor(white)
+        }
+        AlertDialog.Builder(this)
+            .setTitle("إدارة HANI TV")
+            .setMessage("أدخل رمز الإدارة")
+            .setView(input)
+            .setPositiveButton("دخول") { _, _ ->
+                if (input.text.toString() == "1031") showServerManager()
+                else Toast.makeText(this, "رمز الإدارة غير صحيح", Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton("إلغاء", null)
+            .show()
     }
 
     private fun showServerManager() {
