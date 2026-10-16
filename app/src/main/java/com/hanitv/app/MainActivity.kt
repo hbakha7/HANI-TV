@@ -293,13 +293,38 @@ class MainActivity : Activity() {
             setBackgroundColor(panel)
             isClickable = true
             isFocusable = true
-            setOnClickListener {
-                Toast.makeText(
-                    this@MainActivity,
-                    "القناة تجريبية: ${channel.first}",
-                    Toast.LENGTH_SHORT
-                ).show()
-            }
+            
+setOnClickListener {
+    if (channel.first == "SPORT 1") {
+        val intent = android.content.Intent().apply {
+            setClassName(
+                "com.service103.iptvplayer",
+                "com.service103.iptvplayer.MainActivity"
+            )
+            putExtra(
+                "url",
+                "http://mega.leptis.live/live/SQ2EJ94G/Q7VWF5PH/1236874.ts"
+            )
+            putExtra("name", "SPORT 1")
+        }
+
+        try {
+            startActivity(intent)
+        } catch (e: android.content.ActivityNotFoundException) {
+            Toast.makeText(
+                this@MainActivity,
+                "تطبيق 103 IPTV Player غير مثبت",
+                Toast.LENGTH_LONG
+            ).show()
+        }
+    } else {
+        Toast.makeText(
+            this@MainActivity,
+            "القناة تجريبية: ${channel.first}",
+            Toast.LENGTH_SHORT
+        ).show()
+    }
+
         }
 
         val logo = TextView(this).apply {
