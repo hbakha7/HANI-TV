@@ -11,6 +11,12 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
+import android.widget.EditText
+import android.widget.Button
+import android.app.AlertDialog
+import android.content.Intent
+import org.json.JSONArray
+import org.json.JSONObject
 
 class MainActivity : Activity() {
 
@@ -21,6 +27,15 @@ class MainActivity : Activity() {
     private val gray = Color.rgb(175, 175, 185)
 
     private lateinit var content: LinearLayout
+    private val prefs by lazy { getSharedPreferences("hani_tv_sources", MODE_PRIVATE) }
+    private val sources = mutableListOf<StreamSource>()
+
+    private data class StreamSource(
+        val channel: String,
+        val serverName: String,
+        val url: String,
+        val referer: String = ""
+    )
 
     private val channelGroups = linkedMapOf(
         "القنوات الرياضية" to listOf(
@@ -114,6 +129,12 @@ class MainActivity : Activity() {
         )
 
         setContentView(root)
+        loadSources()
+        // Keep the currently configured SPORT 1 source as a starting example.
+        if (sources.none { it.channel == "SPORT 1" }) {
+            sources.add(StreamSource("SPORT 1", "السيرفر الأساسي", "http://mega.leptis.live/live/SQ2EJ94G/Q7VWF5PH/1236874.ts"))
+            saveSources()
+        }
         showHome()
     }
 
@@ -165,6 +186,7 @@ class MainActivity : Activity() {
         channelGroups.keys.forEach { category ->
             addCategoryCard(category)
         }
+        addSectionCard("⚙️", "إدارة السيرفرات وروابط القنوات") { showServerManager() }
 
         addText("الأفلام والمسلسلات", 21f, white, true, 12)
         addSectionCard("🎬", "تصفح الأفلام والمسلسلات") {
@@ -183,7 +205,7 @@ class MainActivity : Activity() {
         channelGroups.keys.forEach { category ->
             addCategoryCard(category)
         }
-
+        addSectionCard("⚙️", "إدارة السيرفرات وروابط القنوات") { showServerManager() }
         addBackButton()
     }
 
@@ -293,37 +315,7 @@ class MainActivity : Activity() {
             setBackgroundColor(panel)
             isClickable = true
             isFocusable = true
-            setOnClickListener {
-                if (channel.first == "SPORT 1") {
-                    val intent = android.content.Intent().apply {
-                        setClassName(
-                            "com.service103.iptvplayer",
-                            "com.service103.iptvplayer.MainActivity"
-                        )
-                        putExtra(
-                            "url",
-                            "http://mega.leptis.live/live/SQ2EJ94G/Q7VWF5PH/1236874.ts"
-                        )
-                        putExtra("name", "SPORT 1")
-                    }
-
-                    try {
-                        startActivity(intent)
-                    } catch (e: android.content.ActivityNotFoundException) {
-                        Toast.makeText(
-                            this@MainActivity,
-                            "تطبيق 103 IPTV Player غير مثبت",
-                            Toast.LENGTH_LONG
-                        ).show()
-                    }
-                } else {
-                    Toast.makeText(
-                        this@MainActivity,
-                        "القناة تجريبية: ${channel.first}",
-                        Toast.LENGTH_SHORT
-                    ).show()
-                }
-            }
+            setOnClickListener { openChannel(channel.first) }
         }
 
         val logo = TextView(this).apply {
@@ -354,6 +346,168 @@ class MainActivity : Activity() {
                 setMargins(dp(4), 0, dp(4), 0)
             }
         )
+    }
+
+    private fun openChannel(channelName: String) {
+        val options = sources.filter { it.channel == channelName }
+        if (options.isEmpty()) {
+            Toast.makeText(this, "لا توجد روابط محفوظة لهذه القناة. افتح إدارة السيرفرات لإضافة رابط.", Toast.LENGTH_LONG).show()
+            return
+        }
+        if (options.size == 1) {
+            launchPlayer(options[0])
+            return
+        }
+        val labels = options.map { "${it.serverName}  •  ${it.url}" }.toTypedArray()
+        AlertDialog.Builder(this)
+            .setTitle("اختر سيرفر ${channelName}")
+            .setItems(labels) { _, which -> launchPlayer(options[which]) }
+            .setNegativeButton("إلغاء", null)
+            .show()
+    }
+
+    private fun launchPlayer(source: StreamSource) {
+        val intent = Intent().apply {
+            setClassName("com.service103.iptvplayer", "com.service103.iptvplayer.MainActivity")
+            putExtra("url", source.url)
+            putExtra("name", source.channel)
+            if (source.referer.isNotBlank()) putExtra("referer", source.referer)
+            // Alternate key names help compatibility with player builds that read a URL extra.
+            putExtra("referrer", source.referer)
+        }
+        try {
+            startActivity(intent)
+        } catch (_: Exception) {
+            Toast.makeText(this, "تعذر فتح 103 IPTV Player. تأكد من تثبيته وأن اسم الحزمة صحيح.", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun showServerManager() {
+        content.removeAllViews()
+        addText("إدارة السيرفرات", 24f, white, true)
+        addText("أضف رابطًا لكل قناة ولكل سيرفر. تُحفظ الروابط على هذا الجهاز.", 14f, gray, false)
+        val add = makeButton("＋ إضافة سيرفر / رابط قناة")
+        add.setOnClickListener { showAddSourceDialog() }
+        content.addView(add, fullWidthParams())
+
+        if (sources.isEmpty()) addText("لا توجد روابط محفوظة بعد.", 14f, gray, false, 12)
+        sources.forEachIndexed { index, source ->
+            val card = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(dp(12), dp(12), dp(12), dp(12))
+                setBackgroundColor(panel)
+            }
+            card.addView(TextView(this).apply {
+                text = "${source.channel} — ${source.serverName}"
+                textSize = 16f
+                setTextColor(white)
+                setTypeface(null, Typeface.BOLD)
+            })
+            card.addView(TextView(this).apply {
+                text = source.url
+                textSize = 12f
+                setTextColor(gray)
+                setPadding(0, dp(6), 0, dp(8))
+            })
+            val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+            val edit = makeButton("تعديل")
+            edit.setOnClickListener { showAddSourceDialog(source, index) }
+            val delete = makeButton("حذف")
+            delete.setOnClickListener {
+                AlertDialog.Builder(this@MainActivity)
+                    .setMessage("حذف رابط ${source.channel} من ${source.serverName}؟")
+                    .setPositiveButton("حذف") { _, _ -> sources.removeAt(index); saveSources(); showServerManager() }
+                    .setNegativeButton("إلغاء", null).show()
+            }
+            actions.addView(edit, LinearLayout.LayoutParams(0, -2, 1f).apply { setMargins(0, 0, dp(5), 0) })
+            actions.addView(delete, LinearLayout.LayoutParams(0, -2, 1f).apply { setMargins(dp(5), 0, 0, 0) })
+            card.addView(actions)
+            content.addView(card, fullWidthParams().apply { topMargin = dp(10) })
+        }
+        addBackButton()
+    }
+
+    private fun showAddSourceDialog(existing: StreamSource? = null, editIndex: Int = -1) {
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(8), dp(20), 0)
+        }
+        fun field(hint: String, value: String = ""): EditText {
+            return EditText(this).apply {
+                this.hint = hint
+                setText(value)
+                setTextColor(white)
+                setHintTextColor(gray)
+                textSize = 15f
+                setSingleLine(true)
+            }.also { box.addView(it) }
+        }
+        val channelNames = channelGroups.values.flatten().map { it.first }
+        val channelInput = field("اسم القناة (مثال: SPORT 1)", existing?.channel ?: channelNames.first())
+        val serverInput = field("اسم السيرفر (مثال: السيرفر 2)", existing?.serverName ?: "السيرفر الأساسي")
+        val urlInput = field("رابط البث الكامل", existing?.url ?: "")
+        val refererInput = field("Referer (اختياري)", existing?.referer ?: "")
+        AlertDialog.Builder(this)
+            .setTitle(if (existing == null) "إضافة رابط" else "تعديل الرابط")
+            .setView(box)
+            .setPositiveButton("حفظ", null)
+            .setNegativeButton("إلغاء", null)
+            .create().also { dialog ->
+                dialog.setOnShowListener {
+                    dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                        val channel = channelInput.text.toString().trim()
+                        val server = serverInput.text.toString().trim()
+                        val url = urlInput.text.toString().trim()
+                        val referer = refererInput.text.toString().trim()
+                        if (channel.isBlank() || server.isBlank() || url.isBlank() ||
+                            !(url.startsWith("http://") || url.startsWith("https://"))) {
+                            Toast.makeText(this, "أدخل اسم القناة والسيرفر ورابطًا يبدأ بـ http:// أو https://", Toast.LENGTH_LONG).show()
+                            return@setOnClickListener
+                        }
+                        val item = StreamSource(channel, server, url, referer)
+                        if (editIndex >= 0 && editIndex < sources.size) sources[editIndex] = item else sources.add(item)
+                        saveSources()
+                        dialog.dismiss()
+                        showServerManager()
+                    }
+                }
+                dialog.show()
+            }
+    }
+
+    private fun fullWidthParams() = LinearLayout.LayoutParams(
+        ViewGroup.LayoutParams.MATCH_PARENT,
+        ViewGroup.LayoutParams.WRAP_CONTENT
+    )
+
+    private fun loadSources() {
+        sources.clear()
+        val raw = prefs.getString("sources_json", "[]") ?: "[]"
+        try {
+            val array = JSONArray(raw)
+            for (i in 0 until array.length()) {
+                val item = array.getJSONObject(i)
+                sources.add(StreamSource(
+                    item.optString("channel"), item.optString("serverName"),
+                    item.optString("url"), item.optString("referer")
+                ))
+            }
+        } catch (_: Exception) {
+            sources.clear()
+        }
+    }
+
+    private fun saveSources() {
+        val array = JSONArray()
+        sources.forEach { source ->
+            array.put(JSONObject().apply {
+                put("channel", source.channel)
+                put("serverName", source.serverName)
+                put("url", source.url)
+                put("referer", source.referer)
+            })
+        }
+        prefs.edit().putString("sources_json", array.toString()).apply()
     }
 
     private fun addSectionCard(
