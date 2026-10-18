@@ -29,7 +29,7 @@ android {
 dependencies {
     implementation("androidx.media3:media3-exoplayer:1.5.1")
     implementation("androidx.media3:media3-ui:1.5.1")
-
+implementation("androidx.media3:media3-exoplayer-hls:1.5.1")
     implementation(platform("com.google.firebase:firebase-bom:34.3.0"))
     implementation("com.google.firebase:firebase-analytics")
     implementation("com.google.firebase:firebase-database")
