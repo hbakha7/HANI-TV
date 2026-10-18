@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "5003007258",
+    "project_id": "hani-tv-b159f",
+    "storage_bucket": "hani-tv-b159f.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:5003007258:android:312f1a4c6cd7857c76c8a3",
+        "android_client_info": {
+          "package_name": "com.hanitv.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAE_Gt6yX2Q0WAg3JiW88wRrnJZvL_oX2c"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
