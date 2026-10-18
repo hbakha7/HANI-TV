@@ -6,7 +6,7 @@
     <application
         android:label="HANI TV"
         android:allowBackup="false"
-        android:theme="@android:style/Theme.Material.NoActionBar"
+        android:theme="@style/Theme.AppCompat.NoActionBar"
         android:usesCleartextTraffic="true">
 
         <activity
