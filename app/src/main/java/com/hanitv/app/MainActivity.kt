@@ -2,6 +2,7 @@ package com.hanitv.app
 
 import android.app.Activity
 import android.os.Bundle
+import android.os.SystemClock
 import android.graphics.Color
 import android.graphics.Typeface
 import android.view.Gravity
@@ -44,6 +45,8 @@ class MainActivity : Activity() {
     // This UID identifies the single Firebase account allowed to change the shared list.
     private val adminUid = "MDbUZT4SdPfxBqqfj5MNeNBtAW23"
     private var showingServerManager = false
+    private var adminTapCount = 0
+    private var lastAdminTapAt = 0L
 
     private data class StreamSource(
         val channel: String,
@@ -109,6 +112,9 @@ class MainActivity : Activity() {
             textSize = 26f
             setTextColor(white)
             setTypeface(null, Typeface.BOLD)
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { handleHiddenAdminTap() }
         })
 
         header.addView(TextView(this).apply {
@@ -116,6 +122,9 @@ class MainActivity : Activity() {
             textSize = 26f
             setTextColor(red)
             setTypeface(null, Typeface.BOLD)
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { handleHiddenAdminTap() }
         })
 
         val spacer = View(this)
@@ -171,6 +180,18 @@ class MainActivity : Activity() {
             }
     }
 
+    // Hidden admin entry: tap the HANI TV title seven times within 3 seconds.
+    private fun handleHiddenAdminTap() {
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastAdminTapAt > 3000L) adminTapCount = 0
+        lastAdminTapAt = now
+        adminTapCount++
+        if (adminTapCount >= 7) {
+            adminTapCount = 0
+            requireAdmin { showServerManager() }
+        }
+    }
+
     private fun showHome() {
         showingServerManager = false
         content.removeAllViews()
@@ -220,7 +241,6 @@ class MainActivity : Activity() {
         channelGroups.keys.forEach { category ->
             addCategoryCard(category)
         }
-        addSectionCard("⚙️", "إدارة السيرفرات وروابط القنوات") { showServerManager() }
 
         addText("الأفلام والمسلسلات", 21f, white, true, 12)
         addSectionCard("🎬", "تصفح الأفلام والمسلسلات") {
@@ -240,7 +260,6 @@ class MainActivity : Activity() {
         channelGroups.keys.forEach { category ->
             addCategoryCard(category)
         }
-        addSectionCard("⚙️", "إدارة السيرفرات وروابط القنوات") { showServerManager() }
         addBackButton()
     }
 
