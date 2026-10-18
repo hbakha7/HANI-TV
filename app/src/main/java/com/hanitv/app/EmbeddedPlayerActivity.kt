@@ -2153,7 +2153,7 @@ private fun showInformationPage(pageTitle: String, pageText: String) {
     }
     val scroll = ScrollView(this).apply {
         setBackgroundColor(bg)
-        addView(textView, android.widget.ScrollView.LayoutParams(-1, -2))
+        addView(textView, android.view.ViewGroup.LayoutParams(-1, -2))
     }
     AlertDialog.Builder(this)
         .setTitle(pageTitle)
