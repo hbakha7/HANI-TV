@@ -2,7 +2,6 @@ package com.hanitv.app
 
 import android.app.Activity
 import android.os.Bundle
-import android.os.SystemClock
 import android.graphics.Color
 import android.graphics.Typeface
 import android.view.Gravity
@@ -14,6 +13,18 @@ import android.widget.TextView
 import android.widget.Toast
 import android.widget.EditText
 import android.widget.Button
+import android.widget.FrameLayout
+import android.widget.ProgressBar
+import android.app.Dialog
+import android.os.Handler
+import android.os.Looper
+import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.Player
+import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.ui.PlayerView
 import android.text.InputType
 import android.app.AlertDialog
 import android.content.Intent
@@ -45,8 +56,16 @@ class MainActivity : Activity() {
     // This UID identifies the single Firebase account allowed to change the shared list.
     private val adminUid = "MDbUZT4SdPfxBqqfj5MNeNBtAW23"
     private var showingServerManager = false
-    private var adminTapCount = 0
-    private var lastAdminTapAt = 0L
+    private var embeddedPlayer: ExoPlayer? = null
+    private var embeddedPlayerView: PlayerView? = null
+    private var embeddedDialog: Dialog? = null
+    private var loadingIndicator: ProgressBar? = null
+    private var currentOptions: List<StreamSource> = emptyList()
+    private var currentServerIndex = 0
+    private var failoverCount = 0
+    private val playerHandler = Handler(Looper.getMainLooper())
+    private var startupTimeout: Runnable? = null
+    private var failoverPending = false
 
     private data class StreamSource(
         val channel: String,
@@ -112,9 +131,6 @@ class MainActivity : Activity() {
             textSize = 26f
             setTextColor(white)
             setTypeface(null, Typeface.BOLD)
-            isClickable = true
-            isFocusable = true
-            setOnClickListener { handleHiddenAdminTap() }
         })
 
         header.addView(TextView(this).apply {
@@ -122,9 +138,6 @@ class MainActivity : Activity() {
             textSize = 26f
             setTextColor(red)
             setTypeface(null, Typeface.BOLD)
-            isClickable = true
-            isFocusable = true
-            setOnClickListener { handleHiddenAdminTap() }
         })
 
         val spacer = View(this)
@@ -180,18 +193,6 @@ class MainActivity : Activity() {
             }
     }
 
-    // Hidden admin entry: tap the HANI TV title seven times within 3 seconds.
-    private fun handleHiddenAdminTap() {
-        val now = SystemClock.elapsedRealtime()
-        if (now - lastAdminTapAt > 3000L) adminTapCount = 0
-        lastAdminTapAt = now
-        adminTapCount++
-        if (adminTapCount >= 7) {
-            adminTapCount = 0
-            requireAdmin { showServerManager() }
-        }
-    }
-
     private fun showHome() {
         showingServerManager = false
         content.removeAllViews()
@@ -241,6 +242,7 @@ class MainActivity : Activity() {
         channelGroups.keys.forEach { category ->
             addCategoryCard(category)
         }
+        addSectionCard("⚙️", "إدارة السيرفرات وروابط القنوات") { showServerManager() }
 
         addText("الأفلام والمسلسلات", 21f, white, true, 12)
         addSectionCard("🎬", "تصفح الأفلام والمسلسلات") {
@@ -260,6 +262,7 @@ class MainActivity : Activity() {
         channelGroups.keys.forEach { category ->
             addCategoryCard(category)
         }
+        addSectionCard("⚙️", "إدارة السيرفرات وروابط القنوات") { showServerManager() }
         addBackButton()
     }
 
@@ -413,25 +416,175 @@ class MainActivity : Activity() {
     }
 
     private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
-        val safeIndex = selectedIndex.coerceIn(0, options.lastIndex)
-        val source = options[safeIndex]
-        val intent = Intent().apply {
-            setClassName("com.service103.iptvplayer", "com.service103.iptvplayer.MainActivity")
-            putExtra("url", source.url)
-            putExtra("name", source.channel)
-            if (source.referer.isNotBlank()) putExtra("referer", source.referer)
-            putExtra("referrer", source.referer)
-            putStringArrayListExtra("server_names", ArrayList(options.map { it.displayName.ifBlank { it.serverName } }))
-            putStringArrayListExtra("server_urls", ArrayList(options.map { it.url }))
-            putStringArrayListExtra("server_referers", ArrayList(options.map { it.referer }))
-            putExtra("selected_server_index", safeIndex)
-        }
-        try {
-            startActivity(intent)
-        } catch (_: Exception) {
-            Toast.makeText(this, "تعذر فتح 103 IPTV Player. تأكد من تثبيته وأن اسم الحزمة صحيح.", Toast.LENGTH_LONG).show()
-        }
+        if (options.isEmpty()) return
+        currentOptions = options
+        currentServerIndex = selectedIndex.coerceIn(0, options.lastIndex)
+        openEmbeddedPlayer()
     }
+
+    /** Plays channel streams inside HANI TV; the separate 103 IPTV Player is not needed. */
+    private fun openEmbeddedPlayer() {
+        closeEmbeddedPlayer()
+        val source = currentOptions.getOrNull(currentServerIndex) ?: return
+        val dialog = Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen)
+        embeddedDialog = dialog
+
+        val root = FrameLayout(this).apply { setBackgroundColor(Color.BLACK) }
+        val video = PlayerView(this).apply {
+            useController = true
+            setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
+            setBackgroundColor(Color.BLACK)
+        }
+        embeddedPlayerView = video
+        root.addView(video, FrameLayout.LayoutParams(-1, -1))
+
+        val overlay = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(12), dp(12), dp(12), dp(12))
+            setBackgroundColor(Color.argb(150, 0, 0, 0))
+        }
+        val top = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        top.addView(TextView(this).apply {
+            text = source.channel
+            textSize = 18f
+            setTextColor(Color.WHITE)
+            setTypeface(null, Typeface.BOLD)
+        }, LinearLayout.LayoutParams(0, dp(44), 1f))
+        val close = Button(this).apply {
+            text = "✕"
+            setTextColor(Color.WHITE)
+            setBackgroundColor(Color.TRANSPARENT)
+            setOnClickListener { dialog.dismiss() }
+        }
+        top.addView(close, LinearLayout.LayoutParams(dp(48), dp(44)))
+        overlay.addView(top)
+
+        val serverRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        if (currentOptions.size > 1) {
+            serverRow.addView(TextView(this).apply {
+                text = "السيرفرات"
+                textSize = 13f
+                setTextColor(Color.WHITE)
+            })
+            currentOptions.forEachIndexed { index, item ->
+                val button = Button(this).apply {
+                    text = item.displayName.ifBlank { item.serverName }.ifBlank { "${index + 1}" }
+                    textSize = 11f
+                    setTextColor(Color.WHITE)
+                    setBackgroundColor(if (index == currentServerIndex) Color.rgb(25, 150, 235) else Color.DKGRAY)
+                    setOnClickListener {
+                        currentServerIndex = index
+                        openEmbeddedPlayer()
+                    }
+                }
+                serverRow.addView(button, LinearLayout.LayoutParams(0, dp(42), 1f).apply {
+                    setMargins(dp(2), 0, dp(2), 0)
+                })
+            }
+            overlay.addView(serverRow)
+        }
+        root.addView(overlay, FrameLayout.LayoutParams(-1, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP))
+
+        val spinner = ProgressBar(this).apply {
+            isIndeterminate = true
+            indeterminateTintList = android.content.res.ColorStateList.valueOf(Color.WHITE)
+            contentDescription = "جارٍ تحميل البث"
+        }
+        loadingIndicator = spinner
+        root.addView(spinner, FrameLayout.LayoutParams(dp(48), dp(48), Gravity.CENTER))
+
+        dialog.setContentView(root)
+        dialog.setOnDismissListener { releaseEmbeddedPlayer() }
+        dialog.show()
+
+        val headers = mutableMapOf<String, String>()
+        if (source.referer.isNotBlank()) headers["Referer"] = source.referer
+        val httpFactory = DefaultHttpDataSource.Factory()
+            .setConnectTimeoutMs(10000)
+            .setReadTimeoutMs(15000)
+            .setAllowCrossProtocolRedirects(true)
+            .setDefaultRequestProperties(headers)
+        val exo = ExoPlayer.Builder(this)
+            .setMediaSourceFactory(DefaultMediaSourceFactory(httpFactory))
+            .build()
+        embeddedPlayer = exo
+        video.player = exo
+        exo.addListener(object : Player.Listener {
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                loadingIndicator?.visibility = when (playbackState) {
+                    Player.STATE_BUFFERING, Player.STATE_IDLE -> View.VISIBLE
+                    Player.STATE_READY, Player.STATE_ENDED -> View.GONE
+                    else -> loadingIndicator?.visibility ?: View.GONE
+                }
+                if (playbackState == Player.STATE_READY) {
+                    startupTimeout?.let { playerHandler.removeCallbacks(it) }
+                    startupTimeout = null
+                    failoverCount = 0
+                } else if (playbackState == Player.STATE_BUFFERING && currentOptions.size > 1) {
+                    startupTimeout?.let { playerHandler.removeCallbacks(it) }
+                    val timeout = Runnable {
+                        if (embeddedPlayer === exo && exo.playbackState != Player.STATE_READY && !exo.isPlaying) {
+                            tryNextServer(exo)
+                        }
+                    }
+                    startupTimeout = timeout
+                    playerHandler.postDelayed(timeout, 10000L)
+                }
+            }
+
+            override fun onPlayerError(error: PlaybackException) {
+                loadingIndicator?.visibility = View.VISIBLE
+                if (currentOptions.size > 1) tryNextServer(exo)
+                else Toast.makeText(this@MainActivity, "تعذر تشغيل القناة على هذا السيرفر", Toast.LENGTH_SHORT).show()
+            }
+        })
+        exo.setMediaItem(MediaItem.fromUri(source.url))
+        exo.prepare()
+        exo.playWhenReady = true
+    }
+
+    private fun tryNextServer(failedPlayer: ExoPlayer) {
+        if (embeddedPlayer !== failedPlayer || currentOptions.size < 2 || failoverPending) return
+        failoverPending = true
+        startupTimeout?.let { playerHandler.removeCallbacks(it) }
+        playerHandler.postDelayed({
+            failoverPending = false
+            if (embeddedPlayer !== failedPlayer || currentOptions.isEmpty()) return@postDelayed
+            currentServerIndex = (currentServerIndex + 1) % currentOptions.size
+            failoverCount++
+            openEmbeddedPlayer()
+        }, 250L)
+    }
+
+    private fun closeEmbeddedPlayer() {
+        embeddedDialog?.let { dialog ->
+            if (dialog.isShowing && embeddedPlayer != null) {
+                // Rebuilding for a server change dismisses the old dialog; guard cleanup below.
+                dialog.setOnDismissListener(null)
+                dialog.dismiss()
+            }
+        }
+        releaseEmbeddedPlayer()
+    }
+
+    private fun releaseEmbeddedPlayer() {
+        startupTimeout?.let { playerHandler.removeCallbacks(it) }
+        startupTimeout = null
+        embeddedPlayerView?.player = null
+        embeddedPlayer?.release()
+        embeddedPlayer = null
+        embeddedPlayerView = null
+        loadingIndicator = null
+        embeddedDialog = null
+        failoverPending = false
+    }
+
 
     private fun showServerManager() {
         showingServerManager = true
