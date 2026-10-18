@@ -2149,11 +2149,11 @@ private fun showInformationPage(pageTitle: String, pageText: String) {
         setTextColor(Color.WHITE)
         setLineSpacing(dp(3).toFloat(), 1.0f)
         setPadding(dp(18), dp(16), dp(18), dp(16))
-        textIsSelectable = true
+        
     }
     val scroll = ScrollView(this).apply {
         setBackgroundColor(bg)
-        addView(textView, ScrollView.LayoutParams(-1, -2))
+        addView(textView, android.widget.ScrollView.LayoutParams(-1, -2))
     }
     AlertDialog.Builder(this)
         .setTitle(pageTitle)
