@@ -1291,9 +1291,11 @@ private fun createPlaybackPlayer(refererOverride: String? = null): ExoPlayer {
                             append("\n\nهذا الخطأ لا يثبت أن Referer وحده هو السبب. قد تكون استجابة الخادم غير فيديو أو أن صيغة البث غير مدعومة.")
                         }
                     }
-                    // For links that provide multiple servers, silently try the next
-                    // server instead of showing an error dialog to the viewer.
-                    if (directLinkPlayback && incomingServerUrls.size > 1) {
+                    // If HANI TV supplied multiple server URLs, treat every playback
+                    // error (including HTTP 401) as a failed server and try the next one
+                    // silently. Do not let a first-server authorization error interrupt
+                    // the viewer while alternate servers are available.
+                    if (incomingServerUrls.size > 1) {
                         scheduleNextServerAfterFailure(exo)
                     } else {
                         message(diagnostic)
