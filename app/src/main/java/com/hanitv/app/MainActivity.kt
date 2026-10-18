@@ -13,11 +13,17 @@ import android.widget.TextView
 import android.widget.Toast
 import android.widget.EditText
 import android.widget.Button
+import android.text.InputType
 import android.app.AlertDialog
 import android.content.Intent
 import org.json.JSONArray
 import org.json.JSONObject
 import com.google.firebase.analytics.FirebaseAnalytics
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.database.DataSnapshot
+import com.google.firebase.database.DatabaseError
+import com.google.firebase.database.FirebaseDatabase
+import com.google.firebase.database.ValueEventListener
 
 class MainActivity : Activity() {
 
@@ -30,6 +36,14 @@ class MainActivity : Activity() {
     private lateinit var content: LinearLayout
     private val prefs by lazy { getSharedPreferences("hani_tv_sources", MODE_PRIVATE) }
     private val sources = mutableListOf<StreamSource>()
+    private val firebaseAuth by lazy { FirebaseAuth.getInstance() }
+    private val remoteSources by lazy {
+        FirebaseDatabase.getInstance("https://hani-tv-b159f-default-rtdb.firebaseio.com")
+            .reference.child("sources")
+    }
+    // This UID identifies the single Firebase account allowed to change the shared list.
+    private val adminUid = "MDbUZT4SdPfxBqqfj5MNeNBtAW23"
+    private var showingServerManager = false
 
     private data class StreamSource(
         val channel: String,
@@ -141,9 +155,24 @@ class MainActivity : Activity() {
             saveSources()
         }
         showHome()
+        // All installs authenticate for read access; only the configured admin UID can write.
+        ensureReadAuthentication()
+    }
+
+    private fun ensureReadAuthentication() {
+        if (firebaseAuth.currentUser != null) {
+            syncFromCloud()
+            return
+        }
+        firebaseAuth.signInAnonymously()
+            .addOnSuccessListener { syncFromCloud() }
+            .addOnFailureListener { error ->
+                Toast.makeText(this, "تعذر الاتصال بقاعدة البيانات: ${error.message}", Toast.LENGTH_LONG).show()
+            }
     }
 
     private fun showHome() {
+        showingServerManager = false
         content.removeAllViews()
 
         addText("مرحباً بك في HANI TV", 23f, white, true)
@@ -204,6 +233,7 @@ class MainActivity : Activity() {
     }
 
     private fun showAllChannels() {
+        showingServerManager = false
         content.removeAllViews()
         addText("جميع القنوات", 24f, white, true, 8)
 
@@ -265,6 +295,7 @@ class MainActivity : Activity() {
     }
 
     private fun showChannels(category: String) {
+        showingServerManager = false
         content.removeAllViews()
         addText(category, 23f, white, true)
         addText("القنوات المتاحة في هذا القسم", 14f, gray, false)
@@ -384,11 +415,12 @@ class MainActivity : Activity() {
     }
 
     private fun showServerManager() {
+        showingServerManager = true
         content.removeAllViews()
         addText("إدارة السيرفرات", 24f, white, true)
-        addText("أضف رابطًا لكل قناة ولكل سيرفر. تُحفظ الروابط على هذا الجهاز.", 14f, gray, false)
+        addText("تتم مزامنة السيرفرات بين نسخ HANI TV. التعديل لحساب الإدارة فقط.", 14f, gray, false)
         val add = makeButton("＋ إضافة سيرفر / رابط قناة")
-        add.setOnClickListener { showAddSourceDialog() }
+        add.setOnClickListener { requireAdmin { showAddSourceDialog() } }
         content.addView(add, fullWidthParams())
 
         if (sources.isEmpty()) addText("لا توجد روابط محفوظة بعد.", 14f, gray, false, 12)
@@ -412,13 +444,35 @@ class MainActivity : Activity() {
             })
             val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
             val edit = makeButton("تعديل")
-            edit.setOnClickListener { showAddSourceDialog(source, index) }
+            edit.setOnClickListener {
+                requireAdmin {
+                    val currentIndex = sources.indexOf(source)
+                    if (currentIndex >= 0) showAddSourceDialog(sources[currentIndex], currentIndex)
+                    else {
+                        Toast.makeText(this, "تغيرت قائمة السيرفرات؛ افتح الإدارة مجددًا.", Toast.LENGTH_LONG).show()
+                        showServerManager()
+                    }
+                }
+            }
             val delete = makeButton("حذف")
             delete.setOnClickListener {
-                AlertDialog.Builder(this@MainActivity)
-                    .setMessage("حذف رابط ${source.channel} من ${source.serverName}؟")
-                    .setPositiveButton("حذف") { _, _ -> sources.removeAt(index); saveSources(); showServerManager() }
-                    .setNegativeButton("إلغاء", null).show()
+                requireAdmin {
+                    val currentIndex = sources.indexOf(source)
+                    if (currentIndex >= 0) {
+                        AlertDialog.Builder(this@MainActivity)
+                            .setMessage("حذف رابط ${source.channel} من ${source.serverName}؟")
+                            .setPositiveButton("حذف") { _, _ ->
+                                sources.removeAt(currentIndex)
+                                saveSources()
+                                saveSourcesToCloud()
+                                showServerManager()
+                            }
+                            .setNegativeButton("إلغاء", null).show()
+                    } else {
+                        Toast.makeText(this, "تغيرت قائمة السيرفرات؛ افتح الإدارة مجددًا.", Toast.LENGTH_LONG).show()
+                        showServerManager()
+                    }
+                }
             }
             actions.addView(edit, LinearLayout.LayoutParams(0, -2, 1f).apply { setMargins(0, 0, dp(5), 0) })
             actions.addView(delete, LinearLayout.LayoutParams(0, -2, 1f).apply { setMargins(dp(5), 0, 0, 0) })
@@ -470,6 +524,7 @@ class MainActivity : Activity() {
                         val item = StreamSource(channel, server, url, referer, displayName.ifBlank { server })
                         if (editIndex >= 0 && editIndex < sources.size) sources[editIndex] = item else sources.add(item)
                         saveSources()
+                        saveSourcesToCloud()
                         dialog.dismiss()
                         showServerManager()
                     }
@@ -513,6 +568,132 @@ class MainActivity : Activity() {
             })
         }
         prefs.edit().putString("sources_json", array.toString()).apply()
+    }
+
+    /** Read the shared list. If the database is still empty, only the signed-in admin may seed it. */
+    private fun syncFromCloud(onComplete: (() -> Unit)? = null) {
+        remoteSources.addListenerForSingleValueEvent(object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                if (snapshot.exists()) {
+                    val downloaded = mutableListOf<StreamSource>()
+                    for (child in snapshot.children) {
+                        if (!child.hasChild("channel")) continue
+                        downloaded.add(
+                            StreamSource(
+                                child.child("channel").getValue(String::class.java).orEmpty(),
+                                child.child("serverName").getValue(String::class.java).orEmpty(),
+                                child.child("url").getValue(String::class.java).orEmpty(),
+                                child.child("referer").getValue(String::class.java).orEmpty(),
+                                child.child("displayName").getValue(String::class.java)
+                                    ?: child.child("serverName").getValue(String::class.java).orEmpty()
+                            )
+                        )
+                    }
+                    sources.clear()
+                    sources.addAll(downloaded)
+                    saveSources()
+                    if (showingServerManager) showServerManager()
+                    onComplete?.invoke()
+                } else if (firebaseAuth.currentUser?.uid == adminUid) {
+                    // First migration: seed the empty cloud database from this admin device's local list.
+                    saveSourcesToCloud(onComplete)
+                } else {
+                    // Keep the existing local list until an admin initializes the shared database.
+                    onComplete?.invoke()
+                }
+            }
+
+            override fun onCancelled(error: DatabaseError) {
+                Toast.makeText(this@MainActivity, "تعذرت مزامنة السيرفرات: ${error.message}", Toast.LENGTH_LONG).show()
+                onComplete?.invoke()
+            }
+        })
+    }
+
+    /** Write is accepted by Firebase rules only when the signed-in UID is the configured admin UID. */
+    private fun saveSourcesToCloud(onComplete: (() -> Unit)? = null) {
+        if (firebaseAuth.currentUser?.uid != adminUid) {
+            onComplete?.invoke()
+            return
+        }
+        val payload = linkedMapOf<String, Any>()
+        sources.forEachIndexed { index, source ->
+            payload[index.toString()] = mapOf(
+                "channel" to source.channel,
+                "serverName" to source.serverName,
+                "url" to source.url,
+                "referer" to source.referer,
+                "displayName" to source.displayName
+            )
+        }
+        if (payload.isEmpty()) payload["_empty"] = true
+        remoteSources.setValue(payload)
+            .addOnSuccessListener { onComplete?.invoke() }
+            .addOnFailureListener { error ->
+                Toast.makeText(this, "لم تُحفظ التعديلات في السحابة: ${error.message}", Toast.LENGTH_LONG).show()
+                onComplete?.invoke()
+            }
+    }
+
+    /** Ask for the admin account only when a user attempts to add, edit, or delete a source. */
+    private fun requireAdmin(action: () -> Unit) {
+        if (firebaseAuth.currentUser?.uid == adminUid) {
+            action()
+            return
+        }
+
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(8), dp(20), 0)
+        }
+        val emailInput = EditText(this).apply {
+            hint = "البريد الإلكتروني للإدارة"
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS
+            setSingleLine(true)
+        }
+        val passwordInput = EditText(this).apply {
+            hint = "كلمة مرور الإدارة"
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+            setSingleLine(true)
+        }
+        box.addView(emailInput, fullWidthParams())
+        box.addView(passwordInput, fullWidthParams())
+
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("تسجيل دخول الإدارة")
+            .setMessage("يلزم حساب الإدارة لتعديل قائمة السيرفرات. بقية النسخ تستطيع قراءة القائمة فقط.")
+            .setView(box)
+            .setPositiveButton("دخول", null)
+            .setNegativeButton("إلغاء", null)
+            .create()
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val email = emailInput.text.toString().trim()
+                val password = passwordInput.text.toString()
+                if (email.isBlank() || password.isBlank()) {
+                    Toast.makeText(this, "أدخل البريد الإلكتروني وكلمة المرور.", Toast.LENGTH_SHORT).show()
+                    return@setOnClickListener
+                }
+                dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled = false
+                firebaseAuth.signInWithEmailAndPassword(email, password)
+                    .addOnCompleteListener { task ->
+                        if (task.isSuccessful && firebaseAuth.currentUser?.uid == adminUid) {
+                            dialog.dismiss()
+                            syncFromCloud { action() }
+                        } else {
+                            firebaseAuth.signOut()
+                            firebaseAuth.signInAnonymously()
+                            dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled = true
+                            Toast.makeText(
+                                this,
+                                if (task.isSuccessful) "هذا الحساب ليس حساب الإدارة المصرح به." else "فشل تسجيل الدخول؛ تحقق من بيانات الحساب.",
+                                Toast.LENGTH_LONG
+                            ).show()
+                        }
+                    }
+            }
+        }
+        dialog.show()
     }
 
     private fun addSectionCard(
