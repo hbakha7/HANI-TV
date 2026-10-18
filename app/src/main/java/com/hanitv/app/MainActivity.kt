@@ -17,6 +17,7 @@ import android.app.AlertDialog
 import android.content.Intent
 import org.json.JSONArray
 import org.json.JSONObject
+import com.google.firebase.analytics.FirebaseAnalytics
 
 class MainActivity : Activity() {
 
@@ -70,6 +71,9 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Record an app-open event for HANI TV Analytics.
+        FirebaseAnalytics.getInstance(this).logEvent("hani_tv_app_open", null)
 
         window.statusBarColor = bg
         window.navigationBarColor = bg
