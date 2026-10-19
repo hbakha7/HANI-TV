@@ -73,6 +73,9 @@ private var directLinkPlayback = false
 private var incomingServerNames = arrayListOf<String>()
 private var incomingServerUrls = arrayListOf<String>()
 private var incomingServerReferers = arrayListOf<String>()
+private var incomingServerUserAgents = arrayListOf<String>()
+private var incomingServerCookies = arrayListOf<String>()
+private var incomingServerAuthorizations = arrayListOf<String>()
 private var incomingSelectedServer = 0
 private var incomingChannelName = ""
 // Automatically rotate through the received server URLs after playback errors.
@@ -124,6 +127,9 @@ private fun handleExternalLink(incoming: android.content.Intent?) {
     incomingServerNames = incoming.getStringArrayListExtra("server_names") ?: arrayListOf()
     incomingServerUrls = incoming.getStringArrayListExtra("server_urls") ?: arrayListOf()
     incomingServerReferers = incoming.getStringArrayListExtra("server_referers") ?: arrayListOf()
+    incomingServerUserAgents = incoming.getStringArrayListExtra("server_user_agents") ?: arrayListOf()
+    incomingServerCookies = incoming.getStringArrayListExtra("server_cookies") ?: arrayListOf()
+    incomingServerAuthorizations = incoming.getStringArrayListExtra("server_authorizations") ?: arrayListOf()
     incomingSelectedServer = incoming.getIntExtra("selected_server_index", 0)
         .coerceIn(0, (incomingServerUrls.size - 1).coerceAtLeast(0))
     incomingChannelName = name
@@ -1191,44 +1197,34 @@ private fun enc(value: String) =
     URLEncoder.encode(value, "UTF-8")
 
 private fun getPlaybackHeaders(refererOverride: String? = null): Map<String, String> {
-val headers = mutableMapOf<String, String>()
+    val headers = mutableMapOf<String, String>()
 
-prefs.getString("add_user_agent", "")  
-    ?.trim()  
-    ?.takeIf { it.isNotEmpty() }  
-    ?.let { headers["User-Agent"] = it }  
+    val sourceUserAgent = incomingServerUserAgents.getOrNull(incomingSelectedServer).orEmpty().trim()
+    val sourceCookie = incomingServerCookies.getOrNull(incomingSelectedServer).orEmpty().trim()
+    val sourceAuthorization = incomingServerAuthorizations.getOrNull(incomingSelectedServer).orEmpty().trim()
 
-(refererOverride?.trim()?.takeIf { it.isNotEmpty() }
-    ?: prefs.getString("add_referrer", "").orEmpty().trim())
-    .takeIf { it.isNotEmpty() }
-    ?.let { headers["Referer"] = it }  
+    (sourceUserAgent.ifBlank { prefs.getString("add_user_agent", "").orEmpty().trim() })
+        .takeIf { it.isNotEmpty() }
+        ?.let { headers["User-Agent"] = it }
 
-prefs.getString("add_cookie", "")  
-    ?.trim()  
-    ?.takeIf { it.isNotEmpty() }  
-    ?.let { headers["Cookie"] = it }  
+    (refererOverride?.trim()?.takeIf { it.isNotEmpty() }
+        ?: prefs.getString("add_referrer", "").orEmpty().trim())
+        .takeIf { it.isNotEmpty() }
+        ?.let { headers["Referer"] = it }
 
-val auth = prefs.getString("add_auth", "")?.trim().orEmpty()  
+    (sourceCookie.ifBlank { prefs.getString("add_cookie", "").orEmpty().trim() })
+        .takeIf { it.isNotEmpty() }
+        ?.let { headers["Cookie"] = it }
 
-if (auth.isNotEmpty()) {  
-    headers["Authorization"] = when {  
-        auth.startsWith("Basic ", true) ||  
-        auth.startsWith("Bearer ", true) -> auth  
-
-        auth.contains(":") -> {  
-            val encoded = Base64.encodeToString(  
-                auth.toByteArray(Charsets.UTF_8),  
-                Base64.NO_WRAP  
-            )  
-            "Basic $encoded"  
-        }  
-
-        else -> auth  
-    }  
-}  
-
-return headers
-
+    val auth = sourceAuthorization.ifBlank { prefs.getString("add_auth", "").orEmpty().trim() }
+    if (auth.isNotEmpty()) {
+        headers["Authorization"] = when {
+            auth.startsWith("Basic ", true) || auth.startsWith("Bearer ", true) -> auth
+            auth.contains(":") -> "Basic " + Base64.encodeToString(auth.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
+            else -> auth
+        }
+    }
+    return headers
 }
 
 
