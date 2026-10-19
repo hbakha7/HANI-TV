@@ -513,16 +513,20 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
         // Use the same kind of HTTP setup as HTV PLAYER, while keeping HANI TV's
         // per-source Referer. A default User-Agent helps servers that reject an
         // empty Android client identity; a saved custom value takes precedence.
+        // Match HTV PLAYER: do not force "103IPTVPlayer/1.0" when no custom
+        // User-Agent was configured. Keep the per-source Referer unchanged.
         val userAgent = prefs.getString("add_user_agent", "")
             ?.trim()
             ?.takeIf { it.isNotEmpty() }
-            ?: "103IPTVPlayer/1.0"
-        val httpFactory = DefaultHttpDataSource.Factory()
-            .setUserAgent(userAgent)
+        val httpFactoryBuilder = DefaultHttpDataSource.Factory()
             .setConnectTimeoutMs(6000)
             .setReadTimeoutMs(12000)
             .setAllowCrossProtocolRedirects(true)
             .setDefaultRequestProperties(headers)
+        if (userAgent != null) {
+            httpFactoryBuilder.setUserAgent(userAgent)
+        }
+        val httpFactory = httpFactoryBuilder
         val exo = ExoPlayer.Builder(this)
             .setMediaSourceFactory(
                 DefaultMediaSourceFactory(this)
