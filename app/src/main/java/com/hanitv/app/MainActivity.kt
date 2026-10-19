@@ -420,9 +420,18 @@ class MainActivity : Activity() {
 
 private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
     if (options.isEmpty()) return
-    currentOptions = options
-    currentServerIndex = selectedIndex.coerceIn(0, options.lastIndex)
-    openEmbeddedPlayer()
+
+    val safeIndex = selectedIndex.coerceIn(0, options.lastIndex)
+    val intent = android.content.Intent(this, EmbeddedPlayerActivity::class.java).apply {
+        putExtra("url", options[safeIndex].url)
+        putExtra("name", options[safeIndex].channel)
+        putExtra("referer", options[safeIndex].referer)
+        putExtra("selected_server_index", safeIndex)
+        putStringArrayListExtra("server_names", ArrayList(options.map { it.serverName }))
+        putStringArrayListExtra("server_urls", ArrayList(options.map { it.url }))
+        putStringArrayListExtra("server_referers", ArrayList(options.map { it.referer }))
+    }
+    startActivity(intent)
 }
 
 
