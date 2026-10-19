@@ -420,11 +420,7 @@ class MainActivity : Activity() {
     }
 
     private fun openChannel(channelName: String) {
-        if (!initialSourceSyncFinished) {
-            // Queue the tap and launch automatically as soon as local/cloud source selection is settled.
-            pendingChannelToOpen = channelName
-            return
-        }
+        // Open immediately from the locally cached source list; Firebase sync continues in the background.
         val options = sources.filter { it.channel == channelName }
         if (options.isEmpty()) {
             Toast.makeText(this, "لا توجد روابط محفوظة لهذه القناة. افتح إدارة السيرفرات لإضافة رابط.", Toast.LENGTH_LONG).show()
@@ -438,9 +434,22 @@ class MainActivity : Activity() {
 
 private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
     if (options.isEmpty()) return
-    currentOptions = options
-    currentServerIndex = selectedIndex.coerceIn(0, options.lastIndex)
-    openEmbeddedPlayer()
+    val safeIndex = selectedIndex.coerceIn(0, options.lastIndex)
+    val selected = options[safeIndex]
+
+    // Use HTV PLAYER's existing activity and its original playback UI, not a new generic PlayerView.
+    val playerIntent = Intent(this, EmbeddedPlayerActivity::class.java).apply {
+        putExtra("url", selected.url)
+        putExtra("name", selected.channel)
+        putExtra("referer", selected.referer)
+        putExtra("selected_server_index", safeIndex)
+        putStringArrayListExtra("server_names", ArrayList(options.map {
+            it.displayName.ifBlank { it.serverName }
+        }))
+        putStringArrayListExtra("server_urls", ArrayList(options.map { it.url }))
+        putStringArrayListExtra("server_referers", ArrayList(options.map { it.referer }))
+    }
+    startActivity(playerIntent)
 }
 
 
