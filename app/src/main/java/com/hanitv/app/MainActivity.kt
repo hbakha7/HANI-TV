@@ -76,7 +76,10 @@ class MainActivity : Activity() {
         val serverName: String,
         val url: String,
         val referer: String = "",
-        val displayName: String = serverName
+        val displayName: String = serverName,
+        val cookie: String = "",
+        val authorization: String = "",
+        val userAgent: String = ""
     )
 
     private val channelGroups = linkedMapOf(
@@ -448,6 +451,9 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
         }))
         putStringArrayListExtra("server_urls", ArrayList(options.map { it.url }))
         putStringArrayListExtra("server_referers", ArrayList(options.map { it.referer }))
+        putStringArrayListExtra("server_cookies", ArrayList(options.map { it.cookie }))
+        putStringArrayListExtra("server_authorizations", ArrayList(options.map { it.authorization }))
+        putStringArrayListExtra("server_user_agents", ArrayList(options.map { it.userAgent }))
     }
     startActivity(playerIntent)
 }
@@ -738,6 +744,9 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
         val displayNameInput = field("الاسم الذي يظهر داخل المشغّل", existing?.displayName ?: existing?.serverName ?: "السيرفر الأساسي")
         val urlInput = field("رابط البث الكامل", existing?.url ?: "")
         val refererInput = field("Referer (اختياري)", existing?.referer ?: "")
+        val cookieInput = field("Cookie (اختياري)", existing?.cookie ?: "")
+        val authorizationInput = field("Authorization (اختياري)", existing?.authorization ?: "")
+        val userAgentInput = field("User-Agent (اختياري)", existing?.userAgent ?: "")
         AlertDialog.Builder(this)
             .setTitle(if (existing == null) "إضافة رابط" else "تعديل الرابط")
             .setView(box)
@@ -751,12 +760,18 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
                         val displayName = displayNameInput.text.toString().trim()
                         val url = urlInput.text.toString().trim()
                         val referer = refererInput.text.toString().trim()
+                        val cookie = cookieInput.text.toString().trim()
+                        val authorization = authorizationInput.text.toString().trim()
+                        val userAgent = userAgentInput.text.toString().trim()
                         if (channel.isBlank() || server.isBlank() || url.isBlank() ||
                             !(url.startsWith("http://") || url.startsWith("https://"))) {
                             Toast.makeText(this, "أدخل اسم القناة والسيرفر ورابطًا يبدأ بـ http:// أو https://", Toast.LENGTH_LONG).show()
                             return@setOnClickListener
                         }
-                        val item = StreamSource(channel, server, url, referer, displayName.ifBlank { server })
+                        val item = StreamSource(
+                            channel, server, url, referer, displayName.ifBlank { server },
+                            cookie, authorization, userAgent
+                        )
                         if (editIndex >= 0 && editIndex < sources.size) sources[editIndex] = item else sources.add(item)
                         saveSources()
                         saveSourcesToCloud()
@@ -783,7 +798,8 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
                 sources.add(StreamSource(
                     item.optString("channel"), item.optString("serverName"),
                     item.optString("url"), item.optString("referer"),
-                    item.optString("displayName", item.optString("serverName"))
+                    item.optString("displayName", item.optString("serverName")),
+                    item.optString("cookie"), item.optString("authorization"), item.optString("userAgent")
                 ))
             }
         } catch (_: Exception) {
@@ -800,6 +816,9 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
                 put("url", source.url)
                 put("referer", source.referer)
                 put("displayName", source.displayName)
+                put("cookie", source.cookie)
+                put("authorization", source.authorization)
+                put("userAgent", source.userAgent)
             })
         }
         prefs.edit().putString("sources_json", array.toString()).apply()
@@ -820,7 +839,10 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
                                 child.child("url").getValue(String::class.java).orEmpty(),
                                 child.child("referer").getValue(String::class.java).orEmpty(),
                                 child.child("displayName").getValue(String::class.java)
-                                    ?: child.child("serverName").getValue(String::class.java).orEmpty()
+                                    ?: child.child("serverName").getValue(String::class.java).orEmpty(),
+                                child.child("cookie").getValue(String::class.java).orEmpty(),
+                                child.child("authorization").getValue(String::class.java).orEmpty(),
+                                child.child("userAgent").getValue(String::class.java).orEmpty()
                             )
                         )
                     }
@@ -858,7 +880,10 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
                 "serverName" to source.serverName,
                 "url" to source.url,
                 "referer" to source.referer,
-                "displayName" to source.displayName
+                "displayName" to source.displayName,
+                "cookie" to source.cookie,
+                "authorization" to source.authorization,
+                "userAgent" to source.userAgent
             )
         }
         if (payload.isEmpty()) payload["_empty"] = true
