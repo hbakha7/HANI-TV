@@ -417,30 +417,12 @@ class MainActivity : Activity() {
 
     
 
+
 private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
     if (options.isEmpty()) return
-
-    val selected = selectedIndex.coerceIn(0, options.lastIndex)
-
-    val playerIntent = Intent(this, EmbeddedPlayerActivity::class.java).apply {
-        putExtra("name", options[selected].channel)
-        putExtra("url", options[selected].url)
-        putExtra("referer", options[selected].referer)
-        putExtra("selected_server_index", selected)
-
-        putStringArrayListExtra(
-            "server_names",
-            ArrayList(options.mapIndexed { index, item ->
-                item.displayName.ifBlank {
-                    item.serverName.ifBlank { "سيرفر ${index + 1}" }
-                }
-            })
-        )
-        putStringArrayListExtra("server_urls", ArrayList(options.map { it.url }))
-        putStringArrayListExtra("server_referers", ArrayList(options.map { it.referer }))
-    }
-
-    startActivity(playerIntent)
+    currentOptions = options
+    currentServerIndex = selectedIndex.coerceIn(0, options.lastIndex)
+    openEmbeddedPlayer()
 }
 
 
