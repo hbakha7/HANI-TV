@@ -630,21 +630,37 @@ val httpFactory = DefaultHttpDataSource.Factory()
                 }
             }
 
-            override fun onPlayerError(error: PlaybackException) {
-                loadingIndicator?.visibility = View.VISIBLE
-                if (currentOptions.size > 1) {
-                    tryNextServer(exo)
-                } else {
-                    // Show the actual Media3 error code to help identify whether
-                    // the server rejected the request or the stream format is unsupported.
-                    Toast.makeText(
-                        this@MainActivity,
-                        "تعذر التشغيل: ${error.errorCodeName}",
-                        Toast.LENGTH_LONG
-                    ).show()
-                }
-            }
-        })
+            
+override fun onPlayerError(error: PlaybackException) {
+    loadingIndicator?.visibility = View.VISIBLE
+
+    val httpError = generateSequence(error as Throwable?) { it.cause }
+        .filterIsInstance<androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException>()
+        .firstOrNull()
+
+    val statusCode = httpError?.responseCode
+
+    // Try another configured server immediately after a playback failure.
+    if (currentOptions.size > 1) {
+        tryNextServer(exo)
+        return
+    }
+
+    // A 401 can be caused by missing or rejected server credentials.
+    val message = when (statusCode) {
+        401 -> "رفض السيرفر المصادقة (401). تحقق من بيانات الدخول."
+        403 -> "السيرفر رفض الوصول (403)."
+        else -> "تعذر التشغيل: ${error.errorCodeName}"
+    }
+
+    Toast.makeText(
+        this@MainActivity,
+        message,
+        Toast.LENGTH_LONG
+    ).show()
+}
+
+        
         val mediaItemBuilder = MediaItem.Builder().setUri(source.url)
         // Match HTV PLAYER's HLS fallback for providers that use an index.html URL.
         val normalizedPath = try {
