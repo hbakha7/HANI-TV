@@ -866,13 +866,19 @@ playDirectFullscreen(link)
 }
 
 private fun playDirectFullscreen(link: String) {
-    val channel = channels.firstOrNull { it.url == link }
-        ?: Channel(
-            name = incomingChannelName.ifBlank { "فيديو مباشر" },
-            url = link,
-            group = "مباشر",
-            type = "live"
-        )
+    
+val channel = channels.firstOrNull { it.url == link }
+    ?: Channel(
+        name = incomingChannelName.ifBlank { "فيديو مباشر" },
+        url = link,
+        group = "مباشر",
+        type = "live",
+        referer = incomingServerReferers
+            .getOrNull(incomingSelectedServer)
+            ?.takeIf { it.isNotBlank() }
+            ?: ""
+    )
+    
 
     currentType = "live"
     directLinkPlayback = true
