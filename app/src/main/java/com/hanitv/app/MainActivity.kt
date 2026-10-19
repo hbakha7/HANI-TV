@@ -9,7 +9,6 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.ScrollView
-import android.widget.HorizontalScrollView
 import android.widget.TextView
 import android.widget.Toast
 import android.widget.EditText
@@ -60,6 +59,8 @@ class MainActivity : Activity() {
     private var embeddedPlayer: ExoPlayer? = null
     private var embeddedPlayerView: PlayerView? = null
     private var embeddedDialog: Dialog? = null
+    private var embeddedChannelTitle: TextView? = null
+    private val embeddedServerButtons = mutableListOf<Button>()
     private var loadingIndicator: ProgressBar? = null
     private var currentOptions: List<StreamSource> = emptyList()
     private var currentServerIndex = 0
@@ -441,112 +442,174 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
     if (options.isEmpty()) return
     currentOptions = options
     currentServerIndex = selectedIndex.coerceIn(0, options.lastIndex)
-    openEmbeddedPlayer()
+    if (embeddedDialog?.isShowing == true && embeddedPlayer != null) {
+        // If a channel is selected while the player is already open, keep the player visible.
+        embeddedChannelTitle?.text = currentOptions[currentServerIndex].channel
+        switchServerInsidePlayer(currentServerIndex)
+    } else {
+        openEmbeddedPlayer()
+    }
 }
 
 
 
-    /** Plays the selected stream inside HANI TV, with the video and channel strip on one screen. */
+    /** Plays channel streams inside HANI TV; the separate 103 IPTV Player is not needed. */
     private fun openEmbeddedPlayer() {
         closeEmbeddedPlayer()
         val source = currentOptions.getOrNull(currentServerIndex) ?: return
         val dialog = Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen)
         embeddedDialog = dialog
 
-        val root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setBackgroundColor(Color.rgb(5, 7, 10))
-        }
-
-        // Header similar to the reference player.
-        val header = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(14), 0, dp(8), 0)
-            setBackgroundColor(Color.rgb(20, 85, 96))
-        }
-        val back = TextView(this).apply {
-            text = "‹"
-            textSize = 38f
-            gravity = Gravity.CENTER
-            setTextColor(Color.WHITE)
-            setOnClickListener { dialog.dismiss() }
-        }
-        header.addView(back, LinearLayout.LayoutParams(dp(42), dp(54)))
-        header.addView(TextView(this).apply {
-            text = source.channel
-            textSize = 20f
-            setTextColor(Color.WHITE)
-            setTypeface(null, Typeface.BOLD)
-            gravity = Gravity.CENTER_VERTICAL
-        }, LinearLayout.LayoutParams(0, dp(54), 1f))
-        val close = TextView(this).apply {
-            text = "⋮"
-            textSize = 30f
-            gravity = Gravity.CENTER
-            setTextColor(Color.WHITE)
-            setOnClickListener {
-                val names = arrayOf("إغلاق المشغّل", "إدارة السيرفرات")
-                AlertDialog.Builder(this@MainActivity).setItems(names) { _, which ->
-                    if (which == 0) dialog.dismiss() else {
-                        dialog.dismiss()
-                        showServerManager()
-                    }
-                }.show()
-            }
-        }
-        header.addView(close, LinearLayout.LayoutParams(dp(42), dp(54)))
-        root.addView(header, LinearLayout.LayoutParams(-1, dp(54)))
-
-        // Video area stays at the top; all controls are part of HANI TV.
-        val videoFrame = FrameLayout(this).apply { setBackgroundColor(Color.BLACK) }
+        val root = FrameLayout(this).apply { setBackgroundColor(Color.BLACK) }
         val video = PlayerView(this).apply {
-            useController = true
+            // Use our own controls embedded in the video area, not Media3's default controller.
+            useController = false
             setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
             setBackgroundColor(Color.BLACK)
-            controllerAutoShow = true
         }
         embeddedPlayerView = video
-        videoFrame.addView(video, FrameLayout.LayoutParams(-1, -1))
+        root.addView(video, FrameLayout.LayoutParams(-1, -1))
 
-        val serverOverlay = LinearLayout(this).apply {
+        val overlay = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(12), dp(12), dp(12), dp(12))
+            setBackgroundColor(Color.argb(150, 0, 0, 0))
+        }
+        val top = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(8), dp(6), dp(8), dp(6))
-            setBackgroundColor(Color.argb(125, 0, 0, 0))
         }
-        serverOverlay.addView(TextView(this).apply {
-            text = "السيرفرات"
-            textSize = 13f
+        val channelTitle = TextView(this).apply {
+            text = source.channel
+            textSize = 18f
             setTextColor(Color.WHITE)
             setTypeface(null, Typeface.BOLD)
-        }, LinearLayout.LayoutParams(-2, dp(48)).apply { rightMargin = dp(5) })
+        }
+        embeddedChannelTitle = channelTitle
+        top.addView(channelTitle, LinearLayout.LayoutParams(0, dp(44), 1f))
+        val close = Button(this).apply {
+            text = "✕"
+            setTextColor(Color.WHITE)
+            setBackgroundColor(Color.TRANSPARENT)
+            setOnClickListener { dialog.dismiss() }
+        }
+        top.addView(close, LinearLayout.LayoutParams(dp(48), dp(44)))
+        overlay.addView(top)
 
-        currentOptions.forEachIndexed { index, item ->
-            val circle = TextView(this).apply {
-                text = "${index + 1}\n${item.displayName.ifBlank { item.serverName }.take(5)}"
-                textSize = 10f
-                gravity = Gravity.CENTER
+        embeddedServerButtons.clear()
+        val serverRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        if (currentOptions.size > 1) {
+            serverRow.addView(TextView(this).apply {
+                text = "السيرفرات"
+                textSize = 13f
                 setTextColor(Color.WHITE)
-                setTypeface(null, Typeface.BOLD)
-                background = android.graphics.drawable.GradientDrawable().apply {
-                    shape = android.graphics.drawable.GradientDrawable.OVAL
-                    setColor(Color.argb(100, 0, 0, 0))
-                    setStroke(dp(if (index == currentServerIndex) 4 else 2),
-                        if (index == currentServerIndex) Color.rgb(25, 155, 245) else Color.LTGRAY)
-                }
-                setOnClickListener {
-                    if (index != currentServerIndex) {
-                        currentServerIndex = index
-                        openEmbeddedPlayer()
+            })
+            currentOptions.forEachIndexed { index, item ->
+                val button = Button(this).apply {
+                    text = item.displayName.ifBlank { item.serverName }.ifBlank { "${index + 1}" }
+                    textSize = 11f
+                    setTextColor(Color.WHITE)
+                    setBackgroundColor(if (index == currentServerIndex) Color.rgb(25, 150, 235) else Color.DKGRAY)
+                    setOnClickListener {
+                        // Switch the stream inside the existing player dialog. Rebuilding
+                        // the full-screen dialog here could dismiss it and reveal the channel page.
+                        switchServerInsidePlayer(index)
                     }
                 }
+                embeddedServerButtons.add(button)
+                serverRow.addView(button, LinearLayout.LayoutParams(0, dp(42), 1f).apply {
+                    setMargins(dp(2), 0, dp(2), 0)
+                })
             }
-            serverOverlay.addView(circle, LinearLayout.LayoutParams(dp(54), dp(54)).apply {
-                setMargins(dp(3), 0, dp(3), 0)
-            })
+            overlay.addView(serverRow)
         }
-        videoFrame.addView(serverOverlay, FrameLayout.LayoutParams(-1, dp(66), Gravity.TOP))
+        root.addView(overlay, FrameLayout.LayoutParams(-1, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP))
+
+        // Custom controls are children of the same player frame, so they are integrated
+        // into the video surface and replace the default Media3 controls.
+        val controls = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            setPadding(dp(8), dp(5), dp(8), dp(5))
+            setBackgroundColor(Color.argb(115, 0, 0, 0))
+        }
+
+        fun playerControl(symbol: String, description: String, action: () -> Unit): TextView {
+            return TextView(this).apply {
+                text = symbol
+                contentDescription = description
+                textSize = 29f
+                gravity = Gravity.CENTER
+                setTextColor(Color.WHITE)
+                setBackgroundColor(Color.TRANSPARENT)
+                isClickable = true
+                isFocusable = true
+                setOnClickListener { action() }
+                controls.addView(this, LinearLayout.LayoutParams(0, dp(58), 1f).apply {
+                    setMargins(dp(1), 0, dp(1), 0)
+                })
+            }
+        }
+
+        playerControl("⏪", "الرجوع 10 ثوانٍ") {
+            embeddedPlayer?.let { player ->
+                val target = (player.currentPosition - 10_000L).coerceAtLeast(0L)
+                player.seekTo(target)
+            }
+        }
+        playerControl("🔊", "الصوت") {
+            embeddedPlayer?.let { player ->
+                player.volume = if (player.volume > 0f) 0f else 1f
+            }
+        }
+        playerControl("⚙", "إعدادات التشغيل") {
+            val speedOptions = arrayOf("0.5x", "0.75x", "1.0x", "1.25x", "1.5x", "2.0x")
+            AlertDialog.Builder(this)
+                .setTitle("سرعة التشغيل")
+                .setItems(speedOptions) { _, which ->
+                    val speed = speedOptions[which].removeSuffix("x").toFloatOrNull() ?: 1f
+                    embeddedPlayer?.setPlaybackSpeed(speed)
+                }
+                .setNegativeButton("إغلاق", null)
+                .show()
+        }
+        playerControl("Ⅱ", "إيقاف أو استئناف") {
+            embeddedPlayer?.let { player ->
+                if (player.isPlaying) player.pause() else player.play()
+            }
+        }
+        playerControl("⛶", "تغيير حجم الفيديو") {
+            val currentMode = video.resizeMode
+            video.resizeMode = if (
+                currentMode == androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
+            ) {
+                androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+            } else {
+                androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
+            }
+        }
+        playerControl("⏩", "التقديم 10 ثوانٍ") {
+            embeddedPlayer?.let { player ->
+                val target = player.currentPosition + 10_000L
+                val duration = player.duration
+                player.seekTo(if (duration > 0L) target.coerceAtMost(duration) else target)
+            }
+        }
+
+        root.addView(
+            controls,
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                Gravity.CENTER
+            ).apply {
+                leftMargin = dp(6)
+                rightMargin = dp(6)
+            }
+        )
 
         val spinner = ProgressBar(this).apply {
             isIndeterminate = true
@@ -554,69 +617,7 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
             contentDescription = "جارٍ تحميل البث"
         }
         loadingIndicator = spinner
-        videoFrame.addView(spinner, FrameLayout.LayoutParams(dp(48), dp(48), Gravity.CENTER))
-        root.addView(videoFrame, LinearLayout.LayoutParams(-1, dp(238)))
-
-        // Horizontal channel strip below the video, like the supplied reference.
-        val channelScroll = HorizontalScrollView(this).apply {
-            isHorizontalScrollBarEnabled = false
-            setBackgroundColor(Color.rgb(8, 12, 12))
-        }
-        val channelRow = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(4), dp(4), dp(4), dp(4))
-        }
-        val allChannels = channelGroups.values.flatten().distinctBy { it.first }
-        allChannels.forEach { channel ->
-            val available = sources.any { it.channel == channel.first }
-            val card = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                gravity = Gravity.CENTER
-                setPadding(dp(5), dp(6), dp(5), dp(6))
-                setBackgroundColor(if (channel.first == source.channel) Color.rgb(30, 110, 170) else Color.TRANSPARENT)
-                isClickable = true
-                isFocusable = true
-                setOnClickListener {
-                    val options = sources.filter { it.channel == channel.first }
-                    if (options.isEmpty()) {
-                        Toast.makeText(this@MainActivity, "لا توجد روابط محفوظة لهذه القناة بعد.", Toast.LENGTH_SHORT).show()
-                    } else {
-                        currentOptions = options
-                        currentServerIndex = 0
-                        openEmbeddedPlayer()
-                    }
-                }
-            }
-            val logo = TextView(this).apply {
-                text = channel.second
-                textSize = 17f
-                gravity = Gravity.CENTER
-                setTextColor(Color.WHITE)
-                setTypeface(null, Typeface.BOLD)
-                background = android.graphics.drawable.GradientDrawable().apply {
-                    setColor(if (available) Color.rgb(105, 40, 130) else Color.rgb(55, 55, 60))
-                    cornerRadius = dp(4).toFloat()
-                }
-            }
-            card.addView(logo, LinearLayout.LayoutParams(dp(62), dp(48)))
-            card.addView(TextView(this).apply {
-                text = channel.first
-                textSize = 12f
-                gravity = Gravity.CENTER
-                setTextColor(Color.WHITE)
-                maxLines = 1
-                ellipsize = android.text.TextUtils.TruncateAt.END
-            }, LinearLayout.LayoutParams(dp(78), dp(28)))
-            channelRow.addView(card, LinearLayout.LayoutParams(dp(84), dp(94)).apply {
-                setMargins(dp(2), 0, dp(2), 0)
-            })
-        }
-        channelScroll.addView(channelRow)
-        root.addView(channelScroll, LinearLayout.LayoutParams(-1, dp(102)))
-
-        // Leave the remaining screen dark, as in the reference layout.
-        root.addView(View(this), LinearLayout.LayoutParams(-1, 0, 1f))
+        root.addView(spinner, FrameLayout.LayoutParams(dp(48), dp(48), Gravity.CENTER))
 
         dialog.setContentView(root)
         dialog.setOnDismissListener { releaseEmbeddedPlayer() }
@@ -624,8 +625,13 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
 
         val headers = mutableMapOf<String, String>()
         if (source.referer.isNotBlank()) headers["Referer"] = source.referer
+        // Use the same kind of HTTP setup as HTV PLAYER, while keeping HANI TV's
+        // per-source Referer. A default User-Agent helps servers that reject an
+        // empty Android client identity; a saved custom value takes precedence.
         val userAgent = prefs.getString("add_user_agent", "")
-            ?.trim()?.takeIf { it.isNotEmpty() } ?: "103IPTVPlayer/1.0"
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() }
+            ?: "103IPTVPlayer/1.0"
         val httpFactory = DefaultHttpDataSource.Factory()
             .setUserAgent(userAgent)
             .setConnectTimeoutMs(6000)
@@ -633,7 +639,10 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
             .setAllowCrossProtocolRedirects(true)
             .setDefaultRequestProperties(headers)
         val exo = ExoPlayer.Builder(this)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(this).setDataSourceFactory(httpFactory))
+            .setMediaSourceFactory(
+                DefaultMediaSourceFactory(this)
+                    .setDataSourceFactory(httpFactory)
+            )
             .build()
         embeddedPlayer = exo
         video.player = exo
@@ -651,9 +660,12 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
                 } else if (playbackState == Player.STATE_BUFFERING && currentOptions.size > 1) {
                     startupTimeout?.let { playerHandler.removeCallbacks(it) }
                     val timeout = Runnable {
-                        if (embeddedPlayer === exo && exo.playbackState != Player.STATE_READY && !exo.isPlaying) tryNextServer(exo)
+                        if (embeddedPlayer === exo && exo.playbackState != Player.STATE_READY && !exo.isPlaying) {
+                            tryNextServer(exo)
+                        }
                     }
                     startupTimeout = timeout
+                    // Try the next server sooner when the current stream never becomes ready.
                     playerHandler.postDelayed(timeout, 5000L)
                 }
             }
@@ -663,18 +675,65 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
                 if (currentOptions.size > 1) {
                     tryNextServer(exo)
                 } else {
-                    Toast.makeText(this@MainActivity, "تعذر تشغيل هذا البث (${error.errorCodeName}).", Toast.LENGTH_LONG).show()
+                    // Show the actual Media3 error code to help identify whether
+                    // the server rejected the request or the stream format is unsupported.
+                    Toast.makeText(
+                        this@MainActivity,
+                        "تعذر التشغيل: ${error.errorCodeName}",
+                        Toast.LENGTH_LONG
+                    ).show()
                 }
             }
         })
         val mediaItemBuilder = MediaItem.Builder().setUri(source.url)
-        val normalizedPath = try { android.net.Uri.parse(source.url).path.orEmpty().lowercase() } catch (_: Exception) { "" }
+        // Match HTV PLAYER's HLS fallback for providers that use an index.html URL.
+        val normalizedPath = try {
+            android.net.Uri.parse(source.url).path.orEmpty().lowercase()
+        } catch (_: Exception) {
+            ""
+        }
         if (normalizedPath.endsWith("/index.html") || normalizedPath == "index.html") {
             mediaItemBuilder.setMimeType(androidx.media3.common.MimeTypes.APPLICATION_M3U8)
         }
         exo.setMediaItem(mediaItemBuilder.build())
         exo.prepare()
         exo.playWhenReady = true
+    }
+
+    private fun switchServerInsidePlayer(index: Int) {
+        if (index !in currentOptions.indices) return
+        currentServerIndex = index
+        embeddedServerButtons.forEachIndexed { buttonIndex, button ->
+            button.setBackgroundColor(
+                if (buttonIndex == currentServerIndex) Color.rgb(25, 150, 235) else Color.DKGRAY
+            )
+        }
+        val source = currentOptions[index]
+        val player = embeddedPlayer
+        if (player == null || embeddedDialog?.isShowing != true) {
+            openEmbeddedPlayer()
+            return
+        }
+        // Keep the existing dialog and PlayerView alive while replacing only the media item.
+        // This prevents a brief return to the channel/category screen during server switching.
+        startupTimeout?.let { playerHandler.removeCallbacks(it) }
+        startupTimeout = null
+        failoverPending = false
+        loadingIndicator?.visibility = View.VISIBLE
+        val mediaItemBuilder = MediaItem.Builder().setUri(source.url)
+        val normalizedPath = try {
+            android.net.Uri.parse(source.url).path.orEmpty().lowercase()
+        } catch (_: Exception) {
+            ""
+        }
+        if (normalizedPath.endsWith("/index.html") || normalizedPath == "index.html") {
+            mediaItemBuilder.setMimeType(androidx.media3.common.MimeTypes.APPLICATION_M3U8)
+        }
+        player.stop()
+        player.clearMediaItems()
+        player.setMediaItem(mediaItemBuilder.build())
+        player.prepare()
+        player.playWhenReady = true
     }
 
     private fun tryNextServer(failedPlayer: ExoPlayer) {
@@ -684,19 +743,17 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
         playerHandler.postDelayed({
             failoverPending = false
             if (embeddedPlayer !== failedPlayer || currentOptions.isEmpty()) return@postDelayed
-            currentServerIndex = (currentServerIndex + 1) % currentOptions.size
+            val nextIndex = (currentServerIndex + 1) % currentOptions.size
             failoverCount++
-            openEmbeddedPlayer()
+            switchServerInsidePlayer(nextIndex)
         }, 250L)
     }
 
     private fun closeEmbeddedPlayer() {
         embeddedDialog?.let { dialog ->
-            if (dialog.isShowing && embeddedPlayer != null) {
-                // Rebuilding for a server change dismisses the old dialog; guard cleanup below.
-                dialog.setOnDismissListener(null)
-                dialog.dismiss()
-            }
+            // Detach cleanup before dismissal so a stale dialog cannot release a newer player.
+            dialog.setOnDismissListener(null)
+            if (dialog.isShowing) dialog.dismiss()
         }
         releaseEmbeddedPlayer()
     }
@@ -710,6 +767,8 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
         embeddedPlayerView = null
         loadingIndicator = null
         embeddedDialog = null
+        embeddedChannelTitle = null
+        embeddedServerButtons.clear()
         failoverPending = false
     }
 
