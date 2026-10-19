@@ -18,9 +18,11 @@ import android.widget.EditText
 import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.ProgressBar
+import android.widget.SeekBar
 import android.app.Dialog
 import android.os.Handler
 import android.os.Looper
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
@@ -28,6 +30,7 @@ import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
+import androidx.media3.ui.TrackSelectionDialogBuilder
 import android.text.InputType
 import android.app.AlertDialog
 import android.content.Intent
@@ -66,6 +69,7 @@ class MainActivity : Activity() {
     private val embeddedServerButtons = mutableListOf<TextView>()
     private val embeddedChannelCards = linkedMapOf<String, View>()
     private var loadingIndicator: ProgressBar? = null
+    private var progressUpdater: Runnable? = null
     private var currentOptions: List<StreamSource> = emptyList()
     private var currentServerIndex = 0
     private var failoverCount = 0
@@ -492,7 +496,8 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
             useController = false
             setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
             setBackgroundColor(Color.BLACK)
-            resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
+            // Fill the landscape screen, cropping only as needed to remove side bars.
+            resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM
         }
         embeddedPlayerView = video
         videoFrame.addView(video, FrameLayout.LayoutParams(-1, -1))
@@ -570,18 +575,18 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
         overlay.addView(serverScroll)
         videoFrame.addView(overlay, FrameLayout.LayoutParams(-1, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP))
 
-        // Translucent centered controls are part of the video frame, not a separate screen.
+        // Persistent player controls: these remain visible and each button controls playback.
         val controls = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
             setPadding(dp(4), dp(4), dp(4), dp(4))
-            setBackgroundColor(Color.argb(105, 0, 0, 0))
+            setBackgroundColor(Color.argb(145, 0, 0, 0))
         }
-        fun playerControl(symbol: String, description: String, action: () -> Unit) {
+        fun playerControl(symbol: String, description: String, action: () -> Unit): TextView {
             val control = TextView(this).apply {
                 text = symbol
                 contentDescription = description
-                textSize = 27f
+                textSize = if (symbol == "HD") 16f else 24f
                 gravity = Gravity.CENTER
                 setTextColor(Color.WHITE)
                 setBackgroundColor(Color.TRANSPARENT)
@@ -589,15 +594,28 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
                 isFocusable = true
                 setOnClickListener { action() }
             }
-            controls.addView(control, LinearLayout.LayoutParams(0, dp(58), 1f).apply {
+            controls.addView(control, LinearLayout.LayoutParams(0, dp(54), 1f).apply {
                 setMargins(dp(1), 0, dp(1), 0)
             })
+            return control
         }
-        playerControl("⏪", "الرجوع 10 ثوانٍ") {
-            embeddedPlayer?.let { it.seekTo((it.currentPosition - 10_000L).coerceAtLeast(0L)) }
+        playerControl("⏪₁₀", "الرجوع 10 ثوانٍ") {
+            embeddedPlayer?.let { player ->
+                if (player.isCurrentMediaItemSeekable) {
+                    player.seekTo((player.currentPosition - 10_000L).coerceAtLeast(0L))
+                } else Toast.makeText(this, "هذا البث لا يدعم الرجوع الزمني", Toast.LENGTH_SHORT).show()
+            }
         }
-        playerControl("◖))", "كتم الصوت واستعادته") {
-            embeddedPlayer?.let { it.volume = if (it.volume > 0f) 0f else 1f }
+        val soundControl = playerControl("◖))", "كتم الصوت واستعادته") {
+            embeddedPlayer?.let { player -> player.volume = if (player.volume > 0f) 0f else 1f }
+        }
+        playerControl("HD", "اختيار جودة الفيديو") {
+            embeddedPlayer?.let { player ->
+                TrackSelectionDialogBuilder(this, "جودة الفيديو", player, C.TRACK_TYPE_VIDEO)
+                    .setAllowAdaptiveSelections(true)
+                    .build()
+                    .show()
+            }
         }
         playerControl("⚙", "إعدادات سرعة التشغيل") {
             val speeds = arrayOf("0.5x", "0.75x", "1.0x", "1.25x", "1.5x", "2.0x")
@@ -606,37 +624,74 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
                     embeddedPlayer?.setPlaybackSpeed(speeds[which].removeSuffix("x").toFloatOrNull() ?: 1f)
                 }.setNegativeButton("إغلاق", null).show()
         }
-        playerControl("Ⅱ", "إيقاف أو استئناف") {
-            embeddedPlayer?.let { if (it.isPlaying) it.pause() else it.play() }
+        val playPauseControl = playerControl("Ⅱ", "إيقاف أو استئناف التشغيل") {
+            embeddedPlayer?.let { player -> if (player.isPlaying) player.pause() else player.play() }
         }
-        playerControl("⛶", "تكبير الفيديو") {
+        playerControl("⛶", "التبديل بين ملء الشاشة والصورة كاملة") {
             video.resizeMode = if (video.resizeMode == androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM)
                 androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
             else androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM
         }
-        playerControl("▣", "تغيير نمط عرض الفيديو") {
-            video.resizeMode = if (video.resizeMode == androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIXED_WIDTH)
-                androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
-            else androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIXED_WIDTH
+        playerControl("▣", "تغيير نمط ملاءمة الفيديو") {
+            video.resizeMode = if (video.resizeMode == androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT)
+                androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIXED_WIDTH
+            else androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
         }
-        playerControl("⏩", "التقديم 10 ثوانٍ") {
+        playerControl("⏩₁₀", "التقديم 10 ثوانٍ") {
             embeddedPlayer?.let { player ->
-                val target = player.currentPosition + 10_000L
-                player.seekTo(if (player.duration > 0L) target.coerceAtMost(player.duration) else target)
+                if (player.isCurrentMediaItemSeekable) {
+                    val target = player.currentPosition + 10_000L
+                    val duration = player.duration
+                    player.seekTo(if (duration > 0L) target.coerceAtMost(duration) else target)
+                } else Toast.makeText(this, "هذا البث لا يدعم التقديم الزمني", Toast.LENGTH_SHORT).show()
             }
         }
-        videoFrame.addView(
-            controls,
-            FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
-            ).apply {
-                leftMargin = dp(16)
-                rightMargin = dp(16)
-                bottomMargin = dp(132)
+        videoFrame.addView(controls, FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER
+        ).apply { leftMargin = dp(12); rightMargin = dp(12) })
+
+        // Timeline is visible permanently. Seek is enabled only for seekable media.
+        val timeline = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(8), 0, dp(8), 0)
+            setBackgroundColor(Color.argb(145, 0, 0, 0))
+        }
+        val elapsedText = TextView(this).apply {
+            text = "00:00"; textSize = 12f; setTextColor(Color.WHITE)
+        }
+        val durationText = TextView(this).apply {
+            text = "LIVE"; textSize = 12f; setTextColor(Color.LTGRAY)
+            gravity = Gravity.END or Gravity.CENTER_VERTICAL
+        }
+        val timelineSeek = SeekBar(this).apply {
+            max = 1000; progress = 0; isEnabled = false
+            contentDescription = "شريط تقدم الفيديو"
+            progressTintList = android.content.res.ColorStateList.valueOf(Color.RED)
+            thumbTintList = android.content.res.ColorStateList.valueOf(Color.WHITE)
+        }
+        timeline.addView(elapsedText, LinearLayout.LayoutParams(dp(48), dp(34)))
+        timeline.addView(timelineSeek, LinearLayout.LayoutParams(0, dp(34), 1f))
+        timeline.addView(durationText, LinearLayout.LayoutParams(dp(48), dp(34)))
+        timelineSeek.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                if (fromUser) {
+                    val duration = embeddedPlayer?.duration ?: 0L
+                    if (duration > 0L) elapsedText.text = formatPlayerTime(duration * progress / 1000L)
+                }
             }
-        )
+            override fun onStartTrackingTouch(seekBar: SeekBar?) = Unit
+            override fun onStopTrackingTouch(seekBar: SeekBar?) {
+                val player = embeddedPlayer ?: return
+                val duration = player.duration
+                if (duration > 0L && player.isCurrentMediaItemSeekable) {
+                    player.seekTo(duration * (seekBar?.progress ?: 0) / 1000L)
+                }
+            }
+        })
+        videoFrame.addView(timeline, FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, dp(38), Gravity.BOTTOM
+        ).apply { bottomMargin = dp(96) })
 
         val spinner = ProgressBar(this).apply {
             isIndeterminate = true
@@ -767,6 +822,39 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
         exo.setMediaItem(mediaItemBuilder.build())
         exo.prepare()
         exo.playWhenReady = true
+
+        val updater = object : Runnable {
+            override fun run() {
+                if (embeddedPlayer !== exo || embeddedDialog?.isShowing != true) return
+                val duration = exo.duration
+                val position = exo.currentPosition.coerceAtLeast(0L)
+                if (duration > 0L && exo.isCurrentMediaItemSeekable) {
+                    timelineSeek.isEnabled = true
+                    timelineSeek.progress = ((position * 1000L) / duration).toInt().coerceIn(0, 1000)
+                    elapsedText.text = formatPlayerTime(position)
+                    durationText.text = formatPlayerTime(duration)
+                } else {
+                    timelineSeek.isEnabled = false
+                    timelineSeek.progress = 0
+                    elapsedText.text = formatPlayerTime(position)
+                    durationText.text = "LIVE"
+                }
+                playPauseControl.text = if (exo.isPlaying) "Ⅱ" else "▶"
+                soundControl.text = if (exo.volume > 0f) "◖))" else "◖×"
+                playerHandler.postDelayed(this, 500L)
+            }
+        }
+        progressUpdater = updater
+        playerHandler.post(updater)
+    }
+
+    private fun formatPlayerTime(positionMs: Long): String {
+        val totalSeconds = positionMs.coerceAtLeast(0L) / 1000L
+        val hours = totalSeconds / 3600L
+        val minutes = (totalSeconds % 3600L) / 60L
+        val seconds = totalSeconds % 60L
+        return if (hours > 0L) String.format(java.util.Locale.US, "%d:%02d:%02d", hours, minutes, seconds)
+        else String.format(java.util.Locale.US, "%02d:%02d", minutes, seconds)
     }
 
     private fun switchServerInsidePlayer(index: Int) {
@@ -830,6 +918,8 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
     }
 
     private fun releaseEmbeddedPlayer() {
+        progressUpdater?.let { playerHandler.removeCallbacks(it) }
+        progressUpdater = null
         startupTimeout?.let { playerHandler.removeCallbacks(it) }
         startupTimeout = null
         embeddedPlayerView?.player = null
