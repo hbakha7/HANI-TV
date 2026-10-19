@@ -79,6 +79,7 @@ private var incomingChannelName = ""
 private val serverFailoverHandler = Handler(Looper.getMainLooper())
 private var serverFailoverPending = false
 private var serverFailoverAttempts = 0
+private val server401RetriedUrls = mutableSetOf<String>()
 private var serverStartupTimeout: Runnable? = null
 private var fullscreenView: PlayerView? = null
 private var serverButtonsBar: LinearLayout? = null  
@@ -1292,10 +1293,30 @@ private fun createPlaybackPlayer(refererOverride: String? = null): ExoPlayer {
                             append("\n\nهذا الخطأ لا يثبت أن Referer وحده هو السبب. قد تكون استجابة الخادم غير فيديو أو أن صيغة البث غير مدعومة.")
                         }
                     }
-                    // If HANI TV supplied multiple server URLs, treat every playback
-                    // error (including HTTP 401) as a failed server and try the next one
-                    // silently. Do not let a first-server authorization error interrupt
-                    // the viewer while alternate servers are available.
+                    // Retry a first HTTP 401 once on the same URL before failing over.
+                    // This repeats the configured request; it does not bypass server auth.
+                    val failedUrl = exo.currentMediaItem
+                        ?.localConfiguration?.uri?.toString().orEmpty()
+                    if (status == 401 && failedUrl.isNotBlank() &&
+                        server401RetriedUrls.add(failedUrl)) {
+                        serverFailoverHandler.postDelayed({
+                            if (player !== exo) return@postDelayed
+                            val retryChannel = channels.firstOrNull { it.url == failedUrl }
+                                ?: Channel(
+                                    name = incomingChannelName.ifBlank { "بث مباشر" },
+                                    url = failedUrl,
+                                    group = "مباشر",
+                                    type = "live",
+                                    referer = incomingServerReferers
+                                        .getOrNull(incomingSelectedServer).orEmpty()
+                                )
+                            play(retryChannel)
+                            fullscreenView?.player = player
+                            updateServerButtonSelection()
+                        }, 700L)
+                        return
+                    }
+                    // If the same URL still fails, try the next supplied server silently.
                     if (incomingServerUrls.size > 1) {
                         scheduleNextServerAfterFailure(exo)
                     } else {
