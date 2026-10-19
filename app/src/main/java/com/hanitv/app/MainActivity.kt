@@ -67,15 +67,16 @@ class MainActivity : Activity() {
     private var startupTimeout: Runnable? = null
     private var failoverPending = false
 
+    // Do not open a channel from stale local data while the first Firebase read is pending.
+    private var initialSourceSyncFinished = false
+    private var pendingChannelToOpen: String? = null
+
     private data class StreamSource(
         val channel: String,
         val serverName: String,
         val url: String,
         val referer: String = "",
-        val displayName: String = serverName,
-        val userAgent: String = "",
-        val cookie: String = "",
-        val authorization: String = ""
+        val displayName: String = serverName
     )
 
     private val channelGroups = linkedMapOf(
@@ -186,14 +187,23 @@ class MainActivity : Activity() {
 
     private fun ensureReadAuthentication() {
         if (firebaseAuth.currentUser != null) {
-            syncFromCloud()
+            syncFromCloud { finishInitialSourceSync() }
             return
         }
         firebaseAuth.signInAnonymously()
-            .addOnSuccessListener { syncFromCloud() }
+            .addOnSuccessListener { syncFromCloud { finishInitialSourceSync() } }
             .addOnFailureListener { error ->
                 Toast.makeText(this, "تعذر الاتصال بقاعدة البيانات: ${error.message}", Toast.LENGTH_LONG).show()
+                // Keep locally saved channels usable if authentication/network access fails.
+                finishInitialSourceSync()
             }
+    }
+
+    private fun finishInitialSourceSync() {
+        initialSourceSyncFinished = true
+        val pendingChannel = pendingChannelToOpen
+        pendingChannelToOpen = null
+        if (!pendingChannel.isNullOrBlank()) openChannel(pendingChannel)
     }
 
     private fun showHome() {
@@ -410,6 +420,11 @@ class MainActivity : Activity() {
     }
 
     private fun openChannel(channelName: String) {
+        if (!initialSourceSyncFinished) {
+            // Queue the tap and launch automatically as soon as local/cloud source selection is settled.
+            pendingChannelToOpen = channelName
+            return
+        }
         val options = sources.filter { it.channel == channelName }
         if (options.isEmpty()) {
             Toast.makeText(this, "لا توجد روابط محفوظة لهذه القناة. افتح إدارة السيرفرات لإضافة رابط.", Toast.LENGTH_LONG).show()
@@ -423,21 +438,9 @@ class MainActivity : Activity() {
 
 private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
     if (options.isEmpty()) return
-
-    val safeIndex = selectedIndex.coerceIn(0, options.lastIndex)
-    val intent = android.content.Intent(this, EmbeddedPlayerActivity::class.java).apply {
-        putExtra("url", options[safeIndex].url)
-        putExtra("name", options[safeIndex].channel)
-        putExtra("referer", options[safeIndex].referer)
-        putExtra("selected_server_index", safeIndex)
-        putStringArrayListExtra("server_names", ArrayList(options.map { it.serverName }))
-        putStringArrayListExtra("server_urls", ArrayList(options.map { it.url }))
-        putStringArrayListExtra("server_referers", ArrayList(options.map { it.referer }))
-        putStringArrayListExtra("server_user_agents", ArrayList(options.map { it.userAgent }))
-        putStringArrayListExtra("server_cookies", ArrayList(options.map { it.cookie }))
-        putStringArrayListExtra("server_authorizations", ArrayList(options.map { it.authorization }))
-    }
-    startActivity(intent)
+    currentOptions = options
+    currentServerIndex = selectedIndex.coerceIn(0, options.lastIndex)
+    openEmbeddedPlayer()
 }
 
 
@@ -528,20 +531,16 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
         // Use the same kind of HTTP setup as HTV PLAYER, while keeping HANI TV's
         // per-source Referer. A default User-Agent helps servers that reject an
         // empty Android client identity; a saved custom value takes precedence.
-        // Match HTV PLAYER: do not force "103IPTVPlayer/1.0" when no custom
-        // User-Agent was configured. Keep the per-source Referer unchanged.
         val userAgent = prefs.getString("add_user_agent", "")
             ?.trim()
             ?.takeIf { it.isNotEmpty() }
-        val httpFactoryBuilder = DefaultHttpDataSource.Factory()
+            ?: "103IPTVPlayer/1.0"
+        val httpFactory = DefaultHttpDataSource.Factory()
+            .setUserAgent(userAgent)
             .setConnectTimeoutMs(6000)
             .setReadTimeoutMs(12000)
             .setAllowCrossProtocolRedirects(true)
             .setDefaultRequestProperties(headers)
-        if (userAgent != null) {
-            httpFactoryBuilder.setUserAgent(userAgent)
-        }
-        val httpFactory = httpFactoryBuilder
         val exo = ExoPlayer.Builder(this)
             .setMediaSourceFactory(
                 DefaultMediaSourceFactory(this)
@@ -569,7 +568,8 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
                         }
                     }
                     startupTimeout = timeout
-                    playerHandler.postDelayed(timeout, 10000L)
+                    // Try the next server sooner when the current stream never becomes ready.
+                    playerHandler.postDelayed(timeout, 5000L)
                 }
             }
 
@@ -729,9 +729,6 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
         val displayNameInput = field("الاسم الذي يظهر داخل المشغّل", existing?.displayName ?: existing?.serverName ?: "السيرفر الأساسي")
         val urlInput = field("رابط البث الكامل", existing?.url ?: "")
         val refererInput = field("Referer (اختياري)", existing?.referer ?: "")
-        val userAgentInput = field("User-Agent (اختياري)", existing?.userAgent ?: "")
-        val cookieInput = field("Cookie (اختياري)", existing?.cookie ?: "")
-        val authorizationInput = field("Authorization (اختياري؛ مثال Basic أو Bearer)", existing?.authorization ?: "")
         AlertDialog.Builder(this)
             .setTitle(if (existing == null) "إضافة رابط" else "تعديل الرابط")
             .setView(box)
@@ -745,15 +742,12 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
                         val displayName = displayNameInput.text.toString().trim()
                         val url = urlInput.text.toString().trim()
                         val referer = refererInput.text.toString().trim()
-                        val userAgent = userAgentInput.text.toString().trim()
-                        val cookie = cookieInput.text.toString().trim()
-                        val authorization = authorizationInput.text.toString().trim()
                         if (channel.isBlank() || server.isBlank() || url.isBlank() ||
                             !(url.startsWith("http://") || url.startsWith("https://"))) {
                             Toast.makeText(this, "أدخل اسم القناة والسيرفر ورابطًا يبدأ بـ http:// أو https://", Toast.LENGTH_LONG).show()
                             return@setOnClickListener
                         }
-                        val item = StreamSource(channel, server, url, referer, displayName.ifBlank { server }, userAgent, cookie, authorization)
+                        val item = StreamSource(channel, server, url, referer, displayName.ifBlank { server })
                         if (editIndex >= 0 && editIndex < sources.size) sources[editIndex] = item else sources.add(item)
                         saveSources()
                         saveSourcesToCloud()
@@ -780,8 +774,7 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
                 sources.add(StreamSource(
                     item.optString("channel"), item.optString("serverName"),
                     item.optString("url"), item.optString("referer"),
-                    item.optString("displayName", item.optString("serverName")),
-                    item.optString("userAgent"), item.optString("cookie"), item.optString("authorization")
+                    item.optString("displayName", item.optString("serverName"))
                 ))
             }
         } catch (_: Exception) {
@@ -798,9 +791,6 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
                 put("url", source.url)
                 put("referer", source.referer)
                 put("displayName", source.displayName)
-                put("userAgent", source.userAgent)
-                put("cookie", source.cookie)
-                put("authorization", source.authorization)
             })
         }
         prefs.edit().putString("sources_json", array.toString()).apply()
@@ -821,10 +811,7 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
                                 child.child("url").getValue(String::class.java).orEmpty(),
                                 child.child("referer").getValue(String::class.java).orEmpty(),
                                 child.child("displayName").getValue(String::class.java)
-                                    ?: child.child("serverName").getValue(String::class.java).orEmpty(),
-                                child.child("userAgent").getValue(String::class.java).orEmpty(),
-                                child.child("cookie").getValue(String::class.java).orEmpty(),
-                                child.child("authorization").getValue(String::class.java).orEmpty()
+                                    ?: child.child("serverName").getValue(String::class.java).orEmpty()
                             )
                         )
                     }
@@ -862,10 +849,7 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
                 "serverName" to source.serverName,
                 "url" to source.url,
                 "referer" to source.referer,
-                "displayName" to source.displayName,
-                "userAgent" to source.userAgent,
-                "cookie" to source.cookie,
-                "authorization" to source.authorization
+                "displayName" to source.displayName
             )
         }
         if (payload.isEmpty()) payload["_empty"] = true
