@@ -69,6 +69,7 @@ class MainActivity : Activity() {
 
     // Do not open a channel from stale local data while the first Firebase read is pending.
     private var initialSourceSyncFinished = false
+    private var initialSyncTimeout: Runnable? = null
     private var pendingChannelToOpen: String? = null
 
     private data class StreamSource(
