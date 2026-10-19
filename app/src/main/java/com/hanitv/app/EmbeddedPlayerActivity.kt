@@ -1237,13 +1237,14 @@ private fun createPlaybackPlayer(refererOverride: String? = null): ExoPlayer {
         headers.remove("User-Agent")
     }
 
-    // Use a non-empty server-specific Referer when supplied; otherwise keep
-    // the globally configured Referer. An empty per-server value must not
-    // erase a valid Referer saved in the player's settings.
-    val referrer = refererOverride?.trim().orEmpty()
-    if (referrer.isNotBlank()) {
-        headers["Referer"] = referrer
-    }
+    val referrer = refererOverride?.trim()
+    ?.takeIf { it.isNotEmpty() }
+    ?: prefs.getString("add_referrer", "").orEmpty().trim()
+
+headers.remove("Referer")
+if (referrer.isNotBlank()) {
+    headers["Referer"] = referrer
+}
 
     val httpFactory = DefaultHttpDataSource.Factory()
         .setDefaultRequestProperties(headers)
