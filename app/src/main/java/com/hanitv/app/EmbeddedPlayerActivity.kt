@@ -82,7 +82,6 @@ private var incomingChannelName = ""
 private val serverFailoverHandler = Handler(Looper.getMainLooper())
 private var serverFailoverPending = false
 private var serverFailoverAttempts = 0
-private val server401RetriedUrls = mutableSetOf<String>()
 private var serverStartupTimeout: Runnable? = null
 private var fullscreenView: PlayerView? = null
 private var serverButtonsBar: LinearLayout? = null  
@@ -1296,31 +1295,11 @@ if (referrer.isNotBlank()) {
                             append("\n\nهذا الخطأ لا يثبت أن Referer وحده هو السبب. قد تكون استجابة الخادم غير فيديو أو أن صيغة البث غير مدعومة.")
                         }
                     }
-                    // Retry a first HTTP 401 once on the same URL before failing over.
-                    // This repeats the configured request; it does not bypass server auth.
-                    val failedUrl = exo.currentMediaItem
-                        ?.localConfiguration?.uri?.toString().orEmpty()
-                    if (status == 401 && failedUrl.isNotBlank() &&
-                        server401RetriedUrls.add(failedUrl)) {
-                        serverFailoverHandler.postDelayed({
-                            if (player !== exo) return@postDelayed
-                            val retryChannel = channels.firstOrNull { it.url == failedUrl }
-                                ?: Channel(
-                                    name = incomingChannelName.ifBlank { "بث مباشر" },
-                                    url = failedUrl,
-                                    group = "مباشر",
-                                    type = "live",
-                                    referer = incomingServerReferers
-                                        .getOrNull(incomingSelectedServer).orEmpty()
-                                )
-                            play(retryChannel)
-                            fullscreenView?.player = player
-                            updateServerButtonSelection()
-                        }, 700L)
-                        return
-                    }
-                    // If the same URL still fails, try the next supplied server silently.
-                    if (incomingServerUrls.size > 1) {
+                    // A failed server (including HTTP 401) should not be retried
+                    // on the same URL: move directly to the next supplied server.
+                    // The next player's request headers are selected from that server's
+                    // own Cookie, Authorization, User-Agent and Referer fields.
+                    if (directLinkPlayback && incomingServerUrls.size > 1) {
                         scheduleNextServerAfterFailure(exo)
                     } else {
                         message(diagnostic)
