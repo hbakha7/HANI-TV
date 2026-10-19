@@ -502,37 +502,46 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
         embeddedPlayerView = video
         videoFrame.addView(video, FrameLayout.LayoutParams(-1, -1))
 
-        // Top overlay: channel name and close button.
+        // Tapping the picture toggles every player overlay; controls can be hidden for viewing
+        // and brought back with another tap. The tap layer sits below all interactive controls.
+        var overlaysVisible = true
+        val overlayViews = mutableListOf<View>()
+        val tapLayer = View(this).apply {
+            setBackgroundColor(Color.TRANSPARENT)
+            isClickable = true
+            isFocusable = false
+            setOnClickListener {
+                overlaysVisible = !overlaysVisible
+                val visibility = if (overlaysVisible) View.VISIBLE else View.GONE
+                overlayViews.forEach { it.visibility = visibility }
+            }
+        }
+        videoFrame.addView(tapLayer, FrameLayout.LayoutParams(-1, -1))
+
+        // Compact top overlay: remove the duplicate channel title; the channel name remains
+        // visible on its card in the bottom channel strip.
         val overlay = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(10), dp(5), dp(10), dp(8))
-            setBackgroundColor(Color.argb(135, 0, 0, 0))
+            setPadding(dp(8), dp(1), dp(8), dp(4))
+            setBackgroundColor(Color.argb(105, 0, 0, 0))
         }
         val top = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
+            gravity = Gravity.END or Gravity.CENTER_VERTICAL
         }
-        val channelTitle = TextView(this).apply {
-            text = source.channel
-            textSize = 19f
-            setTextColor(Color.WHITE)
-            setTypeface(null, Typeface.BOLD)
-            gravity = Gravity.CENTER_VERTICAL
-        }
-        embeddedChannelTitle = channelTitle
-        top.addView(channelTitle, LinearLayout.LayoutParams(0, dp(40), 1f))
         val close = TextView(this).apply {
             text = "✕"
-            textSize = 27f
+            textSize = 25f
             gravity = Gravity.CENTER
             setTextColor(Color.WHITE)
             isClickable = true
+            isFocusable = true
             setOnClickListener { dialog.dismiss() }
         }
-        top.addView(close, LinearLayout.LayoutParams(dp(44), dp(40)))
-        overlay.addView(top)
+        top.addView(close, LinearLayout.LayoutParams(dp(36), dp(28)))
+        overlay.addView(top, LinearLayout.LayoutParams(-1, dp(28)))
 
-        // Circular server selectors like the reference player.
+        // Circular server selectors, reduced to the same compact size as the reference image.
         embeddedServerButtons.clear()
         val serverContent = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -544,14 +553,14 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
             setTextColor(Color.WHITE)
             setTypeface(null, Typeface.BOLD)
             gravity = Gravity.CENTER_VERTICAL
-        }, LinearLayout.LayoutParams(dp(70), dp(66)))
+        }, LinearLayout.LayoutParams(dp(62), dp(50)))
         currentOptions.forEachIndexed { index, item ->
             val label = item.displayName.ifBlank { item.serverName }
                 .replace("السيرفر الأساسي", "السيرفر")
                 .take(8)
             val button = TextView(this).apply {
                 text = "${index + 1}\n$label"
-                textSize = 10f
+                textSize = 9f
                 gravity = Gravity.CENTER
                 setTextColor(Color.WHITE)
                 isClickable = true
@@ -559,12 +568,12 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
                 background = GradientDrawable().apply {
                     shape = GradientDrawable.OVAL
                     setColor(Color.argb(45, 0, 0, 0))
-                    setStroke(dp(3), if (index == currentServerIndex) Color.rgb(25, 155, 240) else Color.LTGRAY)
+                    setStroke(dp(2), if (index == currentServerIndex) Color.rgb(25, 155, 240) else Color.LTGRAY)
                 }
                 setOnClickListener { switchServerInsidePlayer(index) }
             }
             embeddedServerButtons.add(button)
-            serverContent.addView(button, LinearLayout.LayoutParams(dp(64), dp(64)).apply {
+            serverContent.addView(button, LinearLayout.LayoutParams(dp(50), dp(50)).apply {
                 setMargins(dp(3), 0, dp(3), 0)
             })
         }
@@ -572,8 +581,9 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
             isHorizontalScrollBarEnabled = false
             addView(serverContent)
         }
-        overlay.addView(serverScroll)
+        overlay.addView(serverScroll, LinearLayout.LayoutParams(-1, dp(50)))
         videoFrame.addView(overlay, FrameLayout.LayoutParams(-1, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP))
+        overlayViews.add(overlay)
 
         // Persistent player controls: these remain visible and each button controls playback.
         val controls = LinearLayout(this).apply {
@@ -649,6 +659,7 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
         videoFrame.addView(controls, FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER
         ).apply { leftMargin = dp(12); rightMargin = dp(12) })
+        overlayViews.add(controls)
 
         // Timeline is visible permanently. Seek is enabled only for seekable media.
         val timeline = LinearLayout(this).apply {
@@ -692,6 +703,7 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
         videoFrame.addView(timeline, FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, dp(38), Gravity.BOTTOM
         ).apply { bottomMargin = dp(96) })
+        overlayViews.add(timeline)
 
         val spinner = ProgressBar(this).apply {
             isIndeterminate = true
@@ -756,6 +768,7 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
                 Gravity.BOTTOM
             )
         )
+        overlayViews.add(channelScroll)
 
         dialog.setContentView(root)
         dialog.setOnDismissListener {
