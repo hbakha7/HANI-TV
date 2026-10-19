@@ -188,19 +188,40 @@ class MainActivity : Activity() {
         ensureReadAuthentication()
     }
 
-    private fun ensureReadAuthentication() {
-        if (firebaseAuth.currentUser != null) {
-            syncFromCloud { finishInitialSourceSync() }
-            return
-        }
-        firebaseAuth.signInAnonymously()
-            .addOnSuccessListener { syncFromCloud { finishInitialSourceSync() } }
-            .addOnFailureListener { error ->
-                Toast.makeText(this, "تعذر الاتصال بقاعدة البيانات: ${error.message}", Toast.LENGTH_LONG).show()
-                // Keep locally saved channels usable if authentication/network access fails.
-                finishInitialSourceSync()
-            }
+    
+private fun ensureReadAuthentication() {
+    if (firebaseAuth.currentUser != null) {
+        syncFromCloud { finishInitialSourceSync() }
+        return
     }
+
+    firebaseAuth.signInAnonymously()
+        .addOnSuccessListener {
+            syncFromCloud { finishInitialSourceSync() }
+        }
+        .addOnFailureListener { error ->
+            Toast.makeText(
+                this,
+                "تعذر تسجيل الدخول إلى قاعدة البيانات: ${error.message}",
+                Toast.LENGTH_LONG
+            ).show()
+
+            finishInitialSourceSync()
+        }
+
+    // Prevent the channel from waiting forever if Firebase never responds.
+    playerHandler.postDelayed({
+        if (!initialSourceSyncFinished) {
+            finishInitialSourceSync()
+            Toast.makeText(
+                this,
+                "تعذرت المزامنة؛ ستُستخدم الروابط المحفوظة محليًا إن وجدت.",
+                Toast.LENGTH_LONG
+            ).show()
+        }
+    }, 10000L)
+}
+
 
     private fun finishInitialSourceSync() {
         initialSourceSyncFinished = true
