@@ -1,6 +1,7 @@
 package com.hanitv.app
 
 import android.app.Activity
+import android.content.pm.ActivityInfo
 import android.os.Bundle
 import android.graphics.Color
 import android.graphics.Typeface
@@ -71,6 +72,8 @@ class MainActivity : Activity() {
     private val playerHandler = Handler(Looper.getMainLooper())
     private var startupTimeout: Runnable? = null
     private var failoverPending = false
+    private var orientationBeforePlayer = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+    private var systemUiBeforePlayer = 0
 
     // Do not open a channel from stale local data while the first Firebase read is pending.
     private var initialSourceSyncFinished = false
@@ -463,6 +466,20 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
     private fun openEmbeddedPlayer() {
         closeEmbeddedPlayer()
         val source = currentOptions.getOrNull(currentServerIndex) ?: return
+
+        // Open the stream directly in landscape immersive mode.
+        orientationBeforePlayer = requestedOrientation
+        systemUiBeforePlayer = window.decorView.systemUiVisibility
+        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+        window.decorView.systemUiVisibility = (
+            View.SYSTEM_UI_FLAG_FULLSCREEN or
+            View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
+            View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or
+            View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
+            View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or
+            View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+        )
+
         val dialog = Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen)
         embeddedDialog = dialog
 
@@ -471,8 +488,6 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
             setBackgroundColor(Color.BLACK)
         }
         val videoFrame = FrameLayout(this).apply { setBackgroundColor(Color.BLACK) }
-        val screenWidth = resources.displayMetrics.widthPixels
-        val videoHeight = (screenWidth * 9f / 16f).toInt()
         val video = PlayerView(this).apply {
             useController = false
             setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
@@ -610,7 +625,18 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
                 player.seekTo(if (player.duration > 0L) target.coerceAtMost(player.duration) else target)
             }
         }
-        videoFrame.addView(controls, FrameLayout.LayoutParams(-1, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
+        videoFrame.addView(
+            controls,
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+            ).apply {
+                leftMargin = dp(16)
+                rightMargin = dp(16)
+                bottomMargin = dp(132)
+            }
+        )
 
         val spinner = ProgressBar(this).apply {
             isIndeterminate = true
@@ -619,12 +645,13 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
         }
         loadingIndicator = spinner
         videoFrame.addView(spinner, FrameLayout.LayoutParams(dp(42), dp(42), Gravity.CENTER))
-        root.addView(videoFrame, LinearLayout.LayoutParams(-1, videoHeight))
+        // The video occupies the whole landscape screen; overlays stay inside it.
+        root.addView(videoFrame, LinearLayout.LayoutParams(-1, 0, 1f))
 
-        // Horizontal channel strip directly below the video.
+        // Horizontal channel strip overlays the bottom of the fullscreen video.
         val channelScroll = HorizontalScrollView(this).apply {
             isHorizontalScrollBarEnabled = false
-            setBackgroundColor(Color.rgb(8, 10, 11))
+            setBackgroundColor(Color.argb(150, 8, 10, 11))
         }
         val channelRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -666,11 +693,31 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
             embeddedChannelCards[channel.first] = card
         }
         channelScroll.addView(channelRow)
-        root.addView(channelScroll, LinearLayout.LayoutParams(-1, dp(126)))
+        videoFrame.addView(
+            channelScroll,
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                dp(94),
+                Gravity.BOTTOM
+            )
+        )
 
         dialog.setContentView(root)
-        dialog.setOnDismissListener { releaseEmbeddedPlayer() }
+        dialog.setOnDismissListener {
+            releaseEmbeddedPlayer()
+            window.decorView.systemUiVisibility = systemUiBeforePlayer
+            requestedOrientation = orientationBeforePlayer
+        }
         dialog.show()
+        dialog.window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+        dialog.window?.decorView?.systemUiVisibility = (
+            View.SYSTEM_UI_FLAG_FULLSCREEN or
+            View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
+            View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or
+            View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
+            View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or
+            View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+        )
 
         val headers = mutableMapOf<String, String>()
         if (source.referer.isNotBlank()) headers["Referer"] = source.referer
@@ -1146,6 +1193,11 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
 
     private fun dp(value: Int): Int {
         return (value * resources.displayMetrics.density).toInt()
+    }
+
+
+    override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
+        super.onConfigurationChanged(newConfig)
     }
 
     @Deprecated("Deprecated in Android")
