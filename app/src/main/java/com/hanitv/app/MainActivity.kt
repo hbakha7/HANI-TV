@@ -425,19 +425,9 @@ class MainActivity : Activity() {
     
 
 
+
 private fun openChannel(channelName: String) {
-    // Use an already saved local source immediately.
-    val options = sources.filter {
-        it.channel == channelName && it.url.isNotBlank()
-    }
-
-    if (options.isNotEmpty()) {
-        pendingChannelToOpen = null
-        launchPlayer(options, 0)
-        return
-    }
-
-    // If the channel is not saved locally, wait for the initial cloud sync.
+    // Wait for Firebase to finish syncing the server list.
     if (!initialSourceSyncFinished) {
         pendingChannelToOpen = channelName
         Toast.makeText(
@@ -448,12 +438,22 @@ private fun openChannel(channelName: String) {
         return
     }
 
-    Toast.makeText(
-        this,
-        "لا توجد روابط محفوظة لهذه القناة. افتح إدارة السيرفرات لإضافة رابط.",
-        Toast.LENGTH_LONG
-    ).show()
+    val options = sources.filter {
+        it.channel == channelName && it.url.isNotBlank()
+    }
+
+    if (options.isEmpty()) {
+        Toast.makeText(
+            this,
+            "لا توجد روابط محفوظة لهذه القناة. افتح إدارة السيرفرات لإضافة رابط.",
+            Toast.LENGTH_LONG
+        ).show()
+        return
+    }
+
+    launchPlayer(options, 0)
 }
+
 
 
     
