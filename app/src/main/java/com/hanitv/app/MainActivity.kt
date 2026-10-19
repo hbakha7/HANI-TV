@@ -510,13 +510,24 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
 
         val headers = mutableMapOf<String, String>()
         if (source.referer.isNotBlank()) headers["Referer"] = source.referer
+        // Use the same kind of HTTP setup as HTV PLAYER, while keeping HANI TV's
+        // per-source Referer. A default User-Agent helps servers that reject an
+        // empty Android client identity; a saved custom value takes precedence.
+        val userAgent = prefs.getString("add_user_agent", "")
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() }
+            ?: "103IPTVPlayer/1.0"
         val httpFactory = DefaultHttpDataSource.Factory()
-            .setConnectTimeoutMs(10000)
-            .setReadTimeoutMs(15000)
+            .setUserAgent(userAgent)
+            .setConnectTimeoutMs(6000)
+            .setReadTimeoutMs(12000)
             .setAllowCrossProtocolRedirects(true)
             .setDefaultRequestProperties(headers)
         val exo = ExoPlayer.Builder(this)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(httpFactory))
+            .setMediaSourceFactory(
+                DefaultMediaSourceFactory(this)
+                    .setDataSourceFactory(httpFactory)
+            )
             .build()
         embeddedPlayer = exo
         video.player = exo
@@ -545,11 +556,30 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
 
             override fun onPlayerError(error: PlaybackException) {
                 loadingIndicator?.visibility = View.VISIBLE
-                if (currentOptions.size > 1) tryNextServer(exo)
-                else Toast.makeText(this@MainActivity, "تعذر تشغيل القناة على هذا السيرفر", Toast.LENGTH_SHORT).show()
+                if (currentOptions.size > 1) {
+                    tryNextServer(exo)
+                } else {
+                    // Show the actual Media3 error code to help identify whether
+                    // the server rejected the request or the stream format is unsupported.
+                    Toast.makeText(
+                        this@MainActivity,
+                        "تعذر التشغيل: ${error.errorCodeName}",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
             }
         })
-        exo.setMediaItem(MediaItem.fromUri(source.url))
+        val mediaItemBuilder = MediaItem.Builder().setUri(source.url)
+        // Match HTV PLAYER's HLS fallback for providers that use an index.html URL.
+        val normalizedPath = try {
+            android.net.Uri.parse(source.url).path.orEmpty().lowercase()
+        } catch (_: Exception) {
+            ""
+        }
+        if (normalizedPath.endsWith("/index.html") || normalizedPath == "index.html") {
+            mediaItemBuilder.setMimeType(androidx.media3.common.MimeTypes.APPLICATION_M3U8)
+        }
+        exo.setMediaItem(mediaItemBuilder.build())
         exo.prepare()
         exo.playWhenReady = true
     }
