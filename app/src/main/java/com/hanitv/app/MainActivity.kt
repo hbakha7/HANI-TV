@@ -520,208 +520,301 @@ private fun launchPlayer(
 
 
     /** Plays channel streams inside HANI TV; the separate 103 IPTV Player is not needed. */
-    private fun openEmbeddedPlayer() {
-        closeEmbeddedPlayer()
-        val source = currentOptions.getOrNull(currentServerIndex) ?: return
-        val dialog = Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen)
-        embeddedDialog = dialog
+    
+private fun openEmbeddedPlayer() {
+    closeEmbeddedPlayer()
 
-        val root = FrameLayout(this).apply { setBackgroundColor(Color.BLACK) }
-        val video = PlayerView(this).apply {
-            useController = true
-            setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
-            setBackgroundColor(Color.BLACK)
-        }
-        embeddedPlayerView = video
-        root.addView(video, FrameLayout.LayoutParams(-1, -1))
+    val source = currentOptions.getOrNull(currentServerIndex) ?: return
+    failoverPending = false
 
-        val overlay = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(12), dp(12), dp(12), dp(12))
-            setBackgroundColor(Color.argb(150, 0, 0, 0))
-        }
-        val top = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-        }
-        top.addView(TextView(this).apply {
+    val dialog = Dialog(
+        this,
+        android.R.style.Theme_Black_NoTitleBar_Fullscreen
+    )
+    embeddedDialog = dialog
+
+    val root = FrameLayout(this).apply {
+        setBackgroundColor(Color.BLACK)
+    }
+
+    val video = PlayerView(this).apply {
+        useController = true
+        setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
+        setBackgroundColor(Color.BLACK)
+    }
+    embeddedPlayerView = video
+
+    root.addView(
+        video,
+        FrameLayout.LayoutParams(-1, -1)
+    )
+
+    val overlay = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        setPadding(dp(12), dp(8), dp(12), dp(8))
+        setBackgroundColor(Color.argb(170, 0, 0, 0))
+    }
+
+    val top = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+    }
+
+    top.addView(
+        TextView(this).apply {
             text = source.channel
             textSize = 18f
             setTextColor(Color.WHITE)
             setTypeface(null, Typeface.BOLD)
-        }, LinearLayout.LayoutParams(0, dp(44), 1f))
-        val close = Button(this).apply {
-            text = "✕"
-            setTextColor(Color.WHITE)
-            setBackgroundColor(Color.TRANSPARENT)
-            setOnClickListener { dialog.dismiss() }
-        }
-        top.addView(close, LinearLayout.LayoutParams(dp(48), dp(44)))
-        overlay.addView(top)
+        },
+        LinearLayout.LayoutParams(0, dp(44), 1f)
+    )
 
+    top.addView(Button(this).apply {
+        text = "✕"
+        setTextColor(Color.WHITE)
+        setBackgroundColor(Color.TRANSPARENT)
+        setOnClickListener { dialog.dismiss() }
+    }, LinearLayout.LayoutParams(dp(48), dp(44)))
+
+    overlay.addView(top)
+
+    if (currentOptions.size > 1) {
         val serverRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
-        if (currentOptions.size > 1) {
-            serverRow.addView(TextView(this).apply {
-                text = "السيرفرات"
-                textSize = 13f
+
+        currentOptions.forEachIndexed { index, item ->
+            serverRow.addView(Button(this).apply {
+                text = item.displayName
+                    .ifBlank { item.serverName }
+                    .ifBlank { "السيرفر ${index + 1}" }
+                textSize = 10f
                 setTextColor(Color.WHITE)
-            })
-            currentOptions.forEachIndexed { index, item ->
-                val button = Button(this).apply {
-                    text = item.displayName.ifBlank { item.serverName }.ifBlank { "${index + 1}" }
-                    textSize = 11f
-                    setTextColor(Color.WHITE)
-                    setBackgroundColor(if (index == currentServerIndex) Color.rgb(25, 150, 235) else Color.DKGRAY)
-                    setOnClickListener {
+                setBackgroundColor(
+                    if (index == currentServerIndex)
+                        Color.rgb(25, 150, 235)
+                    else
+                        Color.DKGRAY
+                )
+                setOnClickListener {
+                    if (index != currentServerIndex) {
                         currentServerIndex = index
                         openEmbeddedPlayer()
                     }
                 }
-                serverRow.addView(button, LinearLayout.LayoutParams(0, dp(42), 1f).apply {
-                    setMargins(dp(2), 0, dp(2), 0)
-                })
-            }
-            overlay.addView(serverRow)
-        }
-        root.addView(overlay, FrameLayout.LayoutParams(-1, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP))
-
-        val spinner = ProgressBar(this).apply {
-            isIndeterminate = true
-            indeterminateTintList = android.content.res.ColorStateList.valueOf(Color.WHITE)
-            contentDescription = "جارٍ تحميل البث"
-        }
-        loadingIndicator = spinner
-        root.addView(spinner, FrameLayout.LayoutParams(dp(48), dp(48), Gravity.CENTER))
-
-        dialog.setContentView(root)
-        dialog.setOnDismissListener { releaseEmbeddedPlayer() }
-        dialog.show()
-
-        
-val headers = mutableMapOf<String, String>()
-
-if (source.referer.isNotBlank()) {
-    headers["Referer"] = source.referer
-}
-
-if (source.cookie.isNotBlank()) {
-    headers["Cookie"] = source.cookie
-}
-
-val authorization = source.authorization.trim()
-if (authorization.isNotBlank()) {
-    headers["Authorization"] = when {
-        authorization.startsWith("Basic ", ignoreCase = true) ||
-        authorization.startsWith("Bearer ", ignoreCase = true) ->
-            authorization
-
-        authorization.contains(":") -> {
-            val encoded = android.util.Base64.encodeToString(
-                authorization.toByteArray(Charsets.UTF_8),
-                android.util.Base64.NO_WRAP
-            )
-            "Basic $encoded"
+            }, LinearLayout.LayoutParams(0, dp(44), 1f).apply {
+                setMargins(dp(2), 0, dp(2), 0)
+            })
         }
 
-        else -> authorization
+        overlay.addView(serverRow)
     }
-}
 
-val userAgent = source.userAgent.trim().ifBlank {
-    prefs.getString("add_user_agent", "")
-        ?.trim()
-        ?.takeIf { it.isNotEmpty() }
-        ?: "103IPTVPlayer/1.0"
-}
+    root.addView(
+        overlay,
+        FrameLayout.LayoutParams(
+            -1,
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+            Gravity.TOP
+        )
+    )
 
-val httpFactory = DefaultHttpDataSource.Factory()
-    .setUserAgent(userAgent)
-    .setConnectTimeoutMs(6000)
-    .setReadTimeoutMs(12000)
-    .setAllowCrossProtocolRedirects(true)
-    .setDefaultRequestProperties(headers)
-    
-        val exo = ExoPlayer.Builder(this)
-            .setMediaSourceFactory(
-                DefaultMediaSourceFactory(this)
-                    .setDataSourceFactory(httpFactory)
-            )
-            .build()
-        embeddedPlayer = exo
-        video.player = exo
-        exo.addListener(object : Player.Listener {
-            override fun onPlaybackStateChanged(playbackState: Int) {
-                loadingIndicator?.visibility = when (playbackState) {
-                    Player.STATE_BUFFERING, Player.STATE_IDLE -> View.VISIBLE
-                    Player.STATE_READY, Player.STATE_ENDED -> View.GONE
-                    else -> loadingIndicator?.visibility ?: View.GONE
-                }
-                if (playbackState == Player.STATE_READY) {
-                    startupTimeout?.let { playerHandler.removeCallbacks(it) }
-                    startupTimeout = null
-                    failoverCount = 0
-                } else if (playbackState == Player.STATE_BUFFERING && currentOptions.size > 1) {
-                    startupTimeout?.let { playerHandler.removeCallbacks(it) }
-                    val timeout = Runnable {
-                        if (embeddedPlayer === exo && exo.playbackState != Player.STATE_READY && !exo.isPlaying) {
-                            tryNextServer(exo)
-                        }
-                    }
-                    startupTimeout = timeout
-                    // Try the next server sooner when the current stream never becomes ready.
-                    playerHandler.postDelayed(timeout, 5000L)
-                }
+    val spinner = ProgressBar(this).apply {
+        isIndeterminate = true
+        indeterminateTintList =
+            android.content.res.ColorStateList.valueOf(Color.WHITE)
+    }
+    loadingIndicator = spinner
+
+    root.addView(
+        spinner,
+        FrameLayout.LayoutParams(dp(48), dp(48), Gravity.CENTER)
+    )
+
+    dialog.setContentView(root)
+    dialog.setOnDismissListener { releaseEmbeddedPlayer() }
+    dialog.show()
+
+    val headers = mutableMapOf<String, String>()
+
+    if (source.referer.isNotBlank()) {
+        headers["Referer"] = source.referer
+    }
+    if (source.cookie.isNotBlank()) {
+        headers["Cookie"] = source.cookie
+    }
+
+    val authorization = source.authorization.trim()
+    if (authorization.isNotBlank()) {
+        headers["Authorization"] = when {
+            authorization.startsWith("Basic ", true) ||
+                authorization.startsWith("Bearer ", true) ->
+                authorization
+
+            authorization.contains(":") -> {
+                val encoded = android.util.Base64.encodeToString(
+                    authorization.toByteArray(Charsets.UTF_8),
+                    android.util.Base64.NO_WRAP
+                )
+                "Basic $encoded"
             }
 
-            
-override fun onPlayerError(error: PlaybackException) {
-    loadingIndicator?.visibility = View.VISIBLE
-
-    val httpError = generateSequence(error as Throwable?) { it.cause }
-        .filterIsInstance<androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException>()
-        .firstOrNull()
-
-    val statusCode = httpError?.responseCode
-
-    // Try another configured server immediately after a playback failure.
-    if (currentOptions.size > 1) {
-        tryNextServer(exo)
-        return
+            else -> authorization
+        }
     }
 
-    // A 401 can be caused by missing or rejected server credentials.
-    val message = when (statusCode) {
-        401 -> "رفض السيرفر المصادقة (401). تحقق من بيانات الدخول."
-        403 -> "السيرفر رفض الوصول (403)."
-        else -> "تعذر التشغيل: ${error.errorCodeName}"
+    val userAgent = source.userAgent.trim().ifBlank {
+        prefs.getString("add_user_agent", "")
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() }
+            ?: "103IPTVPlayer/1.0"
     }
 
-        Toast.makeText(
-        this@MainActivity,
-        message,
-        Toast.LENGTH_LONG
-    ).show()
+    val httpFactory = DefaultHttpDataSource.Factory()
+        .setUserAgent(userAgent)
+        .setConnectTimeoutMs(4000)
+        .setReadTimeoutMs(6000)
+        .setAllowCrossProtocolRedirects(true)
+        .setDefaultRequestProperties(headers)
+
+    val exo = ExoPlayer.Builder(this)
+        .setMediaSourceFactory(
+            DefaultMediaSourceFactory(this)
+                .setDataSourceFactory(httpFactory)
+        )
+        .build()
+
+    embeddedPlayer = exo
+    video.player = exo
+
+    // Move to the next server if playback has not become ready.
+    val timeout = Runnable {
+        if (embeddedPlayer === exo &&
+            exo.playbackState != Player.STATE_READY
+        ) {
+            tryNextServer(exo)
+        }
+    }
+    startupTimeout = timeout
+    playerHandler.postDelayed(timeout, 7000L)
+
+    exo.addListener(object : Player.Listener {
+        override fun onPlaybackStateChanged(playbackState: Int) {
+            loadingIndicator?.visibility = when (playbackState) {
+                Player.STATE_BUFFERING, Player.STATE_IDLE -> View.VISIBLE
+                Player.STATE_READY, Player.STATE_ENDED -> View.GONE
+                else -> View.VISIBLE
+            }
+
+            if (playbackState == Player.STATE_READY) {
+                startupTimeout?.let {
+                    playerHandler.removeCallbacks(it)
+                }
+                startupTimeout = null
+            }
+        }
+
+        override fun onPlayerError(error: PlaybackException) {
+            loadingIndicator?.visibility = View.VISIBLE
+
+            // Continue to another configured server without stopping on 401.
+            if (currentOptions.size > 1) {
+                tryNextServer(exo)
+            } else {
+                val httpError = generateSequence(error as Throwable?) {
+                    it.cause
+                }.filterIsInstance<
+                    androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException
+                >().firstOrNull()
+
+                val message = when (httpError?.responseCode) {
+                    401 -> "خطأ 401: السيرفر رفض المصادقة."
+                    403 -> "خطأ 403: الوصول مرفوض."
+                    else -> "تعذر التشغيل؛ تحقق من رابط البث وبيانات السيرفر."
+                }
+
+                Toast.makeText(
+                    this@MainActivity,
+                    message,
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+    })
+
+    val itemBuilder = MediaItem.Builder().setUri(source.url)
+
+    val path = try {
+        android.net.Uri.parse(source.url).path.orEmpty().lowercase()
+    } catch (_: Exception) {
+        ""
+    }
+
+    if (path.endsWith(".m3u8") ||
+        path.endsWith("/index.html") ||
+        path == "index.html"
+    ) {
+        itemBuilder.setMimeType(
+            androidx.media3.common.MimeTypes.APPLICATION_M3U8
+        )
+    }
+
+    exo.setMediaItem(itemBuilder.build())
+    exo.prepare()
+    exo.playWhenReady = true
 }
-})
+
+private fun tryNextServer(failedPlayer: ExoPlayer) {
+    if (embeddedPlayer !== failedPlayer ||
+        currentOptions.size < 2 ||
+        failoverPending
+    ) return
+
+    failoverPending = true
+
+    startupTimeout?.let {
+        playerHandler.removeCallbacks(it)
+    }
+    startupTimeout = null
+
+    playerHandler.postDelayed({
+        if (embeddedPlayer !== failedPlayer || currentOptions.isEmpty()) {
+            failoverPending = false
+            return@postDelayed
+        }
+
+        // Cycle through all configured servers continuously.
+        currentServerIndex =
+            (currentServerIndex + 1) % currentOptions.size
+
+        openEmbeddedPlayer()
+    }, 150L)
+}
+
+private fun releaseEmbeddedPlayer() {
+    startupTimeout?.let {
+        playerHandler.removeCallbacks(it)
+    }
+    startupTimeout = null
+
+    embeddedPlayerView?.player = null
+
+    embeddedPlayer?.release()
+    embeddedPlayer = null
+    embeddedPlayerView = null
+    loadingIndicator = null
+    embeddedDialog = null
+    failoverPending = false
+}
+
 
         
-        val mediaItemBuilder = MediaItem.Builder().setUri(source.url)
-        // Match HTV PLAYER's HLS fallback for providers that use an index.html URL.
-        val normalizedPath = try {
-            android.net.Uri.parse(source.url).path.orEmpty().lowercase()
-        } catch (_: Exception) {
-            ""
-        }
-        if (normalizedPath.endsWith("/index.html") || normalizedPath == "index.html") {
-            mediaItemBuilder.setMimeType(androidx.media3.common.MimeTypes.APPLICATION_M3U8)
-        }
-        exo.setMediaItem(mediaItemBuilder.build())
-        exo.prepare()
-        exo.playWhenReady = true
-    }
+
+
+
+        
 
     private fun tryNextServer(failedPlayer: ExoPlayer) {
         if (embeddedPlayer !== failedPlayer || currentOptions.size < 2 || failoverPending) return
