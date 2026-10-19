@@ -502,6 +502,16 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
         embeddedPlayerView = video
         videoFrame.addView(video, FrameLayout.LayoutParams(-1, -1))
 
+        // Crop the stream slightly horizontally to remove a narrow encoded/letterboxed
+        // black strip at the left edge. The video frame clips the scaled surface to screen.
+        // PlayerView's ZOOM mode remains enabled to fill the landscape display.
+        video.post {
+            video.videoSurfaceView?.apply {
+                scaleX = 1.10f
+                translationX = -dp(22).toFloat()
+            }
+        }
+
         // Tapping the picture toggles every player overlay; controls can be hidden for viewing
         // and brought back with another tap. The tap layer sits below all interactive controls.
         var overlaysVisible = true
