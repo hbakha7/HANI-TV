@@ -435,28 +435,21 @@ class MainActivity : Activity() {
     
 
 
-private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
-    if (options.isEmpty()) return
-    val safeIndex = selectedIndex.coerceIn(0, options.lastIndex)
-    val selected = options[safeIndex]
 
-    // Use HTV PLAYER's existing activity and its original playback UI, not a new generic PlayerView.
-    val playerIntent = Intent(this, EmbeddedPlayerActivity::class.java).apply {
-        putExtra("url", selected.url)
-        putExtra("name", selected.channel)
-        putExtra("referer", selected.referer)
-        putExtra("selected_server_index", safeIndex)
-        putStringArrayListExtra("server_names", ArrayList(options.map {
-            it.displayName.ifBlank { it.serverName }
-        }))
-        putStringArrayListExtra("server_urls", ArrayList(options.map { it.url }))
-        putStringArrayListExtra("server_referers", ArrayList(options.map { it.referer }))
-        putStringArrayListExtra("server_cookies", ArrayList(options.map { it.cookie }))
-        putStringArrayListExtra("server_authorizations", ArrayList(options.map { it.authorization }))
-        putStringArrayListExtra("server_user_agents", ArrayList(options.map { it.userAgent }))
-    }
-    startActivity(playerIntent)
+private fun launchPlayer(
+    options: List<StreamSource>,
+    selectedIndex: Int = 0
+) {
+    if (options.isEmpty()) return
+
+    currentOptions = options
+    currentServerIndex = selectedIndex.coerceIn(0, options.lastIndex)
+    failoverCount = 0
+    failoverPending = false
+
+    openEmbeddedPlayer()
 }
+
 
 
 
