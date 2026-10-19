@@ -653,12 +653,13 @@ override fun onPlayerError(error: PlaybackException) {
         else -> "تعذر التشغيل: ${error.errorCodeName}"
     }
 
-    Toast.makeText(
+        Toast.makeText(
         this@MainActivity,
         message,
         Toast.LENGTH_LONG
     ).show()
 }
+})
 
         
         val mediaItemBuilder = MediaItem.Builder().setUri(source.url)
