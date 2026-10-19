@@ -534,21 +534,50 @@ private fun launchPlayer(
         dialog.setOnDismissListener { releaseEmbeddedPlayer() }
         dialog.show()
 
-        val headers = mutableMapOf<String, String>()
-        if (source.referer.isNotBlank()) headers["Referer"] = source.referer
-        // Use the same kind of HTTP setup as HTV PLAYER, while keeping HANI TV's
-        // per-source Referer. A default User-Agent helps servers that reject an
-        // empty Android client identity; a saved custom value takes precedence.
-        val userAgent = prefs.getString("add_user_agent", "")
-            ?.trim()
-            ?.takeIf { it.isNotEmpty() }
-            ?: "103IPTVPlayer/1.0"
-        val httpFactory = DefaultHttpDataSource.Factory()
-            .setUserAgent(userAgent)
-            .setConnectTimeoutMs(6000)
-            .setReadTimeoutMs(12000)
-            .setAllowCrossProtocolRedirects(true)
-            .setDefaultRequestProperties(headers)
+        
+val headers = mutableMapOf<String, String>()
+
+if (source.referer.isNotBlank()) {
+    headers["Referer"] = source.referer
+}
+
+if (source.cookie.isNotBlank()) {
+    headers["Cookie"] = source.cookie
+}
+
+val authorization = source.authorization.trim()
+if (authorization.isNotBlank()) {
+    headers["Authorization"] = when {
+        authorization.startsWith("Basic ", ignoreCase = true) ||
+        authorization.startsWith("Bearer ", ignoreCase = true) ->
+            authorization
+
+        authorization.contains(":") -> {
+            val encoded = android.util.Base64.encodeToString(
+                authorization.toByteArray(Charsets.UTF_8),
+                android.util.Base64.NO_WRAP
+            )
+            "Basic $encoded"
+        }
+
+        else -> authorization
+    }
+}
+
+val userAgent = source.userAgent.trim().ifBlank {
+    prefs.getString("add_user_agent", "")
+        ?.trim()
+        ?.takeIf { it.isNotEmpty() }
+        ?: "103IPTVPlayer/1.0"
+}
+
+val httpFactory = DefaultHttpDataSource.Factory()
+    .setUserAgent(userAgent)
+    .setConnectTimeoutMs(6000)
+    .setReadTimeoutMs(12000)
+    .setAllowCrossProtocolRedirects(true)
+    .setDefaultRequestProperties(headers)
+    
         val exo = ExoPlayer.Builder(this)
             .setMediaSourceFactory(
                 DefaultMediaSourceFactory(this)
