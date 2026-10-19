@@ -190,6 +190,23 @@ class MainActivity : Activity() {
 
     
 private fun ensureReadAuthentication() {
+    // Start the timeout whether the user is already signed in or not.
+    initialSyncTimeout?.let { playerHandler.removeCallbacks(it) }
+
+    val timeout = Runnable {
+        if (!initialSourceSyncFinished) {
+            finishInitialSourceSync()
+            Toast.makeText(
+                this,
+                "انتهت مهلة المزامنة؛ ستُستخدم المصادر المحلية المتاحة.",
+                Toast.LENGTH_LONG
+            ).show()
+        }
+    }
+
+    initialSyncTimeout = timeout
+    playerHandler.postDelayed(timeout, 10000L)
+
     if (firebaseAuth.currentUser != null) {
         syncFromCloud { finishInitialSourceSync() }
         return
@@ -208,26 +225,23 @@ private fun ensureReadAuthentication() {
 
             finishInitialSourceSync()
         }
-
-    // Prevent the channel from waiting forever if Firebase never responds.
-    playerHandler.postDelayed({
-        if (!initialSourceSyncFinished) {
-            finishInitialSourceSync()
-            Toast.makeText(
-                this,
-                "تعذرت المزامنة؛ ستُستخدم الروابط المحفوظة محليًا إن وجدت.",
-                Toast.LENGTH_LONG
-            ).show()
-        }
-    }, 10000L)
 }
 
 
     private fun finishInitialSourceSync() {
-        initialSourceSyncFinished = true
-        val pendingChannel = pendingChannelToOpen
-        pendingChannelToOpen = null
-        if (!pendingChannel.isNullOrBlank()) openChannel(pendingChannel)
+    initialSyncTimeout?.let { playerHandler.removeCallbacks(it) }
+    initialSyncTimeout = null
+
+    if (initialSourceSyncFinished) return
+
+    initialSourceSyncFinished = true
+
+    val pendingChannel = pendingChannelToOpen
+    pendingChannelToOpen = null
+
+    if (!pendingChannel.isNullOrBlank()) {
+        openChannel(pendingChannel)
+    }
     }
 
     private fun showHome() {
