@@ -422,15 +422,35 @@ class MainActivity : Activity() {
         )
     }
 
-    private fun openChannel(channelName: String) {
-        // Open immediately from the locally cached source list; Firebase sync continues in the background.
-        val options = sources.filter { it.channel == channelName }
-        if (options.isEmpty()) {
-            Toast.makeText(this, "لا توجد روابط محفوظة لهذه القناة. افتح إدارة السيرفرات لإضافة رابط.", Toast.LENGTH_LONG).show()
-            return
-        }
-        launchPlayer(options, 0)
+    
+
+private fun openChannel(channelName: String) {
+    // Never start playback from an old local list while Firebase is syncing.
+    if (!initialSourceSyncFinished) {
+        pendingChannelToOpen = channelName
+        Toast.makeText(
+            this,
+            "جارٍ تجهيز القناة...",
+            Toast.LENGTH_SHORT
+        ).show()
+        return
     }
+
+    val options = sources.filter {
+        it.channel == channelName && it.url.isNotBlank()
+    }
+
+    if (options.isEmpty()) {
+        Toast.makeText(
+            this,
+            "لا توجد روابط محفوظة لهذه القناة. افتح إدارة السيرفرات لإضافة رابط.",
+            Toast.LENGTH_LONG
+        ).show()
+        return
+    }
+
+    launchPlayer(options, 0)
+}
 
     
 
