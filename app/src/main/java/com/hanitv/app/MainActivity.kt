@@ -502,10 +502,15 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
         embeddedPlayerView = video
         videoFrame.addView(video, FrameLayout.LayoutParams(-1, -1))
 
-        // VLC-style default: stretch the video to fill the entire landscape screen.
-        // This intentionally stretches the image if its aspect ratio differs from the screen.
-        // The screen-mode menu lets the user choose other display modes.
+        // Default: stretch the video to fill the landscape screen.
+        // A small horizontal zoom also crops a narrow black strip embedded in some streams.
         video.resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FILL
+        video.post {
+            video.videoSurfaceView?.apply {
+                scaleX = 1.10f
+                translationX = -dp(8).toFloat()
+            }
+        }
 
         // Tapping the picture toggles every player overlay; controls can be hidden for viewing
         // and brought back with another tap. The tap layer sits below all interactive controls.
@@ -647,7 +652,7 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
         }
         playerControl("▣", "خيارات شكل الشاشة") {
             val modes = arrayOf(
-                "تمديد الصورة لملء الشاشة (Étirer مثل VLC)",
+                "تمديد الصورة لملء الشاشة",
                 "ملء الشاشة مع الحفاظ على تناسب الصورة (قص بسيط)",
                 "إظهار الصورة كاملة (قد تظهر أشرطة سوداء)",
                 "ملاءمة العرض",
