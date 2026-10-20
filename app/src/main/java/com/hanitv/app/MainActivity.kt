@@ -496,15 +496,15 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
             useController = false
             setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
             setBackgroundColor(Color.BLACK)
-            // Cover the full landscape screen without black bars while preserving proportions.
-            resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+            // Stretch the video to the full PlayerView bounds to remove surrounding black bars.
+            resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FILL
         }
         embeddedPlayerView = video
         videoFrame.addView(video, FrameLayout.LayoutParams(-1, -1))
 
-        // Default: cover the full landscape screen without side bars or manual shifting.
-        // ZOOM preserves the picture proportions and crops excess edges when necessary.
-        video.resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+        // Default: fill the entire landscape screen edge-to-edge without external black bars.
+        // FILL may slightly stretch the picture if the stream aspect ratio differs from the phone.
+        video.resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FILL
 
         // Tapping the picture toggles every player overlay; controls can be hidden for viewing
         // and brought back with another tap. The tap layer sits below all interactive controls.
