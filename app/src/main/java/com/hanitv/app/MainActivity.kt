@@ -496,21 +496,15 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
             useController = false
             setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
             setBackgroundColor(Color.BLACK)
-            // Fill the landscape screen, cropping only as needed to remove side bars.
-            resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FILL
+            // Cover the full landscape screen without black bars while preserving proportions.
+            resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM
         }
         embeddedPlayerView = video
         videoFrame.addView(video, FrameLayout.LayoutParams(-1, -1))
 
-        // Default: stretch the video to fill the landscape screen.
-        // A small horizontal zoom also crops a narrow black strip embedded in some streams.
-        video.resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FILL
-        video.post {
-            video.videoSurfaceView?.apply {
-                scaleX = 1.10f
-                translationX = -dp(8).toFloat()
-            }
-        }
+        // Default: cover the full landscape screen without side bars or manual shifting.
+        // ZOOM preserves the picture proportions and crops excess edges when necessary.
+        video.resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM
 
         // Tapping the picture toggles every player overlay; controls can be hidden for viewing
         // and brought back with another tap. The tap layer sits below all interactive controls.
@@ -652,8 +646,8 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
         }
         playerControl("▣", "خيارات شكل الشاشة") {
             val modes = arrayOf(
-                "تمديد الصورة لملء الشاشة",
-                "ملء الشاشة مع الحفاظ على تناسب الصورة (قص بسيط)",
+                "ملء الشاشة بالكامل دون أشرطة سوداء",
+                "تمديد الصورة لتملأ الشاشة",
                 "إظهار الصورة كاملة (قد تظهر أشرطة سوداء)",
                 "ملاءمة العرض",
                 "ملاءمة الارتفاع"
