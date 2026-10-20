@@ -956,17 +956,38 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
         viewerPresenceRef = sessionRef
         viewerPresenceCountRef = channelRef
 
-        // Register cleanup on Firebase before marking the session as present.
-        sessionRef.onDisconnect().removeValue()
+        
+        // Create the viewer session first.
+        sessionRef.setValue(user.uid)
             .addOnSuccessListener {
-                sessionRef.setValue(user.uid)
-                    .addOnFailureListener {
-                        runOnUiThread { if (viewerCountText === badge) badge.text = "—  👥" }
+                sessionRef.onDisconnect().removeValue()
+                    .addOnFailureListener { error ->
+                        sessionRef.removeValue()
+                        runOnUiThread {
+                            if (viewerCountText === badge) {
+                                badge.text = "—  👥"
+                                Toast.makeText(
+                                    this@MainActivity,
+                                    "تعذر إعداد الاتصال: ${error.message}",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                            }
+                        }
                     }
             }
-            .addOnFailureListener {
-                runOnUiThread { if (viewerCountText === badge) badge.text = "—  👥" }
+            .addOnFailureListener { error ->
+                runOnUiThread {
+                    if (viewerCountText === badge) {
+                        badge.text = "—  👥"
+                    }
+                    Toast.makeText(
+                        this@MainActivity,
+                        "تعذر تسجيل المشاهدة: ${error.message}",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
             }
+
 
         val listener = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
