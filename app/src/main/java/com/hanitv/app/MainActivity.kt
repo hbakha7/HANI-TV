@@ -467,423 +467,408 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
 
 
     /** Embedded sports player: video, circular servers, controls, and channel carousel. */
-    private fun openEmbeddedPlayer() {
-        closeEmbeddedPlayer()
-        val source = currentOptions.getOrNull(currentServerIndex) ?: return
+     private fun openFullscreen() {
+    val original = playerView ?: return
+    if (fullscreenDialog?.isShowing == true) return
 
-        // Open the stream directly in landscape immersive mode.
-        orientationBeforePlayer = requestedOrientation
-        systemUiBeforePlayer = window.decorView.systemUiVisibility
-        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
-        window.decorView.systemUiVisibility = (
-            View.SYSTEM_UI_FLAG_FULLSCREEN or
-            View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
-            View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or
-            View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
-            View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or
-            View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-        )
+    val parent = original.parent as? ViewGroup ?: return
+    val oldOrientation = requestedOrientation
+    val oldIndex = parent.indexOfChild(original)
+    val oldParams = original.layoutParams
+    parent.removeView(original)
 
-        val dialog = Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen)
-        embeddedDialog = dialog
+    val dialog = Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen)
+    val frame = FrameLayout(this).apply { setBackgroundColor(Color.BLACK) }
 
-        val root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setBackgroundColor(Color.BLACK)
-        }
-        val videoFrame = FrameLayout(this).apply { setBackgroundColor(Color.BLACK) }
-        val video = PlayerView(this).apply {
-            useController = false
-            setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
-            setBackgroundColor(Color.BLACK)
-            // Stretch the video to the full PlayerView bounds to remove surrounding black bars.
-            resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FILL
-        }
-        embeddedPlayerView = video
-        // Slightly enlarge the video horizontally so a narrow black strip embedded at
-        // the left edge of some streams is cropped outside the visible screen.
-        // The parent videoFrame clips the enlarged view to the screen bounds.
-        video.scaleX = 1.10f
-        videoFrame.clipChildren = true
-        videoFrame.clipToPadding = true
-        videoFrame.addView(video, FrameLayout.LayoutParams(-1, -1))
+    val fullPlayer = PlayerView(this).apply {
+        useController = false
+        player = this@MainActivity.player
+        // Make "ملء الصورة" the default mode whenever fullscreen playback opens.
+        resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FILL
+        keepScreenOn = true
+        setShutterBackgroundColor(Color.BLACK)
+        setBackgroundColor(Color.BLACK)
+    }
+    frame.addView(fullPlayer, FrameLayout.LayoutParams(-1, -1))
+    fullscreenView = fullPlayer
 
-        // Fill the player area; the extra horizontal scale hides the remaining edge strip.
-        video.resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FILL
+    // Centered spinner shown until playback is ready and whenever buffering resumes.
+    val spinner = ProgressBar(this).apply {
+        isIndeterminate = true
+        visibility = View.VISIBLE
+        indeterminateTintList = android.content.res.ColorStateList.valueOf(Color.WHITE)
+        contentDescription = "جارٍ تحميل البث"
+    }
+    loadingIndicator = spinner
+    val spinnerSize = dp(48)
+    frame.addView(spinner, FrameLayout.LayoutParams(spinnerSize, spinnerSize, Gravity.CENTER))
 
-        // Tapping the picture toggles every player overlay; controls can be hidden for viewing
-        // and brought back with another tap. The tap layer sits below all interactive controls.
-        var overlaysVisible = true
-        val overlayViews = mutableListOf<View>()
-        val tapLayer = View(this).apply {
+    val handler = Handler(Looper.getMainLooper())
+    var controlsVisible = true
+
+    fun textButton(symbol: String, size: Float = 25f): TextView = TextView(this).apply {
+        text = symbol
+        textSize = size
+        setTextColor(Color.WHITE)
+        gravity = Gravity.CENTER
+        setPadding(dp(4), dp(2), dp(4), dp(2))
+        setShadowLayer(3f, 1f, 1f, Color.BLACK)
+        isClickable = true
+        isFocusable = true
+    }
+
+    val topBar = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+        setPadding(dp(8), dp(2), dp(8), dp(2))
+    }
+    val back = textButton("‹", 36f).apply {
+        contentDescription = "رجوع"
+        setOnClickListener { dialog.dismiss() }
+    }
+    topBar.addView(back, LinearLayout.LayoutParams(dp(48), dp(48)))
+    topBar.addView(View(this), LinearLayout.LayoutParams(0, dp(48), 1f))
+    frame.addView(topBar, FrameLayout.LayoutParams(-1, dp(48), Gravity.TOP))
+
+    // Server circles overlay the video without a long dark bar behind them.
+    var serverButtonsContainer: LinearLayout? = null
+    if (incomingServerUrls.size > 1 && incomingServerNames.size == incomingServerUrls.size) {
+        val serverBar = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, 0, 0, 0)
             setBackgroundColor(Color.TRANSPARENT)
-            isClickable = true
-            isFocusable = false
-            setOnClickListener {
-                overlaysVisible = !overlaysVisible
-                val visibility = if (overlaysVisible) View.VISIBLE else View.GONE
-                overlayViews.forEach { it.visibility = visibility }
-            }
         }
-        videoFrame.addView(tapLayer, FrameLayout.LayoutParams(-1, -1))
-
-        // Compact top overlay: remove the duplicate channel title; the channel name remains
-        // visible on its card in the bottom channel strip.
-        val overlay = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(8), dp(1), dp(8), dp(4))
-            setBackgroundColor(Color.argb(105, 0, 0, 0))
-        }
-        val top = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.END or Gravity.CENTER_VERTICAL
-        }
-        val close = TextView(this).apply {
-            text = "✕"
-            textSize = 25f
-            gravity = Gravity.CENTER
-            setTextColor(Color.WHITE)
-            isClickable = true
-            isFocusable = true
-            setOnClickListener { dialog.dismiss() }
-        }
-        top.addView(close, LinearLayout.LayoutParams(dp(36), dp(28)))
-        overlay.addView(top, LinearLayout.LayoutParams(-1, dp(28)))
-
-        // Circular server selectors, reduced to the same compact size as the reference image.
-        embeddedServerButtons.clear()
-        val serverContent = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-        }
-        serverContent.addView(TextView(this).apply {
-            text = "السيرفرات"
-            textSize = 12f
-            setTextColor(Color.WHITE)
-            setTypeface(null, Typeface.BOLD)
-            gravity = Gravity.CENTER_VERTICAL
-        }, LinearLayout.LayoutParams(dp(62), dp(50)))
-        currentOptions.forEachIndexed { index, item ->
-            val label = item.displayName.ifBlank { item.serverName }
-                .replace("السيرفر الأساسي", "السيرفر")
-                .take(8)
-            val button = TextView(this).apply {
-                text = "${index + 1}\n$label"
-                textSize = 9f
+        serverButtonsContainer = serverBar
+        serverButtonsBar = serverBar
+        incomingServerNames.forEachIndexed { index, serverName ->
+            val serverButton = TextView(this).apply {
+                text = serverName.ifBlank { "S${index + 1}" }
+                textSize = 13f
                 gravity = Gravity.CENTER
                 setTextColor(Color.WHITE)
-                isClickable = true
-                isFocusable = true
                 background = GradientDrawable().apply {
                     shape = GradientDrawable.OVAL
-                    setColor(Color.argb(45, 0, 0, 0))
-                    setStroke(dp(2), if (index == currentServerIndex) Color.rgb(25, 155, 240) else Color.LTGRAY)
+                    setColor(if (index == incomingSelectedServer) Color.rgb(25, 190, 165) else Color.argb(135, 35, 35, 35))
+                    setStroke(dp(1), if (index == incomingSelectedServer) Color.WHITE else Color.LTGRAY)
                 }
-                setOnClickListener { switchServerInsidePlayer(index) }
-            }
-            embeddedServerButtons.add(button)
-            serverContent.addView(button, LinearLayout.LayoutParams(dp(50), dp(50)).apply {
-                setMargins(dp(3), 0, dp(3), 0)
-            })
-        }
-        val serverScroll = HorizontalScrollView(this).apply {
-            isHorizontalScrollBarEnabled = false
-            addView(serverContent)
-        }
-        overlay.addView(serverScroll, LinearLayout.LayoutParams(-1, dp(50)))
-        videoFrame.addView(overlay, FrameLayout.LayoutParams(-1, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP))
-        overlayViews.add(overlay)
-
-        // Persistent player controls: these remain visible and each button controls playback.
-        val controls = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
-            setPadding(dp(4), dp(4), dp(4), dp(4))
-            setBackgroundColor(Color.argb(145, 0, 0, 0))
-        }
-        fun playerControl(symbol: String, description: String, action: () -> Unit): TextView {
-            val control = TextView(this).apply {
-                text = symbol
-                contentDescription = description
-                textSize = if (symbol == "HD") 16f else 24f
-                gravity = Gravity.CENTER
-                setTextColor(Color.WHITE)
-                setBackgroundColor(Color.TRANSPARENT)
-                isClickable = true
-                isFocusable = true
-                setOnClickListener { action() }
-            }
-            controls.addView(control, LinearLayout.LayoutParams(0, dp(54), 1f).apply {
-                setMargins(dp(1), 0, dp(1), 0)
-            })
-            return control
-        }
-        playerControl("⏪₁₀", "الرجوع 10 ثوانٍ") {
-            embeddedPlayer?.let { player ->
-                if (player.isCurrentMediaItemSeekable) {
-                    player.seekTo((player.currentPosition - 10_000L).coerceAtLeast(0L))
-                } else Toast.makeText(this, "هذا البث لا يدعم الرجوع الزمني", Toast.LENGTH_SHORT).show()
-            }
-        }
-        val soundControl = playerControl("◖))", "كتم الصوت واستعادته") {
-            embeddedPlayer?.let { player -> player.volume = if (player.volume > 0f) 0f else 1f }
-        }
-        playerControl("HD", "اختيار جودة الفيديو") {
-            embeddedPlayer?.let { player ->
-                TrackSelectionDialogBuilder(this, "جودة الفيديو", player, C.TRACK_TYPE_VIDEO)
-                    .setAllowAdaptiveSelections(true)
-                    .build()
-                    .show()
-            }
-        }
-        playerControl("⚙", "إعدادات سرعة التشغيل") {
-            val speeds = arrayOf("0.5x", "0.75x", "1.0x", "1.25x", "1.5x", "2.0x")
-            AlertDialog.Builder(this).setTitle("سرعة التشغيل")
-                .setItems(speeds) { _, which ->
-                    embeddedPlayer?.setPlaybackSpeed(speeds[which].removeSuffix("x").toFloatOrNull() ?: 1f)
-                }.setNegativeButton("إغلاق", null).show()
-        }
-        val playPauseControl = playerControl("Ⅱ", "إيقاف أو استئناف التشغيل") {
-            embeddedPlayer?.let { player -> if (player.isPlaying) player.pause() else player.play() }
-        }
-        playerControl("⛶", "ملء الشاشة بالعرض بدون أشرطة سوداء") {
-            video.resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FILL
-        }
-        playerControl("▣", "خيارات شكل الشاشة") {
-            val modes = arrayOf(
-                "ملء الشاشة بالكامل دون أشرطة سوداء",
-                "تمديد الصورة لتملأ الشاشة",
-                "إظهار الصورة كاملة (قد تظهر أشرطة سوداء)",
-                "ملاءمة العرض",
-                "ملاءمة الارتفاع"
-            )
-            AlertDialog.Builder(this)
-                .setTitle("اختر شكل عرض الفيديو")
-                .setItems(modes) { _, which ->
-                    video.resizeMode = when (which) {
-                        0 -> androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FILL
-                        1 -> androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM
-                        2 -> androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
-                        3 -> androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIXED_WIDTH
-                        else -> androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIXED_HEIGHT
-                    }
-                }
-                .setNegativeButton("إلغاء", null)
-                .show()
-        }
-        playerControl("⏩₁₀", "التقديم 10 ثوانٍ") {
-            embeddedPlayer?.let { player ->
-                if (player.isCurrentMediaItemSeekable) {
-                    val target = player.currentPosition + 10_000L
-                    val duration = player.duration
-                    player.seekTo(if (duration > 0L) target.coerceAtMost(duration) else target)
-                } else Toast.makeText(this, "هذا البث لا يدعم التقديم الزمني", Toast.LENGTH_SHORT).show()
-            }
-        }
-        videoFrame.addView(controls, FrameLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER
-        ).apply { leftMargin = dp(12); rightMargin = dp(12) })
-        overlayViews.add(controls)
-
-        // Timeline is visible permanently. Seek is enabled only for seekable media.
-        val timeline = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(8), 0, dp(8), 0)
-            setBackgroundColor(Color.argb(145, 0, 0, 0))
-        }
-        val elapsedText = TextView(this).apply {
-            text = "00:00"; textSize = 12f; setTextColor(Color.WHITE)
-        }
-        val durationText = TextView(this).apply {
-            text = "LIVE"; textSize = 12f; setTextColor(Color.LTGRAY)
-            gravity = Gravity.END or Gravity.CENTER_VERTICAL
-        }
-        val timelineSeek = SeekBar(this).apply {
-            max = 1000; progress = 0; isEnabled = false
-            contentDescription = "شريط تقدم الفيديو"
-            progressTintList = android.content.res.ColorStateList.valueOf(Color.RED)
-            thumbTintList = android.content.res.ColorStateList.valueOf(Color.WHITE)
-        }
-        timeline.addView(elapsedText, LinearLayout.LayoutParams(dp(48), dp(34)))
-        timeline.addView(timelineSeek, LinearLayout.LayoutParams(0, dp(34), 1f))
-        timeline.addView(durationText, LinearLayout.LayoutParams(dp(48), dp(34)))
-        timelineSeek.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
-                if (fromUser) {
-                    val duration = embeddedPlayer?.duration ?: 0L
-                    if (duration > 0L) elapsedText.text = formatPlayerTime(duration * progress / 1000L)
+                setOnClickListener {
+                    if (index == incomingSelectedServer) return@setOnClickListener
+                    incomingSelectedServer = index
+                    val targetUrl = incomingServerUrls.getOrNull(index) ?: return@setOnClickListener
+                    val targetReferer = incomingServerReferers.getOrNull(index).orEmpty()
+                    val channel = Channel(incomingChannelName.ifBlank { "بث مباشر" }, targetUrl,
+                        "مباشر", type = "live", referer = targetReferer)
+                    channels.removeAll { it.name == channel.name && it.group == "مباشر" }
+                    channels.add(channel)
+                    play(channel)
+                    fullPlayer.player = player
+                    updateServerButtonSelection()
                 }
             }
-            override fun onStartTrackingTouch(seekBar: SeekBar?) = Unit
-            override fun onStopTrackingTouch(seekBar: SeekBar?) {
-                val player = embeddedPlayer ?: return
-                val duration = player.duration
-                if (duration > 0L && player.isCurrentMediaItemSeekable) {
-                    player.seekTo(duration * (seekBar?.progress ?: 0) / 1000L)
-                }
-            }
-        })
-        videoFrame.addView(timeline, FrameLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, dp(38), Gravity.BOTTOM
-        ).apply { bottomMargin = dp(96) })
-        overlayViews.add(timeline)
-
-        val spinner = ProgressBar(this).apply {
-            isIndeterminate = true
-            indeterminateTintList = android.content.res.ColorStateList.valueOf(Color.WHITE)
-            contentDescription = "جارٍ تحميل البث"
+            val params = LinearLayout.LayoutParams(dp(48), dp(48))
+            params.marginEnd = dp(8)
+            serverBar.addView(serverButton, params)
         }
-        loadingIndicator = spinner
-        videoFrame.addView(spinner, FrameLayout.LayoutParams(dp(42), dp(42), Gravity.CENTER))
-        // The video occupies the whole landscape screen; overlays stay inside it.
-        root.addView(videoFrame, LinearLayout.LayoutParams(-1, 0, 1f))
-
-        // Horizontal channel strip overlays the bottom of the fullscreen video.
-        val channelScroll = HorizontalScrollView(this).apply {
-            isHorizontalScrollBarEnabled = false
-            setBackgroundColor(Color.argb(150, 8, 10, 11))
-        }
-        val channelRow = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(4), dp(5), dp(4), dp(5))
-        }
-        embeddedChannelCards.clear()
-        val allChannels = channelGroups.values.flatten().distinctBy { it.first }
-        allChannels.forEach { channel ->
-            val selected = channel.first == source.channel
-            val card = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                gravity = Gravity.CENTER
-                setPadding(dp(7), dp(7), dp(7), dp(7))
-                setBackgroundColor(if (selected) Color.rgb(28, 105, 165) else Color.TRANSPARENT)
-                isClickable = true
-                isFocusable = true
-                setOnClickListener { openChannel(channel.first) }
-            }
-            val logo = TextView(this).apply {
-                text = channel.second
-                textSize = 21f
-                gravity = Gravity.CENTER
-                setTextColor(Color.WHITE)
-                setTypeface(null, Typeface.BOLD)
-                setBackgroundColor(if (channel.second.startsWith("S")) Color.rgb(105, 35, 125) else Color.rgb(55, 55, 60))
-            }
-            card.addView(logo, LinearLayout.LayoutParams(dp(76), dp(54)))
-            card.addView(TextView(this).apply {
-                text = channel.first
-                textSize = 12f
-                gravity = Gravity.CENTER
-                setTextColor(Color.WHITE)
-                maxLines = 1
-            }, LinearLayout.LayoutParams(dp(92), dp(29)))
-            channelRow.addView(card, LinearLayout.LayoutParams(dp(100), dp(116)).apply {
-                setMargins(dp(2), 0, dp(2), 0)
-            })
-            embeddedChannelCards[channel.first] = card
-        }
-        channelScroll.addView(channelRow)
-        videoFrame.addView(
-            channelScroll,
-            FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                dp(94),
-                Gravity.BOTTOM
-            )
-        )
-        overlayViews.add(channelScroll)
-
-        dialog.setContentView(root)
-        dialog.setOnDismissListener {
-            releaseEmbeddedPlayer()
-            window.decorView.systemUiVisibility = systemUiBeforePlayer
-            requestedOrientation = orientationBeforePlayer
-        }
-        dialog.show()
-        dialog.window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-        dialog.window?.decorView?.systemUiVisibility = (
-            View.SYSTEM_UI_FLAG_FULLSCREEN or
-            View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
-            View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or
-            View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
-            View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or
-            View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-        )
-
-        val headers = mutableMapOf<String, String>()
-        if (source.referer.isNotBlank()) headers["Referer"] = source.referer
-        val userAgent = prefs.getString("add_user_agent", "")?.trim()?.takeIf { it.isNotEmpty() }
-            ?: "103IPTVPlayer/1.0"
-        val httpFactory = DefaultHttpDataSource.Factory()
-            .setUserAgent(userAgent)
-            .setConnectTimeoutMs(6000)
-            .setReadTimeoutMs(12000)
-            .setAllowCrossProtocolRedirects(true)
-            .setDefaultRequestProperties(headers)
-        val exo = ExoPlayer.Builder(this)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(this).setDataSourceFactory(httpFactory))
-            .build()
-        embeddedPlayer = exo
-        video.player = exo
-        exo.addListener(object : Player.Listener {
-            override fun onPlaybackStateChanged(playbackState: Int) {
-                loadingIndicator?.visibility = when (playbackState) {
-                    Player.STATE_BUFFERING, Player.STATE_IDLE -> View.VISIBLE
-                    Player.STATE_READY, Player.STATE_ENDED -> View.GONE
-                    else -> loadingIndicator?.visibility ?: View.GONE
-                }
-                if (playbackState == Player.STATE_READY) {
-                    startupTimeout?.let { playerHandler.removeCallbacks(it) }
-                    startupTimeout = null
-                    failoverCount = 0
-                } else if (playbackState == Player.STATE_BUFFERING && currentOptions.size > 1) {
-                    startupTimeout?.let { playerHandler.removeCallbacks(it) }
-                    val timeout = Runnable {
-                        if (embeddedPlayer === exo && exo.playbackState != Player.STATE_READY && !exo.isPlaying) tryNextServer(exo)
-                    }
-                    startupTimeout = timeout
-                    playerHandler.postDelayed(timeout, 5000L)
-                }
-            }
-            override fun onPlayerError(error: PlaybackException) {
-                loadingIndicator?.visibility = View.VISIBLE
-                if (currentOptions.size > 1) tryNextServer(exo)
-                else Toast.makeText(this@MainActivity, "تعذر التشغيل: ${error.errorCodeName}", Toast.LENGTH_LONG).show()
-            }
-        })
-        val mediaItemBuilder = MediaItem.Builder().setUri(source.url)
-        val normalizedPath = try { android.net.Uri.parse(source.url).path.orEmpty().lowercase() } catch (_: Exception) { "" }
-        if (normalizedPath.endsWith("/index.html") || normalizedPath == "index.html")
-            mediaItemBuilder.setMimeType(androidx.media3.common.MimeTypes.APPLICATION_M3U8)
-        exo.setMediaItem(mediaItemBuilder.build())
-        exo.prepare()
-        exo.playWhenReady = true
-
-        val updater = object : Runnable {
-            override fun run() {
-                if (embeddedPlayer !== exo || embeddedDialog?.isShowing != true) return
-                val duration = exo.duration
-                val position = exo.currentPosition.coerceAtLeast(0L)
-                if (duration > 0L && exo.isCurrentMediaItemSeekable) {
-                    timelineSeek.isEnabled = true
-                    timelineSeek.progress = ((position * 1000L) / duration).toInt().coerceIn(0, 1000)
-                    elapsedText.text = formatPlayerTime(position)
-                    durationText.text = formatPlayerTime(duration)
-                } else {
-                    timelineSeek.isEnabled = false
-                    timelineSeek.progress = 0
-                    elapsedText.text = formatPlayerTime(position)
-                    durationText.text = "LIVE"
-                }
-                playPauseControl.text = if (exo.isPlaying) "Ⅱ" else "▶"
-                soundControl.text = if (exo.volume > 0f) "◖))" else "◖×"
-                playerHandler.postDelayed(this, 500L)
-            }
-        }
-        progressUpdater = updater
-        playerHandler.post(updater)
+        val serverParams = FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.LEFT)
+        serverParams.topMargin = dp(54)
+        serverParams.leftMargin = dp(12)
+        frame.addView(serverBar, serverParams)
     }
+
+    var showControls: () -> Unit = {}
+
+    val pauseButton = textButton("Ⅱ", 31f).apply {
+        contentDescription = "تشغيل أو إيقاف مؤقت"
+        setOnClickListener {
+            val p = player ?: return@setOnClickListener
+            if (p.isPlaying) p.pause() else p.play()
+            text = if (p.isPlaying) "Ⅱ" else "▶"
+            showControls()
+        }
+    }
+
+    val rewindButton = textButton("↶\n10", 15f).apply {
+        contentDescription = "رجوع 10 ثوانٍ"
+        setOnClickListener {
+            val p = player ?: return@setOnClickListener
+            p.seekTo((p.currentPosition - 10_000L).coerceAtLeast(0L))
+            showControls()
+        }
+    }
+    val forwardButton = textButton("↷\n10", 15f).apply {
+        contentDescription = "تقديم 10 ثوانٍ"
+        setOnClickListener {
+            val p = player ?: return@setOnClickListener
+            val d = p.duration
+            val target = p.currentPosition + 10_000L
+            p.seekTo(if (d > 0 && d != C.TIME_UNSET) target.coerceAtMost(d) else target)
+            showControls()
+        }
+    }
+
+    val bottomPanel = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        setPadding(dp(12), dp(2), dp(12), dp(4))
+        background = android.graphics.drawable.GradientDrawable(
+            android.graphics.drawable.GradientDrawable.Orientation.BOTTOM_TOP,
+            intArrayOf(Color.argb(190, 0, 0, 0), Color.TRANSPARENT)
+        )
+    }
+
+    val actionBar = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER
+    }
+
+    fun addControl(view: View, width: Int = 42) {
+        actionBar.addView(view, LinearLayout.LayoutParams(dp(width), dp(46)))
+    }
+
+    val cast = textButton("▣", 25f).apply {
+        contentDescription = "البث إلى شاشة أخرى"
+        setOnClickListener {
+            message("لإضافة Chromecast يلزم ربط مكتبة Google Cast بالتطبيق.")
+            showControls()
+        }
+    }
+    val audioTracks = textButton("◉", 24f).apply {
+        contentDescription = "مسارات الصوت والترجمة"
+        setOnClickListener {
+            val p = player
+            if (p == null) return@setOnClickListener
+            val tracks = p.currentTracks
+            val details = tracks.groups.joinToString("\n") { group ->
+                val type = when (group.type) {
+                    C.TRACK_TYPE_AUDIO -> "صوت"
+                    C.TRACK_TYPE_TEXT -> "ترجمة"
+                    C.TRACK_TYPE_VIDEO -> "فيديو"
+                    else -> "مسار"
+                }
+                "$type: ${group.length} خيار"
+            }.ifBlank { "لا توجد مسارات إضافية متاحة." }
+            message(details)
+            showControls()
+        }
+    }
+    val settings = textButton("⚙", 25f).apply {
+        contentDescription = "إعدادات المشغل"
+        setOnClickListener {
+            val popup = PopupMenu(this@MainActivity, this)
+            listOf("ملاءمة الشاشة", "ملء الصورة", "تكبير الصورة", "معلومات البث").forEach { popup.menu.add(it) }
+            popup.setOnMenuItemClickListener { item ->
+                when (item.title.toString()) {
+                    "ملاءمة الشاشة" -> fullPlayer.resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
+                    "ملء الصورة" -> fullPlayer.resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FILL
+                    "تكبير الصورة" -> fullPlayer.resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                    "معلومات البث" -> message("${player?.currentMediaItem?.mediaId.orEmpty()}\n${player?.videoFormat?.width ?: 0} × ${player?.videoFormat?.height ?: 0}")
+                }
+                true
+            }
+            popup.show()
+            showControls()
+        }
+    }
+    val fullscreen = textButton("⛶", 27f).apply {
+        contentDescription = "إغلاق ملء الشاشة"
+        setOnClickListener { dialog.dismiss() }
+    }
+    val display = textButton("▭", 26f).apply {
+        contentDescription = "تغيير نمط عرض الفيديو"
+        setOnClickListener {
+            fullPlayer.resizeMode = when (fullPlayer.resizeMode) {
+                androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT ->
+                    androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FILL
+                androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FILL ->
+                    androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                else -> androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
+            }
+            showControls()
+        }
+    }
+
+    // One single control row, in the same order and near the bottom as the reference.
+    addControl(rewindButton, 48)
+    addControl(pauseButton, 48)
+    addControl(forwardButton, 48)
+    addControl(cast, 48)
+    addControl(audioTracks, 48)
+    addControl(settings, 48)
+    addControl(fullscreen, 48)
+    addControl(display, 48)
+    bottomPanel.addView(actionBar)
+
+    val timeRow = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+    }
+    fun timeText(ms: Long): String {
+        if (ms < 0 || ms == C.TIME_UNSET) return "00:00"
+        val total = ms / 1000
+        return String.format(java.util.Locale.US, "%02d:%02d", total / 60, total % 60)
+    }
+    val elapsed = TextView(this).apply {
+        text = "00:00"
+        textSize = 14f
+        setTextColor(Color.LTGRAY)
+        setTypeface(null, Typeface.BOLD)
+    }
+    val duration = TextView(this).apply {
+        text = "00:00"
+        textSize = 14f
+        setTextColor(Color.LTGRAY)
+        setTypeface(null, Typeface.BOLD)
+        gravity = Gravity.RIGHT or Gravity.CENTER_VERTICAL
+    }
+    val seek = SeekBar(this).apply {
+        max = 1000
+        // Match the reference image: white played track and white circular thumb,
+        // with a faint translucent track for the remaining duration.
+        progressTintList = android.content.res.ColorStateList.valueOf(Color.WHITE)
+        thumbTintList = android.content.res.ColorStateList.valueOf(Color.WHITE)
+        progressBackgroundTintList = android.content.res.ColorStateList.valueOf(Color.argb(115, 220, 230, 240))
+        secondaryProgressTintList = android.content.res.ColorStateList.valueOf(Color.argb(150, 255, 255, 255))
+        splitTrack = false
+        setPadding(0, 0, 0, 0)
+    }
+    timeRow.addView(elapsed, LinearLayout.LayoutParams(dp(58), dp(28)))
+    timeRow.addView(seek, LinearLayout.LayoutParams(0, dp(28), 1f))
+    timeRow.addView(duration, LinearLayout.LayoutParams(dp(58), dp(28)))
+    bottomPanel.addView(timeRow)
+    frame.addView(bottomPanel, FrameLayout.LayoutParams(-1, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM))
+
+    seek.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+        override fun onProgressChanged(bar: SeekBar?, progress: Int, fromUser: Boolean) {
+            if (fromUser) {
+                val d = player?.duration ?: C.TIME_UNSET
+                if (d > 0 && d != C.TIME_UNSET) player?.seekTo(d * progress / 1000L)
+            }
+        }
+        override fun onStartTrackingTouch(bar: SeekBar?) {}
+        override fun onStopTrackingTouch(bar: SeekBar?) {}
+    })
+
+    lateinit var hideControls: Runnable
+    showControls = {
+        controlsVisible = true
+        topBar.visibility = View.VISIBLE
+        bottomPanel.visibility = View.VISIBLE
+        serverButtonsContainer?.visibility = View.VISIBLE
+        handler.removeCallbacks(hideControls)
+        handler.postDelayed(hideControls, 4500)
+    }
+    hideControls = Runnable {
+        controlsVisible = false
+        topBar.visibility = View.GONE
+        bottomPanel.visibility = View.GONE
+        serverButtonsContainer?.visibility = View.GONE
+    }
+    val updateProgress = object : Runnable {
+        override fun run() {
+            if (dialog.isShowing) {
+                val p = player
+                if (p != null) {
+                    val actualDuration = p.duration
+                    var d = actualDuration
+                    var position = p.currentPosition
+                    var buffered = p.bufferedPosition
+
+                    // Some live streams expose their duration through the current timeline
+                    // window even when player.duration is TIME_UNSET.
+                    if ((d <= 0L || d == C.TIME_UNSET) && !p.currentTimeline.isEmpty) {
+                        val timelineWindow = androidx.media3.common.Timeline.Window()
+                        p.currentTimeline.getWindow(p.currentMediaItemIndex, timelineWindow)
+                        if (timelineWindow.durationMs > 0L &&
+                            timelineWindow.durationMs != C.TIME_UNSET) {
+                            d = timelineWindow.durationMs
+                        }
+                    }
+
+                    elapsed.text = timeText(position)
+                    duration.text = timeText(d)
+                    if (d > 0L && d != C.TIME_UNSET && !seek.isPressed) {
+                        // Move the white thumb and played track with the playback position.
+                        seek.progress = ((position.coerceAtLeast(0L) * 1000L) / d)
+                            .toInt().coerceIn(0, 1000)
+                        buffered = buffered.coerceAtLeast(position)
+                        seek.secondaryProgress = ((buffered.coerceAtMost(d) * 1000L) / d)
+                            .toInt().coerceIn(seek.progress, 1000)
+                    } else if (d <= 0L || d == C.TIME_UNSET) {
+                        // A truly unbounded live stream has no measurable percentage timeline.
+                        seek.progress = 0
+                        seek.secondaryProgress = 0
+                    }
+                    pauseButton.text = if (p.isPlaying) "Ⅱ" else "▶"
+                }
+                handler.postDelayed(this, 500)
+            }
+        }
+    }
+
+    frame.setOnClickListener { if (controlsVisible) hideControls.run() else showControls() }
+    fullPlayer.setOnClickListener { if (controlsVisible) hideControls.run() else showControls() }
+    dialog.setContentView(frame)
+    dialog.setOnDismissListener {
+        handler.removeCallbacks(updateProgress)
+        handler.removeCallbacks(hideControls)
+        loadingIndicator = null
+        fullPlayer.player = null
+        (fullPlayer.parent as? ViewGroup)?.removeView(fullPlayer)
+        if (directLinkPlayback) {
+            directLinkPlayback = false
+            original.player = null
+            playerView = null
+            requestedOrientation = oldOrientation
+            window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_VISIBLE
+            fullscreenDialog = null
+            // Returning from an external app launch should return to HANI TV,
+            // not show the player's library page.
+            finish()
+            return@setOnDismissListener
+        }
+        if (original.parent == null) parent.addView(original, oldIndex.coerceIn(0, parent.childCount), oldParams)
+        original.player = player
+        original.useController = true
+        requestedOrientation = oldOrientation
+        window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_VISIBLE
+        fullscreenDialog = null
+    }
+
+    fullscreenDialog = dialog
+    requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+    dialog.show()
+    dialog.window?.let { fullscreenWindow ->
+        fullscreenWindow.setLayout(
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.MATCH_PARENT
+        )
+        fullscreenWindow.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        // Allow the video surface to extend into the landscape display cutout area.
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+            fullscreenWindow.attributes = fullscreenWindow.attributes.apply {
+                layoutInDisplayCutoutMode =
+                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+            }
+        }
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+            fullscreenWindow.setDecorFitsSystemWindows(false)
+        }
+    }
+    dialog.window?.decorView?.systemUiVisibility = (
+        View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+            or View.SYSTEM_UI_FLAG_FULLSCREEN
+            or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+            or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+            or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+            or View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+    )
+    handler.post(updateProgress)
+    handler.postDelayed(hideControls, 4500)
+}
+                
+            
+        
+        
 
     private fun formatPlayerTime(positionMs: Long): String {
         val totalSeconds = positionMs.coerceAtLeast(0L) / 1000L
