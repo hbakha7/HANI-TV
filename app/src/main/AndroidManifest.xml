@@ -7,7 +7,9 @@
         android:label="HANI TV"
         android:allowBackup="false"
         android:theme="@style/Theme.AppCompat.NoActionBar"
-        android:usesCleartextTraffic="true">
+        android:usesCleartextTraffic="true"
+        android:icon="@mipmap/hani_tv_icon"
+        android:roundIcon="@mipmap/hani_tv_icon">
 
         <activity
             android:name=".MainActivity"
