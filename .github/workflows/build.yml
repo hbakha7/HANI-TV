@@ -32,15 +32,18 @@ jobs:
           printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/hani-tv-release.jks"
           test -s "$RUNNER_TEMP/hani-tv-release.jks"
 
+      
       - name: Verify restored signing key
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
         run: |
           set -e
           keytool -list \
+            -storetype JKS \
             -keystore "$RUNNER_TEMP/hani-tv-release.jks" \
             -storepass "$KEYSTORE_PASSWORD" \
             -alias hanitv
+            
             
       - name: Build Release APK
         uses: eskatos/gradle-command-action@v3
