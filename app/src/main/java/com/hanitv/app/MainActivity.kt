@@ -646,19 +646,21 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
         val playPauseControl = playerControl("Ⅱ", "إيقاف أو استئناف التشغيل") {
             embeddedPlayer?.let { player -> if (player.isPlaying) player.pause() else player.play() }
         }
-        playerControl("⛶", "ملء الشاشة بالعرض بدون أشرطة سوداء") {
+        playerControl("⛶", "ملء الصورة لعرض الشاشة بالكامل") {
             video.resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FILL
+            // Keep the slight horizontal crop only for this full-fill mode.
+            video.scaleX = 1.10f
         }
-        playerControl("▣", "خيارات شكل الشاشة") {
+        playerControl("▣", "خيارات أبعاد الصورة") {
             val modes = arrayOf(
-                "ملء الشاشة بالكامل دون أشرطة سوداء",
-                "تمديد الصورة لتملأ الشاشة",
-                "إظهار الصورة كاملة (قد تظهر أشرطة سوداء)",
+                "ملء الشاشة بالكامل (قد تتغير نسب الصورة)",
+                "تكبير الصورة مع قص الأطراف",
+                "ملاءمة الشاشة — إظهار الصورة كاملة",
                 "ملاءمة العرض",
                 "ملاءمة الارتفاع"
             )
             AlertDialog.Builder(this)
-                .setTitle("اختر شكل عرض الفيديو")
+                .setTitle("اختر أبعاد الصورة")
                 .setItems(modes) { _, which ->
                     video.resizeMode = when (which) {
                         0 -> androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FILL
@@ -667,6 +669,8 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
                         3 -> androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIXED_WIDTH
                         else -> androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIXED_HEIGHT
                     }
+                    // Prevent the extra horizontal crop from interfering with other aspect modes.
+                    video.scaleX = if (which == 0) 1.10f else 1.0f
                 }
                 .setNegativeButton("إلغاء", null)
                 .show()
