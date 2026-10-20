@@ -1,4 +1,4 @@
-package com.service103.iptvplayer
+package com.hanitv.app
 
 import android.app.Activity
 import android.app.AlertDialog
