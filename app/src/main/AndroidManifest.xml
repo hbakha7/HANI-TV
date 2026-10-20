@@ -5,11 +5,11 @@
 
     <application
         android:label="HANI TV"
+        android:icon="@mipmap/hani_tv_icon"
+        android:roundIcon="@mipmap/hani_tv_icon"
         android:allowBackup="false"
         android:theme="@style/Theme.AppCompat.NoActionBar"
-        android:usesCleartextTraffic="true"
-        android:icon="@mipmap/hani_tv_icon"
-        android:roundIcon="@mipmap/hani_tv_icon">
+        android:usesCleartextTraffic="true">
 
         <activity
             android:name=".MainActivity"
