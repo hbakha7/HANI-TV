@@ -502,15 +502,10 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
         embeddedPlayerView = video
         videoFrame.addView(video, FrameLayout.LayoutParams(-1, -1))
 
-        // Crop the stream slightly horizontally to remove a narrow encoded/letterboxed
-        // black strip at the left edge. The video frame clips the scaled surface to screen.
-        // PlayerView's ZOOM mode remains enabled to fill the landscape display.
-        video.post {
-            video.videoSurfaceView?.apply {
-                scaleX = 1.10f
-                translationX = -dp(22).toFloat()
-            }
-        }
+        // Keep the video proportional and fill the entire landscape screen.
+        // ZOOM crops excess image edges when aspect ratios differ, rather than
+        // stretching the picture or leaving black bars on the sides.
+        video.resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM
 
         // Tapping the picture toggles every player overlay; controls can be hidden for viewing
         // and brought back with another tap. The tap layer sits below all interactive controls.
@@ -647,10 +642,8 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
         val playPauseControl = playerControl("Ⅱ", "إيقاف أو استئناف التشغيل") {
             embeddedPlayer?.let { player -> if (player.isPlaying) player.pause() else player.play() }
         }
-        playerControl("⛶", "التبديل بين ملء الشاشة والصورة كاملة") {
-            video.resizeMode = if (video.resizeMode == androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM)
-                androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
-            else androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+        playerControl("⛶", "ملء الشاشة") {
+            video.resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM
         }
         playerControl("▣", "تغيير نمط ملاءمة الفيديو") {
             video.resizeMode = if (video.resizeMode == androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT)
