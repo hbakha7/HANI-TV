@@ -23,6 +23,7 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      
       - name: Restore signing key
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
@@ -31,6 +32,8 @@ jobs:
           test -n "$KEYSTORE_BASE64"
           printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/hani-tv-release.jks"
           test -s "$RUNNER_TEMP/hani-tv-release.jks"
+          file "$RUNNER_TEMP/hani-tv-release.jks"
+          
 
       
       - name: Verify restored signing key
