@@ -497,15 +497,15 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
             setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
             setBackgroundColor(Color.BLACK)
             // Fill the landscape screen, cropping only as needed to remove side bars.
-            resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+            resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FILL
         }
         embeddedPlayerView = video
         videoFrame.addView(video, FrameLayout.LayoutParams(-1, -1))
 
-        // Keep the video proportional and fill the entire landscape screen.
-        // ZOOM crops excess image edges when aspect ratios differ, rather than
-        // stretching the picture or leaving black bars on the sides.
-        video.resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+        // VLC-style default: stretch the video to fill the entire landscape screen.
+        // This intentionally stretches the image if its aspect ratio differs from the screen.
+        // The screen-mode menu lets the user choose other display modes.
+        video.resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FILL
 
         // Tapping the picture toggles every player overlay; controls can be hidden for viewing
         // and brought back with another tap. The tap layer sits below all interactive controls.
@@ -642,13 +642,30 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
         val playPauseControl = playerControl("Ⅱ", "إيقاف أو استئناف التشغيل") {
             embeddedPlayer?.let { player -> if (player.isPlaying) player.pause() else player.play() }
         }
-        playerControl("⛶", "ملء الشاشة") {
-            video.resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+        playerControl("⛶", "ملء الشاشة بالعرض بدون أشرطة سوداء") {
+            video.resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FILL
         }
-        playerControl("▣", "تغيير نمط ملاءمة الفيديو") {
-            video.resizeMode = if (video.resizeMode == androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT)
-                androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIXED_WIDTH
-            else androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
+        playerControl("▣", "خيارات شكل الشاشة") {
+            val modes = arrayOf(
+                "تمديد الصورة لملء الشاشة (Étirer مثل VLC)",
+                "ملء الشاشة مع الحفاظ على تناسب الصورة (قص بسيط)",
+                "إظهار الصورة كاملة (قد تظهر أشرطة سوداء)",
+                "ملاءمة العرض",
+                "ملاءمة الارتفاع"
+            )
+            AlertDialog.Builder(this)
+                .setTitle("اختر شكل عرض الفيديو")
+                .setItems(modes) { _, which ->
+                    video.resizeMode = when (which) {
+                        0 -> androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FILL
+                        1 -> androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                        2 -> androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
+                        3 -> androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIXED_WIDTH
+                        else -> androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIXED_HEIGHT
+                    }
+                }
+                .setNegativeButton("إلغاء", null)
+                .show()
         }
         playerControl("⏩₁₀", "التقديم 10 ثوانٍ") {
             embeddedPlayer?.let { player ->
