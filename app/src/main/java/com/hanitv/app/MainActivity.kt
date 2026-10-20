@@ -500,10 +500,15 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
             resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FILL
         }
         embeddedPlayerView = video
+        // Slightly enlarge the video horizontally so a narrow black strip embedded at
+        // the left edge of some streams is cropped outside the visible screen.
+        // The parent videoFrame clips the enlarged view to the screen bounds.
+        video.scaleX = 1.10f
+        videoFrame.clipChildren = true
+        videoFrame.clipToPadding = true
         videoFrame.addView(video, FrameLayout.LayoutParams(-1, -1))
 
-        // Default: fill the entire landscape screen edge-to-edge without external black bars.
-        // FILL may slightly stretch the picture if the stream aspect ratio differs from the phone.
+        // Fill the player area; the extra horizontal scale hides the remaining edge strip.
         video.resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FILL
 
         // Tapping the picture toggles every player overlay; controls can be hidden for viewing
