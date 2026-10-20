@@ -496,19 +496,18 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
             useController = false
             setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
             setBackgroundColor(Color.BLACK)
-            // Stretch the video to the full PlayerView bounds to remove surrounding black bars.
+            // Default: stretch the picture to fill the player area, like the requested VLC-style mode.
             resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FILL
         }
         embeddedPlayerView = video
-        // Slightly enlarge the video horizontally so a narrow black strip embedded at
-        // the left edge of some streams is cropped outside the visible screen.
-        // The parent videoFrame clips the enlarged view to the screen bounds.
-        video.scaleX = 1.10f
+        // Do not add extra zoom; only use the selected resize mode.
+        video.scaleX = 1.0f
+        video.scaleY = 1.0f
         videoFrame.clipChildren = true
         videoFrame.clipToPadding = true
         videoFrame.addView(video, FrameLayout.LayoutParams(-1, -1))
 
-        // Fill the player area; the extra horizontal scale hides the remaining edge strip.
+        // Fill the player area without any additional scaling.
         video.resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FILL
 
         // Tapping the picture toggles every player overlay; controls can be hidden for viewing
@@ -646,31 +645,32 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
         val playPauseControl = playerControl("Ⅱ", "إيقاف أو استئناف التشغيل") {
             embeddedPlayer?.let { player -> if (player.isPlaying) player.pause() else player.play() }
         }
-        playerControl("⛶", "ملء الصورة لعرض الشاشة بالكامل") {
+        playerControl("⛶", "تمديد الصورة لملء مساحة المشغل") {
+            video.scaleX = 1.0f
+            video.scaleY = 1.0f
             video.resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FILL
-            // Keep the slight horizontal crop only for this full-fill mode.
-            video.scaleX = 1.10f
         }
-        playerControl("▣", "خيارات أبعاد الصورة") {
+        playerControl("▣", "خيارات شكل الشاشة") {
             val modes = arrayOf(
-                "ملء الشاشة بالكامل (قد تتغير نسب الصورة)",
+                "تمديد الصورة لملء الشاشة (مثل VLC)",
+                "الصورة كاملة مع الحفاظ على النسب",
                 "تكبير الصورة مع قص الأطراف",
-                "ملاءمة الشاشة — إظهار الصورة كاملة",
                 "ملاءمة العرض",
                 "ملاءمة الارتفاع"
             )
             AlertDialog.Builder(this)
-                .setTitle("اختر أبعاد الصورة")
+                .setTitle("اختر شكل عرض الفيديو")
                 .setItems(modes) { _, which ->
+                    // Reset any extra scaling before applying the chosen mode.
+                    video.scaleX = 1.0f
+                    video.scaleY = 1.0f
                     video.resizeMode = when (which) {
                         0 -> androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FILL
-                        1 -> androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM
-                        2 -> androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
+                        1 -> androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
+                        2 -> androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM
                         3 -> androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIXED_WIDTH
                         else -> androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIXED_HEIGHT
                     }
-                    // Prevent the extra horizontal crop from interfering with other aspect modes.
-                    video.scaleX = if (which == 0) 1.10f else 1.0f
                 }
                 .setNegativeButton("إلغاء", null)
                 .show()
