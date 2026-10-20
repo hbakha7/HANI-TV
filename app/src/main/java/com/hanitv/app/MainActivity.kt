@@ -82,6 +82,8 @@ class MainActivity : Activity() {
     private val playerHandler = Handler(Looper.getMainLooper())
     private var startupTimeout: Runnable? = null
     private var failoverPending = false
+    private var sameServerRetryUsed = false
+    private var keepScreenOnWasSet = false
     private var orientationBeforePlayer = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
     private var systemUiBeforePlayer = 0
 
@@ -477,6 +479,10 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
     private fun openEmbeddedPlayer() {
         closeEmbeddedPlayer()
         val source = currentOptions.getOrNull(currentServerIndex) ?: return
+
+        // Keep the screen awake while the player is open.
+        keepScreenOnWasSet = (window.attributes.flags and android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) != 0
+        window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
         // Open the stream directly in landscape immersive mode.
         orientationBeforePlayer = requestedOrientation
@@ -877,19 +883,42 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
                     startupTimeout?.let { playerHandler.removeCallbacks(it) }
                     startupTimeout = null
                     failoverCount = 0
-                } else if (playbackState == Player.STATE_BUFFERING && currentOptions.size > 1) {
+                    sameServerRetryUsed = false
+                } else if (playbackState == Player.STATE_BUFFERING) {
                     startupTimeout?.let { playerHandler.removeCallbacks(it) }
                     val timeout = Runnable {
-                        if (embeddedPlayer === exo && exo.playbackState != Player.STATE_READY && !exo.isPlaying) tryNextServer(exo)
+                        if (embeddedPlayer === exo && exo.playbackState == Player.STATE_BUFFERING && !exo.isPlaying) {
+                            if (!sameServerRetryUsed) {
+                                sameServerRetryUsed = true
+                                exo.prepare()
+                                exo.playWhenReady = true
+                            } else if (currentOptions.size > 1) {
+                                tryNextServer(exo)
+                            }
+                        }
                     }
                     startupTimeout = timeout
-                    playerHandler.postDelayed(timeout, 5000L)
+                    // Give the current server 10 seconds to start or recover before switching.
+                    playerHandler.postDelayed(timeout, 10_000L)
                 }
             }
             override fun onPlayerError(error: PlaybackException) {
                 loadingIndicator?.visibility = View.VISIBLE
-                if (currentOptions.size > 1) tryNextServer(exo)
-                else Toast.makeText(this@MainActivity, "تعذر التشغيل: ${error.errorCodeName}", Toast.LENGTH_LONG).show()
+                startupTimeout?.let { playerHandler.removeCallbacks(it) }
+                startupTimeout = null
+                if (!sameServerRetryUsed) {
+                    sameServerRetryUsed = true
+                    playerHandler.postDelayed({
+                        if (embeddedPlayer === exo && embeddedDialog?.isShowing == true) {
+                            exo.prepare()
+                            exo.playWhenReady = true
+                        }
+                    }, 1500L)
+                } else if (currentOptions.size > 1) {
+                    playerHandler.postDelayed({ if (embeddedPlayer === exo) tryNextServer(exo) }, 3000L)
+                } else {
+                    Toast.makeText(this@MainActivity, "تعذر التشغيل: ${error.errorCodeName}", Toast.LENGTH_LONG).show()
+                }
             }
         })
         val mediaItemBuilder = MediaItem.Builder().setUri(source.url)
@@ -1066,6 +1095,7 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
         startupTimeout?.let { playerHandler.removeCallbacks(it) }
         startupTimeout = null
         failoverPending = false
+        sameServerRetryUsed = false
         loadingIndicator?.visibility = View.VISIBLE
         val mediaItemBuilder = MediaItem.Builder().setUri(source.url)
         val normalizedPath = try {
@@ -1122,6 +1152,9 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
         embeddedServerButtons.clear()
         embeddedChannelCards.clear()
         failoverPending = false
+        sameServerRetryUsed = false
+        if (!keepScreenOnWasSet) window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        keepScreenOnWasSet = false
     }
 
 
