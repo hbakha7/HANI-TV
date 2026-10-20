@@ -40,7 +40,15 @@ import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.common.C
 import androidx.media3.common.TrackSelectionParameters
-
+data class Channel(
+    val name: String,
+    val url: String,
+    val group: String = "عام",
+    val logo: String = "",
+    val type: String = "live",
+    val id: String = "",
+    val referer: String? = null
+)
 
 class EmbeddedPlayerActivity : AppCompatActivity() {
 
