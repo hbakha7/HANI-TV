@@ -41,6 +41,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.FirebaseDatabase
+import com.google.firebase.database.DatabaseReference
 import com.google.firebase.database.ValueEventListener
 
 class MainActivity : Activity() {
@@ -66,6 +67,11 @@ class MainActivity : Activity() {
     private var embeddedPlayerView: PlayerView? = null
     private var embeddedDialog: Dialog? = null
     private var embeddedChannelTitle: TextView? = null
+    private var viewerCountText: TextView? = null
+    private var viewerPresenceRef: DatabaseReference? = null
+    private var viewerPresenceCountRef: DatabaseReference? = null
+    private var viewerPresenceListener: ValueEventListener? = null
+    private var viewerPresenceChannel: String? = null
     private val embeddedServerButtons = mutableListOf<TextView>()
     private val embeddedChannelCards = linkedMapOf<String, View>()
     private var loadingIndicator: ProgressBar? = null
@@ -459,6 +465,7 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
             card.setBackgroundColor(if (name == currentOptions[currentServerIndex].channel) Color.rgb(28, 105, 165) else Color.TRANSPARENT)
         }
         switchServerInsidePlayer(currentServerIndex)
+        startViewerPresence(currentOptions[currentServerIndex].channel)
     } else {
         openEmbeddedPlayer()
     }
@@ -548,6 +555,34 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
         }
         top.addView(close, LinearLayout.LayoutParams(dp(36), dp(28)))
         overlay.addView(top, LinearLayout.LayoutParams(-1, dp(28)))
+
+        // Live viewer count badge in the upper-right corner of the video.
+        val viewerBadge = TextView(this).apply {
+            text = "0  👥"
+            textSize = 15f
+            setTextColor(Color.WHITE)
+            setTypeface(null, Typeface.BOLD)
+            gravity = Gravity.CENTER
+            setPadding(dp(8), dp(3), dp(8), dp(3))
+            background = GradientDrawable().apply {
+                setColor(Color.argb(150, 0, 0, 0))
+                cornerRadius = dp(16).toFloat()
+            }
+            contentDescription = "عدد المشاهدين المتصلين بهذه القناة"
+        }
+        viewerCountText = viewerBadge
+        videoFrame.addView(
+            viewerBadge,
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                dp(30),
+                Gravity.TOP or Gravity.END
+            ).apply {
+                topMargin = dp(30)
+                rightMargin = dp(12)
+            }
+        )
+        overlayViews.add(viewerBadge)
 
         // Circular server selectors, reduced to the same compact size as the reference image.
         embeddedServerButtons.clear()
@@ -806,6 +841,7 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
         }
         dialog.show()
         dialog.window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+        startViewerPresence(source.channel)
         dialog.window?.decorView?.systemUiVisibility = (
             View.SYSTEM_UI_FLAG_FULLSCREEN or
             View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
@@ -889,6 +925,96 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
         playerHandler.post(updater)
     }
 
+    /**
+     * Counts active HANI TV playback sessions for this channel using Firebase Realtime Database.
+     * Each player session gets its own child key; onDisconnect removes it when the client drops.
+     */
+    private fun startViewerPresence(channelName: String) {
+        if (viewerPresenceChannel == channelName &&
+            viewerPresenceRef != null &&
+            viewerCountText != null
+        ) return
+
+        stopViewerPresence()
+        val badge = viewerCountText ?: return
+        val user = firebaseAuth.currentUser
+        if (user == null) {
+            badge.text = "—  👥"
+            return
+        }
+
+        val channelKey = android.util.Base64.encodeToString(
+            channelName.trim().toByteArray(Charsets.UTF_8),
+            android.util.Base64.URL_SAFE or android.util.Base64.NO_WRAP or android.util.Base64.NO_PADDING
+        )
+        val channelRef = FirebaseDatabase.getInstance(
+            "https://hani-tv-b159f-default-rtdb.firebaseio.com"
+        ).reference.child("viewerPresence").child(channelKey)
+
+        val sessionRef = channelRef.push()
+        viewerPresenceChannel = channelName
+        viewerPresenceRef = sessionRef
+        viewerPresenceCountRef = channelRef
+
+        // Register cleanup on Firebase before marking the session as present.
+        sessionRef.onDisconnect().removeValue()
+            .addOnSuccessListener {
+                sessionRef.setValue(user.uid)
+                    .addOnFailureListener {
+                        runOnUiThread { if (viewerCountText === badge) badge.text = "—  👥" }
+                    }
+            }
+            .addOnFailureListener {
+                runOnUiThread { if (viewerCountText === badge) badge.text = "—  👥" }
+            }
+
+        val listener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val count = snapshot.childrenCount
+                runOnUiThread {
+                    if (viewerCountText === badge && viewerPresenceChannel == channelName) {
+                        badge.text = "${formatViewerCount(count)}  👥"
+                    }
+                }
+            }
+
+            override fun onCancelled(error: DatabaseError) {
+                runOnUiThread {
+                    if (viewerCountText === badge && viewerPresenceChannel == channelName) {
+                        badge.text = "—  👥"
+                    }
+                }
+            }
+        }
+        viewerPresenceListener = listener
+        channelRef.addValueEventListener(listener)
+    }
+
+    private fun stopViewerPresence() {
+        val countRef = viewerPresenceCountRef
+        val listener = viewerPresenceListener
+        if (countRef != null && listener != null) {
+            countRef.removeEventListener(listener)
+        }
+        viewerPresenceListener = null
+        viewerPresenceCountRef = null
+
+        val sessionRef = viewerPresenceRef
+        viewerPresenceRef = null
+        viewerPresenceChannel = null
+        sessionRef?.onDisconnect()?.cancel()
+        sessionRef?.removeValue()
+    }
+
+    private fun formatViewerCount(count: Long): String {
+        return when {
+            count >= 1_000_000 -> String.format(java.util.Locale.US, "%.1fM", count / 1_000_000.0)
+            count >= 10_000 -> String.format(java.util.Locale.US, "%.0fK", count / 1_000.0)
+            count >= 1_000 -> String.format(java.util.Locale.US, "%.1fK", count / 1_000.0)
+            else -> count.toString()
+        }
+    }
+
     private fun formatPlayerTime(positionMs: Long): String {
         val totalSeconds = positionMs.coerceAtLeast(0L) / 1000L
         val hours = totalSeconds / 3600L
@@ -959,6 +1085,8 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
     }
 
     private fun releaseEmbeddedPlayer() {
+        stopViewerPresence()
+        viewerCountText = null
         progressUpdater?.let { playerHandler.removeCallbacks(it) }
         progressUpdater = null
         startupTimeout?.let { playerHandler.removeCallbacks(it) }
