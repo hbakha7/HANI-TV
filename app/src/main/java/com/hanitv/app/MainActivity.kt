@@ -1222,7 +1222,7 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
     }
 
     /** Read the shared channel/server list from Hostinger PHP API. */
-    private fun syncFromCloud(onComplete: (() -> Unit)? = null, silent: Boolean = false) {
+    private fun syncFromCloud(silent: Boolean = false, onComplete: (() -> Unit)? = null) {
         networkExecutor.execute {
             var errorMessage: String? = null
             try {
