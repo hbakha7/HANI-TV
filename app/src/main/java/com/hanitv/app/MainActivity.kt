@@ -1129,9 +1129,18 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
             }
         })
         val mediaItemBuilder = MediaItem.Builder().setUri(source.url)
-        val normalizedPath = try { android.net.Uri.parse(source.url).path.orEmpty().lowercase() } catch (_: Exception) { "" }
-        if (normalizedPath.endsWith("/index.html") || normalizedPath == "index.html")
-            mediaItemBuilder.setMimeType(androidx.media3.common.MimeTypes.APPLICATION_M3U8)
+        // Detect common streaming formats from the URL path (query parameters are ignored).
+        val normalizedPath = try {
+            android.net.Uri.parse(source.url).path.orEmpty().lowercase(java.util.Locale.ROOT)
+        } catch (_: Exception) {
+            ""
+        }
+        when {
+            normalizedPath.endsWith(".m3u8") || normalizedPath.endsWith("/index.html") || normalizedPath == "index.html" ->
+                mediaItemBuilder.setMimeType(androidx.media3.common.MimeTypes.APPLICATION_M3U8)
+            normalizedPath.endsWith(".mpd") ->
+                mediaItemBuilder.setMimeType("application/dash+xml")
+        }
         exo.setMediaItem(mediaItemBuilder.build())
         exo.prepare()
         exo.playWhenReady = true
@@ -1210,13 +1219,17 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
         sameServerRetryUsed = false
         loadingIndicator?.visibility = View.VISIBLE
         val mediaItemBuilder = MediaItem.Builder().setUri(source.url)
+        // Apply the same format detection when switching servers.
         val normalizedPath = try {
-            android.net.Uri.parse(source.url).path.orEmpty().lowercase()
+            android.net.Uri.parse(source.url).path.orEmpty().lowercase(java.util.Locale.ROOT)
         } catch (_: Exception) {
             ""
         }
-        if (normalizedPath.endsWith("/index.html") || normalizedPath == "index.html") {
-            mediaItemBuilder.setMimeType(androidx.media3.common.MimeTypes.APPLICATION_M3U8)
+        when {
+            normalizedPath.endsWith(".m3u8") || normalizedPath.endsWith("/index.html") || normalizedPath == "index.html" ->
+                mediaItemBuilder.setMimeType(androidx.media3.common.MimeTypes.APPLICATION_M3U8)
+            normalizedPath.endsWith(".mpd") ->
+                mediaItemBuilder.setMimeType("application/dash+xml")
         }
         player.stop()
         player.clearMediaItems()
