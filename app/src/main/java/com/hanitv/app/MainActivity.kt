@@ -1085,6 +1085,11 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
 
 
     private fun allCategories(): List<String> {
+        // After a successful Hostinger sync, channelGroups is rebuilt from remote data.
+        // Use those remote groups as the source of truth so empty demo categories do not
+        // continue appearing in the UI. Keep the compiled defaults only before cloud data arrives.
+        val remoteGroups = channelGroups.keys.map { it.trim() }.filter { it.isNotBlank() }
+        if (initialSourceSyncFinished && remoteGroups.isNotEmpty()) return remoteGroups.distinct()
         val defaults = channelGroups.keys.toList()
         val remote = channelCategories.values.map { it.trim() }.filter { it.isNotBlank() }
         return (remote + defaults).distinct()
