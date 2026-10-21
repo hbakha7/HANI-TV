@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.pm.ActivityInfo
 import android.os.Bundle
 import android.graphics.Color
+import android.graphics.BitmapFactory
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.view.Gravity
@@ -17,6 +18,7 @@ import android.widget.Toast
 import android.widget.EditText
 import android.widget.Button
 import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.ProgressBar
 import android.widget.SeekBar
 import android.app.Dialog
@@ -54,6 +56,8 @@ class MainActivity : Activity() {
     private lateinit var content: LinearLayout
     private val prefs by lazy { getSharedPreferences("hani_tv_sources", MODE_PRIVATE) }
     private val sources = mutableListOf<StreamSource>()
+    private val channelImageUrls = linkedMapOf<String, String>()
+    private val channelCategories = linkedMapOf<String, String>()
     private val apiUrl = "https://103service.store/api.php"
     private val networkExecutor = Executors.newSingleThreadExecutor()
     private var adminApiKey: String? = null
@@ -208,7 +212,11 @@ class MainActivity : Activity() {
         initialSourceSyncFinished = true
         val pendingChannel = pendingChannelToOpen
         pendingChannelToOpen = null
-        if (!pendingChannel.isNullOrBlank()) openChannel(pendingChannel)
+        if (!pendingChannel.isNullOrBlank()) {
+            openChannel(pendingChannel)
+        } else {
+            showHome()
+        }
     }
 
     private fun showHome() {
@@ -257,7 +265,7 @@ class MainActivity : Activity() {
 
         addText("أقسام القنوات", 21f, white, true)
 
-        channelGroups.keys.forEach { category ->
+        allCategories().forEach { category ->
             addCategoryCard(category)
         }
 
@@ -276,7 +284,7 @@ class MainActivity : Activity() {
         content.removeAllViews()
         addText("جميع القنوات", 24f, white, true, 8)
 
-        channelGroups.keys.forEach { category ->
+        allCategories().forEach { category ->
             addCategoryCard(category)
         }
         addBackButton()
@@ -352,7 +360,8 @@ class MainActivity : Activity() {
         addText(category, 23f, white, true)
         addText("القنوات المتاحة في هذا القسم", 14f, gray, false)
 
-        val channels = channelGroups[category] ?: emptyList()
+        val channels = channelGroups.values.flatten().distinctBy { it.first }
+            .filter { (name, _) -> (channelCategories[name] ?: defaultCategoryFor(name)) == category }
 
         val grid = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -406,17 +415,8 @@ class MainActivity : Activity() {
             setOnClickListener { openChannel(channel.first) }
         }
 
-        val logo = TextView(this).apply {
-            text = channel.second
-            textSize = 23f
-            gravity = Gravity.CENTER
-            setTextColor(white)
-            setTypeface(null, Typeface.BOLD)
-            setBackgroundColor(red)
-        }
-
         card.addView(
-            logo,
+            channelLogoView(channel.first, channel.second, dp(66), dp(66)),
             LinearLayout.LayoutParams(dp(66), dp(66))
         )
 
@@ -776,15 +776,10 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
                 isFocusable = true
                 setOnClickListener { openChannel(channel.first) }
             }
-            val logo = TextView(this).apply {
-                text = channel.second
-                textSize = 21f
-                gravity = Gravity.CENTER
-                setTextColor(Color.WHITE)
-                setTypeface(null, Typeface.BOLD)
-                setBackgroundColor(if (channel.second.startsWith("S")) Color.rgb(105, 35, 125) else Color.rgb(55, 55, 60))
-            }
-            card.addView(logo, LinearLayout.LayoutParams(dp(76), dp(54)))
+            card.addView(
+                channelLogoView(channel.first, channel.second, dp(76), dp(54)),
+                LinearLayout.LayoutParams(dp(76), dp(54))
+            )
             card.addView(TextView(this).apply {
                 text = channel.first
                 textSize = 12f
@@ -1025,6 +1020,9 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
         val add = makeButton("＋ إضافة سيرفر / رابط قناة")
         add.setOnClickListener { requireAdmin { showAddSourceDialog() } }
         content.addView(add, fullWidthParams())
+        val manageImages = makeButton("🖼 إدارة صور القنوات وأقسامها")
+        manageImages.setOnClickListener { requireAdmin { showChannelImageManager() } }
+        content.addView(manageImages, fullWidthParams().apply { topMargin = dp(8) })
 
         if (sources.isEmpty()) addText("لا توجد روابط محفوظة بعد.", 14f, gray, false, 12)
         sources.forEachIndexed { index, source ->
@@ -1083,6 +1081,180 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
             content.addView(card, fullWidthParams().apply { topMargin = dp(10) })
         }
         addBackButton()
+    }
+
+
+    private fun allCategories(): List<String> {
+        val defaults = channelGroups.keys.toList()
+        val remote = channelCategories.values.map { it.trim() }.filter { it.isNotBlank() }
+        return (remote + defaults).distinct()
+    }
+
+    private fun defaultCategoryFor(channelName: String): String =
+        channelGroups.entries.firstOrNull { entry -> entry.value.any { it.first == channelName } }?.key
+            ?: "القنوات العربية"
+
+    private fun showChannelImageManager() {
+        showingServerManager = true
+        content.removeAllViews()
+        addText("إدارة صور القنوات", 23f, white, true)
+        addText("أدخل رابط صورة مباشر يبدأ بـ https:// لكل قناة. التغييرات تظهر على الأجهزة بعد المزامنة.", 13f, gray, false)
+        val allChannels = channelGroups.values.flatten().distinctBy { it.first }
+        allChannels.forEach { channel ->
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(10), dp(8), dp(10), dp(8))
+                setBackgroundColor(panel)
+            }
+            row.addView(channelLogoView(channel.first, channel.second, dp(56), dp(42)),
+                LinearLayout.LayoutParams(dp(56), dp(42)))
+            val info = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+            info.addView(TextView(this).apply {
+                text = channel.first
+                setTextColor(white); textSize = 14f; setTypeface(null, Typeface.BOLD)
+            })
+            info.addView(TextView(this).apply {
+                text = channelCategories[channel.first] ?: defaultCategoryFor(channel.first)
+                setTextColor(gray); textSize = 12f
+            })
+            row.addView(info, LinearLayout.LayoutParams(0, -2, 1f).apply {
+                marginStart = dp(10); marginEnd = dp(6)
+            })
+            val edit = makeButton("تعديل")
+            edit.setOnClickListener { requireAdmin { showChannelImageDialog(channel.first) } }
+            row.addView(edit, LinearLayout.LayoutParams(dp(78), -2))
+            content.addView(row, fullWidthParams().apply { bottomMargin = dp(7) })
+        }
+        addBackButton()
+    }
+
+    private fun showChannelImageDialog(channelName: String) {
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(18), dp(8), dp(18), 0)
+        }
+        fun input(hintText: String, value: String): EditText = EditText(this).apply {
+            hint = hintText
+            setText(value)
+            setTextColor(white)
+            setHintTextColor(gray)
+            textSize = 14f
+            setSingleLine(true)
+            box.addView(this)
+        }
+        val categoryInput = input("اسم القسم", channelCategories[channelName] ?: defaultCategoryFor(channelName))
+        val imageInput = input("رابط الصورة المباشر (https://...)", channelImageUrls[channelName].orEmpty())
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("تعديل $channelName")
+            .setView(box)
+            .setPositiveButton("حفظ", null)
+            .setNegativeButton("إلغاء", null)
+            .create()
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val category = categoryInput.text.toString().trim()
+                val imageUrl = imageInput.text.toString().trim()
+                if (category.isBlank()) {
+                    Toast.makeText(this, "اكتب اسم القسم.", Toast.LENGTH_SHORT).show()
+                    return@setOnClickListener
+                }
+                if (imageUrl.isNotBlank() &&
+                    !(imageUrl.startsWith("https://", true) || imageUrl.startsWith("http://", true))) {
+                    Toast.makeText(this, "رابط الصورة يجب أن يبدأ بـ https:// أو http://", Toast.LENGTH_LONG).show()
+                    return@setOnClickListener
+                }
+                channelCategories[channelName] = category
+                if (imageUrl.isBlank()) channelImageUrls.remove(channelName)
+                else channelImageUrls[channelName] = imageUrl
+                saveChannelSettingsToCloud {
+                    showChannelImageManager()
+                }
+                dialog.dismiss()
+            }
+        }
+        dialog.show()
+    }
+
+    private fun channelLogoView(channelName: String, fallback: String, width: Int, height: Int): FrameLayout {
+        val frame = FrameLayout(this)
+        val fallbackView = TextView(this).apply {
+            text = fallback
+            textSize = 18f
+            gravity = Gravity.CENTER
+            setTextColor(Color.WHITE)
+            setTypeface(null, Typeface.BOLD)
+            setBackgroundColor(if (fallback.startsWith("B")) Color.rgb(75, 35, 125) else Color.rgb(55, 55, 60))
+        }
+        frame.addView(fallbackView, FrameLayout.LayoutParams(-1, -1))
+        val imageUrl = channelImageUrls[channelName].orEmpty()
+        if (imageUrl.isNotBlank()) {
+            val imageView = ImageView(this).apply {
+                scaleType = ImageView.ScaleType.CENTER_CROP
+                contentDescription = channelName
+            }
+            frame.addView(imageView, FrameLayout.LayoutParams(-1, -1))
+            networkExecutor.execute {
+                try {
+                    val connection = (URL(imageUrl).openConnection() as HttpURLConnection).apply {
+                        connectTimeout = 6000
+                        readTimeout = 8000
+                        instanceFollowRedirects = true
+                    }
+                    val bitmap = connection.inputStream.use { BitmapFactory.decodeStream(it) }
+                    connection.disconnect()
+                    if (bitmap != null) runOnUiThread {
+                        if (imageView.parent != null) {
+                            imageView.setImageBitmap(bitmap)
+                            fallbackView.visibility = View.GONE
+                        }
+                    }
+                } catch (_: Exception) { }
+            }
+        }
+        return frame
+    }
+
+    private fun saveChannelSettingsToCloud(onComplete: (() -> Unit)? = null) {
+        val key = adminApiKey
+        if (key.isNullOrBlank()) {
+            Toast.makeText(this, "سجّل دخول الإدارة أولاً.", Toast.LENGTH_LONG).show()
+            onComplete?.invoke()
+            return
+        }
+        val channelList = JSONArray()
+        channelGroups.values.flatten().distinctBy { it.first }.forEach { item ->
+            channelList.put(JSONObject().apply {
+                put("channel", item.first)
+                put("category", channelCategories[item.first] ?: defaultCategoryFor(item.first))
+                put("imageUrl", channelImageUrls[item.first] ?: "")
+            })
+        }
+        val payload = JSONObject().put("channels", channelList).toString()
+        networkExecutor.execute {
+            var success = false
+            var message = "network_error"
+            try {
+                val connection = (URL(apiUrl).openConnection() as HttpURLConnection).apply {
+                    requestMethod = "POST"; connectTimeout = 10000; readTimeout = 20000; doOutput = true
+                    setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                    setRequestProperty("Accept", "application/json")
+                    setRequestProperty("X-ADMIN-KEY", key)
+                }
+                OutputStreamWriter(connection.outputStream, Charsets.UTF_8).use { it.write(payload) }
+                val code = connection.responseCode
+                val stream = if (code in 200..299) connection.inputStream else connection.errorStream
+                val response = BufferedReader(InputStreamReader(stream, Charsets.UTF_8)).use { it.readText() }
+                connection.disconnect()
+                val result = JSONObject(response)
+                success = code in 200..299 && result.optBoolean("ok")
+                message = if (success) "تم حفظ صور القنوات على Hostinger." else result.optString("error", "HTTP $code")
+            } catch (e: Exception) { message = e.message ?: "network_error" }
+            runOnUiThread {
+                Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+                onComplete?.invoke()
+            }
+        }
     }
 
     private fun showAddSourceDialog(existing: StreamSource? = null, editIndex: Int = -1) {
@@ -1268,6 +1440,19 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
                 if (json.optBoolean("ok")) {
                     val array = json.optJSONArray("sources") ?: JSONArray()
                     val downloaded = mutableListOf<StreamSource>()
+                    val channelArray = json.optJSONArray("channels") ?: JSONArray()
+                    val downloadedImages = linkedMapOf<String, String>()
+                    val downloadedCategories = linkedMapOf<String, String>()
+                    for (j in 0 until channelArray.length()) {
+                        val channelItem = channelArray.optJSONObject(j) ?: continue
+                        val name = channelItem.optString("channel", "").trim()
+                        if (name.isNotBlank()) {
+                            val image = channelItem.optString("imageUrl", "").trim()
+                            if (image.isNotBlank()) downloadedImages[name] = image
+                            val category = channelItem.optString("category", "").trim()
+                            if (category.isNotBlank()) downloadedCategories[name] = category
+                        }
+                    }
                     for (i in 0 until array.length()) {
                         val item = array.optJSONObject(i) ?: continue
                         val channel = item.optString("channel", "").trim()
@@ -1281,6 +1466,12 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
                         ))
                     }
                     runOnUiThread {
+                        if (channelArray.length() > 0) {
+                            channelImageUrls.clear()
+                            channelImageUrls.putAll(downloadedImages)
+                            channelCategories.clear()
+                            channelCategories.putAll(downloadedCategories)
+                        }
                         // If Hostinger is still empty, preserve this device's cached list so it can seed the new API.
                         // Do not overwrite local/Firebase-migrated sources with an empty first response.
                         if (downloaded.isNotEmpty()) {
