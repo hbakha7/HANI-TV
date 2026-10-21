@@ -227,63 +227,322 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun showHome() {
-        showingServerManager = false
-        content.removeAllViews()
+    
+private fun showHome() {
+    showingServerManager = false
+    content.removeAllViews()
 
-        content.setBackgroundColor(bg)
-        window.statusBarColor = bg
-        window.navigationBarColor = bg
-        addText(homeTitle, 23f, white, true)
-        addText(homeSubtitle, 14f, gray, false)
+    val purple = Color.rgb(111, 35, 255)
+    val dark = Color.rgb(5, 13, 27)
+    val blue = Color.rgb(15, 39, 75)
+    val cyan = Color.rgb(0, 190, 255)
 
-        val banner = LinearLayout(this).apply {
+    content.setPadding(dp(12), dp(12), dp(12), dp(24))
+
+    // عنوان HANI TV
+    val header = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+        setPadding(dp(4), dp(8), dp(4), dp(18))
+    }
+
+    header.addView(TextView(this).apply {
+        text = "▶"
+        textSize = 27f
+        setTextColor(purple)
+        setTypeface(null, Typeface.BOLD)
+    })
+
+    header.addView(TextView(this).apply {
+        text = " HANI "
+        textSize = 27f
+        setTextColor(white)
+        setTypeface(null, Typeface.BOLD)
+    })
+
+    header.addView(TextView(this).apply {
+        text = "TV"
+        textSize = 27f
+        setTextColor(Color.rgb(151, 88, 255))
+        setTypeface(null, Typeface.BOLD)
+    })
+
+    val spacer = View(this)
+    header.addView(spacer, LinearLayout.LayoutParams(0, dp(1), 1f))
+
+    header.addView(TextView(this).apply {
+        text = "● مباشر"
+        textSize = 12f
+        setTextColor(Color.rgb(60, 220, 150))
+    })
+
+    content.addView(header)
+
+    // بانر رياضي رئيسي
+    val banner = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        gravity = Gravity.CENTER_VERTICAL
+        setPadding(dp(18), dp(22), dp(18), dp(22))
+        background = GradientDrawable(
+            GradientDrawable.Orientation.TL_BR,
+            intArrayOf(
+                Color.rgb(67, 17, 133),
+                Color.rgb(18, 28, 75),
+                dark
+            )
+        ).apply {
+            cornerRadius = dp(18).toFloat()
+            setStroke(dp(1), Color.rgb(105, 65, 210))
+        }
+    }
+
+    banner.addView(TextView(this).apply {
+        text = "⚽  HANI TV SPORTS"
+        textSize = 13f
+        setTextColor(Color.rgb(203, 175, 255))
+        setTypeface(null, Typeface.BOLD)
+    })
+
+    banner.addView(TextView(this).apply {
+        text = "عِش أجواء المباريات"
+        textSize = 25f
+        setTextColor(white)
+        setTypeface(null, Typeface.BOLD)
+        setPadding(0, dp(12), 0, dp(5))
+    })
+
+    banner.addView(TextView(this).apply {
+        text = "قنواتك الرياضية في مكان واحد"
+        textSize = 14f
+        setTextColor(Color.rgb(215, 220, 240))
+    })
+
+    banner.setOnClickListener {
+        showChannels("القنوات الرياضية")
+    }
+
+    content.addView(banner, LinearLayout.LayoutParams(
+        -1, ViewGroup.LayoutParams.WRAP_CONTENT
+    ).apply {
+        bottomMargin = dp(22)
+    })
+
+    // عنوان قسم الرياضة
+    val sportsTitle = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+        setPadding(dp(2), dp(2), dp(2), dp(12))
+    }
+
+    sportsTitle.addView(TextView(this).apply {
+        text = "القنوات الرياضية"
+        textSize = 20f
+        setTextColor(white)
+        setTypeface(null, Typeface.BOLD)
+    })
+
+    val titleSpace = View(this)
+    sportsTitle.addView(titleSpace, LinearLayout.LayoutParams(0, 1, 1f))
+
+    sportsTitle.addView(TextView(this).apply {
+        text = "⚽"
+        textSize = 23f
+        setTextColor(cyan)
+    })
+
+    content.addView(sportsTitle)
+
+    // بطاقات القنوات الرياضية
+    val sportsScroll = HorizontalScrollView(this).apply {
+        isHorizontalScrollBarEnabled = false
+        layoutDirection = View.LAYOUT_DIRECTION_RTL
+    }
+
+    val sportsRow = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        layoutDirection = View.LAYOUT_DIRECTION_LTR
+    }
+
+    data class SportsBrand(
+        val name: String,
+        val subtitle: String,
+        val foreground: Int,
+        val background: Int
+    )
+
+    val brands = listOf(
+        SportsBrand(
+            "beIN",
+            "SPORTS",
+            Color.rgb(255, 255, 255),
+            Color.rgb(88, 25, 190)
+        ),
+        SportsBrand(
+            "SSC",
+            "SPORTS",
+            Color.WHITE,
+            Color.rgb(14, 34, 65)
+        ),
+        SportsBrand(
+            "ثمانية",
+            "الرياضية",
+            Color.WHITE,
+            Color.rgb(17, 35, 46)
+        ),
+        SportsBrand(
+            "STARZ",
+            "PLAY",
+            Color.rgb(255, 215, 45),
+            Color.rgb(9, 24, 32)
+        )
+    )
+
+    brands.forEach { brand ->
+        val card = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(20), dp(24), dp(20), dp(24))
-            setBackgroundColor(bannerColor)
+            gravity = Gravity.CENTER
+            setPadding(dp(7), dp(14), dp(7), dp(12))
+            background = GradientDrawable().apply {
+                setColor(brand.background)
+                cornerRadius = dp(13).toFloat()
+                setStroke(dp(1), Color.rgb(67, 79, 120))
+            }
+            isClickable = true
+            isFocusable = true
+            setOnClickListener {
+                // عرض القنوات الرياضية الحالية دون تغيير مصادرها
+                showChannels("القنوات الرياضية")
+            }
         }
 
-        banner.addView(TextView(this).apply {
-            text = bannerTitle
-            textSize = 30f
-            setTextColor(white)
+        card.addView(TextView(this).apply {
+            text = brand.name
+            textSize = if (brand.name == "ثمانية") 19f else 21f
+            gravity = Gravity.CENTER
+            setTextColor(brand.foreground)
             setTypeface(null, Typeface.BOLD)
         })
 
-        banner.addView(TextView(this).apply {
-            text = bannerSubtitle
-            textSize = 17f
-            setTextColor(white)
-            setPadding(0, dp(8), 0, dp(14))
+        card.addView(TextView(this).apply {
+            text = brand.subtitle
+            textSize = 11f
+            gravity = Gravity.CENTER
+            setTextColor(brand.foreground)
+            setPadding(0, dp(3), 0, 0)
         })
 
-        val browse = makeButton("عرض جميع القنوات")
-        browse.setOnClickListener { showAllChannels() }
-        banner.addView(browse)
-
-        content.addView(
-            banner,
-            LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-            ).apply {
-                bottomMargin = dp(22)
-            }
-        )
-
-        addText("أقسام القنوات", 21f, white, true)
-
-        allCategories().forEach { category ->
-            addCategoryCard(category)
-        }
-
-        if (showMoviesSection) {
-            addText("الأفلام والمسلسلات", 21f, white, true, 12)
-            addSectionCard("🎬", "تصفح الأفلام والمسلسلات") {
-                Toast.makeText(this, "سيتم إضافة محتوى هذا القسم لاحقاً", Toast.LENGTH_SHORT).show()
-            }
-        }
+        sportsRow.addView(card, LinearLayout.LayoutParams(
+            dp(112), dp(91)
+        ).apply {
+            setMargins(dp(4), dp(2), dp(4), dp(5))
+        })
     }
+
+    sportsScroll.addView(sportsRow)
+    content.addView(sportsScroll)
+
+    // جميع الأقسام
+    addText("الأقسام الرئيسية", 20f, white, true, 22)
+
+    val categories = listOf(
+        Triple("⚽", "القنوات الرياضية", cyan),
+        Triple("📺", "القنوات العربية", Color.rgb(30, 190, 160)),
+        Triple("🌍", "القنوات الإخبارية", Color.rgb(55, 135, 255)),
+        Triple("🧸", "قنوات الأطفال", Color.rgb(255, 105, 180)),
+        Triple("🎭", "قنوات الترفيه", Color.rgb(255, 165, 55))
+    )
+
+    categories.forEach { item ->
+        val card = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(14), dp(13), dp(14), dp(13))
+            background = GradientDrawable().apply {
+                setColor(Color.rgb(16, 27, 45))
+                cornerRadius = dp(13).toFloat()
+                setStroke(dp(1), Color.rgb(37, 52, 78))
+            }
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { showChannels(item.second) }
+        }
+
+        card.addView(TextView(this).apply {
+            text = item.first
+            textSize = 25f
+            gravity = Gravity.CENTER
+            setTextColor(item.third)
+        }, LinearLayout.LayoutParams(dp(48), dp(44)))
+
+        card.addView(TextView(this).apply {
+            text = item.second
+            textSize = 16f
+            setTextColor(white)
+            setTypeface(null, Typeface.BOLD)
+            setPadding(dp(10), 0, 0, 0)
+        }, LinearLayout.LayoutParams(0, -2, 1f))
+
+        card.addView(TextView(this).apply {
+            text = "‹"
+            textSize = 27f
+            setTextColor(Color.rgb(165, 125, 255))
+        })
+
+        content.addView(card, LinearLayout.LayoutParams(
+            -1, ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply {
+            bottomMargin = dp(9)
+        })
+    }
+
+    // المنصات العالمية
+    addText("منصات عالمية", 20f, white, true, 18)
+
+    val platforms = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER
+    }
+
+    listOf(
+        Triple("NETFLIX", Color.rgb(229, 9, 20), "أفلام"),
+        Triple("Disney+", Color.rgb(40, 115, 255), "ترفيه"),
+        Triple("STARZPLAY", Color.rgb(255, 210, 40), "رياضة وترفيه"),
+        Triple("prime video", Color.rgb(0, 175, 240), "منصة عالمية")
+    ).forEach { platform ->
+        val tile = TextView(this).apply {
+            text = platform.first
+            textSize = 12f
+            gravity = Gravity.CENTER
+            setTextColor(platform.second)
+            setTypeface(null, Typeface.BOLD)
+            setPadding(dp(3), dp(12), dp(3), dp(12))
+            background = GradientDrawable().apply {
+                setColor(Color.rgb(13, 23, 39))
+                cornerRadius = dp(9).toFloat()
+                setStroke(dp(1), Color.rgb(43, 55, 81))
+            }
+        }
+
+        platforms.addView(tile, LinearLayout.LayoutParams(
+            0, dp(58), 1f
+        ).apply {
+            setMargins(dp(3), 0, dp(3), 0)
+        })
+    }
+
+    content.addView(platforms)
+
+    // الوصول إلى إدارة السيرفرات الحالية
+    val manager = makeButton("⚙  إدارة السيرفرات وروابط القنوات")
+    manager.setOnClickListener { showServerManager() }
+
+    content.addView(manager, LinearLayout.LayoutParams(
+        -1, ViewGroup.LayoutParams.WRAP_CONTENT
+    ).apply {
+        topMargin = dp(22)
+    })
+}
+
 
     private fun showAllChannels() {
         showingServerManager = false
