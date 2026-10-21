@@ -1272,8 +1272,8 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
                 setSingleLine(true)
             }.also { box.addView(it) }
         }
-        val channelNames = channelGroups.values.flatten().map { it.first }
-        val channelInput = field("اسم القناة (مثال: SPORT 1)", existing?.channel ?: channelNames.first())
+        val channelNames = channelGroups.values.flatten().map { it.first }.distinct()
+        val channelInput = field("اسم القناة (مثال: SPORT 1)", existing?.channel ?: channelNames.firstOrNull().orEmpty())
         val serverInput = field("اسم السيرفر للإدارة (مثال: السيرفر الاحتياطي)", existing?.serverName ?: "السيرفر الأساسي")
         val displayNameInput = field("الاسم الذي يظهر داخل المشغّل", existing?.displayName ?: existing?.serverName ?: "السيرفر الأساسي")
         val urlInput = field("رابط البث الكامل", existing?.url ?: "")
@@ -1443,14 +1443,18 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
                     val channelArray = json.optJSONArray("channels") ?: JSONArray()
                     val downloadedImages = linkedMapOf<String, String>()
                     val downloadedCategories = linkedMapOf<String, String>()
+                    val remoteChannelOrder = linkedMapOf<String, Int>()
+                    val remoteChannelNames = mutableListOf<String>()
                     for (j in 0 until channelArray.length()) {
                         val channelItem = channelArray.optJSONObject(j) ?: continue
                         val name = channelItem.optString("channel", "").trim()
                         if (name.isNotBlank()) {
+                            if (!remoteChannelNames.contains(name)) remoteChannelNames.add(name)
                             val image = channelItem.optString("imageUrl", "").trim()
                             if (image.isNotBlank()) downloadedImages[name] = image
                             val category = channelItem.optString("category", "").trim()
                             if (category.isNotBlank()) downloadedCategories[name] = category
+                            remoteChannelOrder[name] = channelItem.optInt("sort_order", j)
                         }
                     }
                     for (i in 0 until array.length()) {
@@ -1465,15 +1469,44 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
                             item.optString("displayName", server)
                         ))
                     }
+                    // If a channel has sources but no separate channel_settings row yet, still show it.
+                    downloaded.forEach { source ->
+                        if (source.channel.isNotBlank() && !remoteChannelNames.contains(source.channel)) {
+                            remoteChannelNames.add(source.channel)
+                            if (!downloadedCategories.containsKey(source.channel)) {
+                                downloadedCategories[source.channel] = "القنوات العربية"
+                            }
+                            remoteChannelOrder[source.channel] = remoteChannelOrder.size
+                        }
+                    }
+
                     runOnUiThread {
-                        if (channelArray.length() > 0) {
+                        if (channelArray.length() > 0 || remoteChannelNames.isNotEmpty()) {
                             channelImageUrls.clear()
                             channelImageUrls.putAll(downloadedImages)
                             channelCategories.clear()
                             channelCategories.putAll(downloadedCategories)
+
+                            // Build the visible channel groups from Hostinger instead of relying
+                            // only on the demo channels compiled into this APK.
+                            if (remoteChannelNames.isNotEmpty()) {
+                                val grouped = linkedMapOf<String, MutableList<Pair<String, String>>>()
+                                remoteChannelNames
+                                    .distinct()
+                                    .sortedBy { remoteChannelOrder[it] ?: Int.MAX_VALUE }
+                                    .forEach { name ->
+                                        val category = downloadedCategories[name]?.takeIf { it.isNotBlank() }
+                                            ?: "القنوات العربية"
+                                        val fallback = name.filter { it.isLetterOrDigit() }.take(3)
+                                            .ifBlank { "TV" }.uppercase(java.util.Locale.ROOT)
+                                        grouped.getOrPut(category) { mutableListOf() }.add(name to fallback)
+                                    }
+                                channelGroups.clear()
+                                grouped.forEach { (category, channels) -> channelGroups[category] = channels }
+                            }
                         }
-                        // If Hostinger is still empty, preserve this device's cached list so it can seed the new API.
-                        // Do not overwrite local/Firebase-migrated sources with an empty first response.
+                        // Keep the last local list if the API returns no sources; otherwise
+                        // replace it with the shared Hostinger source list.
                         if (downloaded.isNotEmpty()) {
                             val changed = downloaded != sources
                             if (changed) {
@@ -1484,6 +1517,7 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
                             }
                         }
                         if (showingServerManager) showServerManager()
+                        else showHome()
                         onComplete?.invoke()
                     }
                 } else throw IllegalStateException(json.optString("error", "api_error"))
