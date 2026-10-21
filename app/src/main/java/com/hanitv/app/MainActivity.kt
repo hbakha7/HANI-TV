@@ -314,7 +314,22 @@ class MainActivity : Activity() {
         val sportsScroll = HorizontalScrollView(this).apply {
             isHorizontalScrollBarEnabled = false
             clipToPadding = false
+            isFillViewport = false
+            overScrollMode = View.OVER_SCROLL_NEVER
             layoutDirection = View.LAYOUT_DIRECTION_LTR
+            // Snap the horizontal slider to a channel card after the user swipes.
+            setOnTouchListener { view, event ->
+                if (event.action == android.view.MotionEvent.ACTION_UP ||
+                    event.action == android.view.MotionEvent.ACTION_CANCEL) {
+                    view.post {
+                        val itemWidth = dp(120) // 112dp card + 8dp horizontal margins
+                        val slider = view as HorizontalScrollView
+                        val targetX = ((slider.scrollX + itemWidth / 2) / itemWidth) * itemWidth
+                        slider.smoothScrollTo(targetX, 0)
+                    }
+                }
+                false
+            }
         }
         val sportsRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
