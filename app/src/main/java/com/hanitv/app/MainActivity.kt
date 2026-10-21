@@ -64,6 +64,8 @@ class MainActivity : Activity() {
     private var embeddedDialog: Dialog? = null
     private var embeddedChannelTitle: TextView? = null
     private val embeddedServerButtons = mutableListOf<TextView>()
+    private var embeddedServerContent: LinearLayout? = null
+    private var serverRefreshRunnable: Runnable? = null
     private val embeddedChannelCards = linkedMapOf<String, View>()
     private var loadingIndicator: ProgressBar? = null
     private var progressUpdater: Runnable? = null
@@ -535,6 +537,7 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
+        embeddedServerContent = serverContent
         serverContent.addView(TextView(this).apply {
             text = "السيرفرات"
             textSize = 12f
@@ -786,6 +789,7 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
         }
         dialog.show()
         dialog.window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+        scheduleServerRefreshWhilePlaying()
         dialog.window?.decorView?.systemUiVisibility = (
             View.SYSTEM_UI_FLAG_FULLSCREEN or
             View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
@@ -963,6 +967,9 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
     }
 
     private fun releaseEmbeddedPlayer() {
+        serverRefreshRunnable?.let { playerHandler.removeCallbacks(it) }
+        serverRefreshRunnable = null
+        embeddedServerContent = null
         progressUpdater?.let { playerHandler.removeCallbacks(it) }
         progressUpdater = null
         startupTimeout?.let { playerHandler.removeCallbacks(it) }
@@ -1139,8 +1146,83 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
         prefs.edit().putString("sources_json", array.toString()).apply()
     }
 
+    /**
+     * Check Hostinger every two minutes only while the embedded player is open.
+     * This is a read-only request: it does not add rows or consume Hostinger storage.
+     */
+    private fun scheduleServerRefreshWhilePlaying() {
+        serverRefreshRunnable?.let { playerHandler.removeCallbacks(it) }
+        val task = object : Runnable {
+            override fun run() {
+                if (embeddedDialog?.isShowing != true || embeddedPlayer == null) {
+                    serverRefreshRunnable = null
+                    return
+                }
+                syncFromCloud(silent = true)
+                playerHandler.postDelayed(this, 120_000L)
+            }
+        }
+        serverRefreshRunnable = task
+        playerHandler.postDelayed(task, 120_000L)
+    }
+
+    /**
+     * Update only the server choices for the channel being watched.
+     * The currently playing media item is not stopped or replaced.
+     */
+    private fun refreshEmbeddedServerOptions() {
+        if (embeddedDialog?.isShowing != true || embeddedPlayer == null) return
+
+        val channelName = currentOptions.firstOrNull()?.channel ?: return
+        val updatedOptions = sources.filter { it.channel == channelName }
+        if (updatedOptions.isEmpty()) return
+
+        val playingUrl = embeddedPlayer?.currentMediaItem
+            ?.localConfiguration?.uri?.toString()
+        val previousSelectedUrl = currentOptions.getOrNull(currentServerIndex)?.url
+        currentOptions = updatedOptions
+        currentServerIndex = updatedOptions.indexOfFirst {
+            it.url == playingUrl || it.url == previousSelectedUrl
+        }.let { if (it >= 0) it else 0 }
+
+        val serverContent = embeddedServerContent ?: return
+        serverContent.removeAllViews()
+        serverContent.addView(TextView(this).apply {
+            text = "السيرفرات"
+            textSize = 12f
+            setTextColor(Color.WHITE)
+            setTypeface(null, Typeface.BOLD)
+            gravity = Gravity.CENTER_VERTICAL
+        }, LinearLayout.LayoutParams(dp(62), dp(50)))
+
+        embeddedServerButtons.clear()
+        currentOptions.forEachIndexed { index, item ->
+            val label = item.displayName.ifBlank { item.serverName }
+                .replace("السيرفر الأساسي", "السيرفر")
+                .take(8)
+            val button = TextView(this).apply {
+                text = "${index + 1}\\n$label"
+                textSize = 9f
+                gravity = Gravity.CENTER
+                setTextColor(Color.WHITE)
+                isClickable = true
+                isFocusable = true
+                background = GradientDrawable().apply {
+                    shape = GradientDrawable.OVAL
+                    setColor(Color.argb(45, 0, 0, 0))
+                    setStroke(dp(2), if (index == currentServerIndex) Color.rgb(25, 155, 240) else Color.LTGRAY)
+                }
+                setOnClickListener { switchServerInsidePlayer(index) }
+            }
+            embeddedServerButtons.add(button)
+            serverContent.addView(button, LinearLayout.LayoutParams(dp(50), dp(50)).apply {
+                setMargins(dp(3), 0, dp(3), 0)
+            })
+        }
+    }
+
     /** Read the shared channel/server list from Hostinger PHP API. */
-    private fun syncFromCloud(onComplete: (() -> Unit)? = null) {
+    private fun syncFromCloud(onComplete: (() -> Unit)? = null, silent: Boolean = false) {
         networkExecutor.execute {
             var errorMessage: String? = null
             try {
@@ -1175,9 +1257,13 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
                         // If Hostinger is still empty, preserve this device's cached list so it can seed the new API.
                         // Do not overwrite local/Firebase-migrated sources with an empty first response.
                         if (downloaded.isNotEmpty()) {
-                            sources.clear()
-                            sources.addAll(downloaded)
-                            saveSources()
+                            val changed = downloaded != sources
+                            if (changed) {
+                                sources.clear()
+                                sources.addAll(downloaded)
+                                saveSources()
+                                refreshEmbeddedServerOptions()
+                            }
                         }
                         if (showingServerManager) showServerManager()
                         onComplete?.invoke()
@@ -1186,7 +1272,9 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
             } catch (e: Exception) {
                 errorMessage = e.message ?: "network_error"
                 runOnUiThread {
-                    Toast.makeText(this, "تعذر تحميل السيرفرات من Hostinger: $errorMessage", Toast.LENGTH_LONG).show()
+                    if (!silent) {
+                        Toast.makeText(this, "تعذر تحميل السيرفرات من Hostinger: $errorMessage", Toast.LENGTH_LONG).show()
+                    }
                     onComplete?.invoke()
                 }
             }
