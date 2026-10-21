@@ -628,6 +628,28 @@ class MainActivity : Activity() {
         )
     }
 
+private fun displayChannelName(name: String): String {
+    val value = name.trim()
+
+    if (
+        value.contains("bein", ignoreCase = true) &&
+        value.contains("news", ignoreCase = true)
+    ) {
+        return "beIN SPORTS NEWS"
+    }
+
+    val match = Regex(
+        """(?i)bein\s*[-_ ]*sports\s*([1-9])"""
+    ).find(value)
+
+    if (match != null) {
+        return "beIN SPORTS ${match.groupValues[1]}"
+    }
+
+    return value
+}
+
+
     private fun openChannel(channelName: String) {
         if (!initialSourceSyncFinished) {
             // Queue the tap and launch automatically as soon as local/cloud source selection is settled.
