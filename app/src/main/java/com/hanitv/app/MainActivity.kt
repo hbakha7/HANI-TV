@@ -1368,44 +1368,7 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
         dialog.show()
     }
 
-    private fun channelLogoView(channelName: String, fallback: String, width: Int, height: Int): FrameLayout {
-        val frame = FrameLayout(this)
-        val fallbackView = TextView(this).apply {
-            text = fallback
-            textSize = 18f
-            gravity = Gravity.CENTER
-            setTextColor(Color.WHITE)
-            setTypeface(null, Typeface.BOLD)
-            setBackgroundColor(if (fallback.startsWith("B")) Color.rgb(75, 35, 125) else Color.rgb(55, 55, 60))
-        }
-        frame.addView(fallbackView, FrameLayout.LayoutParams(-1, -1))
-        val imageUrl = channelImageUrls[channelName].orEmpty()
-        if (imageUrl.isNotBlank()) {
-            val imageView = ImageView(this).apply {
-                scaleType = ImageView.ScaleType.CENTER_CROP
-                contentDescription = channelName
-            }
-            frame.addView(imageView, FrameLayout.LayoutParams(-1, -1))
-            networkExecutor.execute {
-                try {
-                    val connection = (URL(imageUrl).openConnection() as HttpURLConnection).apply {
-                        connectTimeout = 6000
-                        readTimeout = 8000
-                        instanceFollowRedirects = true
-                    }
-                    val bitmap = connection.inputStream.use { BitmapFactory.decodeStream(it) }
-                    connection.disconnect()
-                    if (bitmap != null) runOnUiThread {
-                        if (imageView.parent != null) {
-                            imageView.setImageBitmap(bitmap)
-                            fallbackView.visibility = View.GONE
-                        }
-                    }
-                } catch (_: Exception) { }
-            }
-        }
-        return frame
-    }
+    private fun channelLogoView(
 
     private fun saveChannelSettingsToCloud(onComplete: (() -> Unit)? = null) {
         val key = adminApiKey
