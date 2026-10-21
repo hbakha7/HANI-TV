@@ -613,7 +613,7 @@ class MainActivity : Activity() {
         )
 
         card.addView(TextView(this).apply {
-            text = channel.first
+            text = displayChannelName(channel.first)
             textSize = 14f
             gravity = Gravity.CENTER
             setTextColor(white)
