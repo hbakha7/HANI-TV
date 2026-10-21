@@ -94,10 +94,16 @@ class MainActivity : Activity() {
 
     private val channelGroups = linkedMapOf(
         "القنوات الرياضية" to listOf(
-            "SPORT 1" to "S1",
-            "SPORT 2" to "S2",
-            "SPORT 3" to "S3",
-            "SPORT 4" to "S4"
+            "beIN SPORTS 1" to "B1",
+            "beIN SPORTS 2" to "B2",
+            "beIN SPORTS 3" to "B3",
+            "beIN SPORTS 4" to "B4",
+            "beIN SPORTS 5" to "B5",
+            "beIN SPORTS 6" to "B6",
+            "beIN SPORTS 7" to "B7",
+            "beIN SPORTS 8" to "B8",
+            "beIN SPORTS 9" to "B9",
+            "beIN SPORTS 10" to "B10"
         ),
         "القنوات العربية" to listOf(
             "قناة عربية 1" to "AR",
@@ -145,13 +151,22 @@ class MainActivity : Activity() {
             textSize = 26f
             setTextColor(white)
             setTypeface(null, Typeface.BOLD)
+            setOnLongClickListener(View.OnLongClickListener {
+                requireAdmin { showServerManager() }
+                true
+            })
         })
 
+        val hiddenAdminGesture = View.OnLongClickListener {
+            requireAdmin { showServerManager() }
+            true
+        }
         header.addView(TextView(this).apply {
             text = "TV"
             textSize = 26f
             setTextColor(red)
             setTypeface(null, Typeface.BOLD)
+            setOnLongClickListener(hiddenAdminGesture)
         })
 
         val spacer = View(this)
@@ -245,7 +260,6 @@ class MainActivity : Activity() {
         channelGroups.keys.forEach { category ->
             addCategoryCard(category)
         }
-        addSectionCard("⚙️", "إدارة السيرفرات وروابط القنوات") { showServerManager() }
 
         addText("الأفلام والمسلسلات", 21f, white, true, 12)
         addSectionCard("🎬", "تصفح الأفلام والمسلسلات") {
@@ -265,7 +279,6 @@ class MainActivity : Activity() {
         channelGroups.keys.forEach { category ->
             addCategoryCard(category)
         }
-        addSectionCard("⚙️", "إدارة السيرفرات وروابط القنوات") { showServerManager() }
         addBackButton()
     }
 
@@ -282,17 +295,31 @@ class MainActivity : Activity() {
 
         val icon = TextView(this).apply {
             text = when (category) {
-                "القنوات الرياضية" -> "⚽"
+                "القنوات الرياضية" -> "beIN\nSPORTS"
                 "القنوات العربية" -> "📺"
                 "القنوات الإخبارية" -> "🌍"
                 "قنوات الأطفال" -> "🧸"
                 else -> "🎭"
             }
-            textSize = 26f
+            textSize = if (category == "القنوات الرياضية") 13f else 26f
             gravity = Gravity.CENTER
+            setTextColor(Color.WHITE)
+            if (category == "القنوات الرياضية") {
+                setTypeface(null, Typeface.BOLD)
+                background = GradientDrawable(
+                    GradientDrawable.Orientation.LEFT_RIGHT,
+                    intArrayOf(Color.rgb(100, 20, 150), Color.rgb(220, 20, 75))
+                ).apply { cornerRadius = dp(8).toFloat() }
+            }
         }
 
-        card.addView(icon, LinearLayout.LayoutParams(dp(48), dp(45)))
+        card.addView(
+            icon,
+            LinearLayout.LayoutParams(
+                if (category == "القنوات الرياضية") dp(76) else dp(48),
+                if (category == "القنوات الرياضية") dp(54) else dp(45)
+            )
+        )
 
         card.addView(TextView(this).apply {
             text = category
@@ -417,7 +444,7 @@ class MainActivity : Activity() {
         }
         val options = sources.filter { it.channel == channelName }
         if (options.isEmpty()) {
-            Toast.makeText(this, "لا توجد روابط محفوظة لهذه القناة. افتح إدارة السيرفرات لإضافة رابط.", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "لا تتوفر روابط لهذه القناة حاليًا.", Toast.LENGTH_SHORT).show()
             return
         }
         launchPlayer(options, 0)
