@@ -2,6 +2,8 @@ package com.hanitv.app
 
 import android.app.Activity
 import android.content.pm.ActivityInfo
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.os.Bundle
 import android.graphics.Color
 import android.graphics.BitmapFactory
@@ -36,6 +38,8 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.DefaultLoadControl
+import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
 import androidx.media3.ui.TrackSelectionDialogBuilder
@@ -1031,17 +1035,46 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
             View.SYSTEM_UI_FLAG_LAYOUT_STABLE
         )
 
+        // Detect the active connection so the player can be more conservative on mobile data.
+        // Requires ACCESS_NETWORK_STATE in AndroidManifest.xml.
+        val usingMobileData = isUsingMobileData()
+
         val headers = mutableMapOf<String, String>()
         if (source.referer.isNotBlank()) headers["Referer"] = source.referer
         val userAgent = prefs.getString("add_user_agent", "")?.trim()?.takeIf { it.isNotEmpty() }
             ?: "103IPTVPlayer/1.0"
+
+        // Mobile networks can have higher latency and more variable throughput.
         val httpFactory = DefaultHttpDataSource.Factory()
             .setUserAgent(userAgent)
-            .setConnectTimeoutMs(6000)
-            .setReadTimeoutMs(12000)
+            .setConnectTimeoutMs(if (usingMobileData) 8000 else 6000)
+            .setReadTimeoutMs(if (usingMobileData) 15000 else 12000)
             .setAllowCrossProtocolRedirects(true)
             .setDefaultRequestProperties(headers)
+
+        // On mobile data, cap adaptive video selection to a moderate bitrate to reduce
+        // data consumption. This works when the stream provides multiple quality tracks.
+        // Wi-Fi keeps the normal unrestricted quality selection.
+        val trackSelector = DefaultTrackSelector(this).apply {
+            parameters = buildUponParameters()
+                .setMaxVideoBitrate(if (usingMobileData) 1_200_000 else Int.MAX_VALUE)
+                .build()
+        }
+
+        // Keep the buffer moderate on cellular connections so startup is responsive,
+        // while allowing a larger safety buffer on Wi-Fi.
+        val loadControl = DefaultLoadControl.Builder()
+            .setBufferDurationsMs(
+                if (usingMobileData) 12000 else 20000,
+                if (usingMobileData) 25000 else 50000,
+                1000,
+                3000
+            )
+            .build()
+
         val exo = ExoPlayer.Builder(this)
+            .setTrackSelector(trackSelector)
+            .setLoadControl(loadControl)
             .setMediaSourceFactory(DefaultMediaSourceFactory(this).setDataSourceFactory(httpFactory))
             .build()
         embeddedPlayer = exo
@@ -1073,7 +1106,7 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
                     }
                     startupTimeout = timeout
                     // Give the current server 10 seconds to start or recover before switching.
-                    playerHandler.postDelayed(timeout, 10_000L)
+                    playerHandler.postDelayed(timeout, if (usingMobileData) 15_000L else 10_000L)
                 }
             }
             override fun onPlayerError(error: PlaybackException) {
@@ -1126,6 +1159,22 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
         }
         progressUpdater = updater
         playerHandler.post(updater)
+    }
+
+    private fun isUsingMobileData(): Boolean {
+        return try {
+            val connectivityManager =
+                getSystemService(CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return false
+            val network = connectivityManager.activeNetwork ?: return false
+            val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return false
+            capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) &&
+                !capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
+        } catch (_: SecurityException) {
+            // If network-state permission is absent, use the normal player configuration.
+            false
+        } catch (_: Exception) {
+            false
+        }
     }
 
     private fun formatPlayerTime(positionMs: Long): String {
