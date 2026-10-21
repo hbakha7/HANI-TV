@@ -107,7 +107,8 @@ class MainActivity : Activity() {
             "beIN SPORTS 7" to "B7",
             "beIN SPORTS 8" to "B8",
             "beIN SPORTS 9" to "B9",
-            "beIN SPORTS 10" to "B10"
+            "beIN SPORTS 10" to "B10",
+            "beIN SPORTS NEWS" to "BN"
         ),
         "القنوات العربية" to listOf(
             "قناة عربية 1" to "AR",
@@ -320,20 +321,17 @@ class MainActivity : Activity() {
             layoutDirection = View.LAYOUT_DIRECTION_LTR
         }
 
-        val brands = listOf(
-            Triple("beIN", "SPORTS", Pair(Color.rgb(91, 28, 190), Color.WHITE)),
-            Triple("SSC", "SPORTS", Pair(Color.rgb(17, 39, 72), Color.WHITE)),
-            Triple("ثمانية", "الرياضية", Pair(Color.rgb(17, 39, 48), Color.WHITE)),
-            Triple("STARZ", "PLAY", Pair(Color.rgb(10, 25, 34), Color.rgb(255, 213, 55)))
-        )
+        // beIN SPORTS channel strip: logos/cards only for beIN channels.
+        // Each card uses the configured channel image when available, with a built-in beIN wordmark fallback.
+        val sportsChannels = channelGroups["القنوات الرياضية"].orEmpty()
 
-        brands.forEach { brand ->
+        sportsChannels.forEach { channel ->
             val brandCard = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER
-                setPadding(dp(7), dp(12), dp(7), dp(10))
+                setPadding(dp(7), dp(8), dp(7), dp(8))
                 background = GradientDrawable().apply {
-                    setColor(brand.third.first)
+                    setColor(Color.rgb(22, 20, 31))
                     cornerRadius = dp(15).toFloat()
                     setStroke(dp(1), cardStroke)
                 }
@@ -341,21 +339,20 @@ class MainActivity : Activity() {
                 isFocusable = true
                 setOnClickListener { showChannels("القنوات الرياضية") }
             }
+
+            brandCard.addView(
+                channelLogoView(channel.first, channel.second, dp(88), dp(43)),
+                LinearLayout.LayoutParams(dp(88), dp(43))
+            )
             brandCard.addView(TextView(this).apply {
-                text = brand.first
-                textSize = if (brand.first == "ثمانية") 19f else 22f
+                text = displayChannelName(channel.first)
+                textSize = 10f
                 gravity = Gravity.CENTER
-                setTextColor(brand.third.second)
-                setTypeface(null, Typeface.BOLD)
+                setTextColor(Color.WHITE)
                 maxLines = 1
-            })
-            brandCard.addView(TextView(this).apply {
-                text = brand.second
-                textSize = 12f
-                gravity = Gravity.CENTER
-                setTextColor(brand.third.second)
-                setPadding(0, dp(4), 0, 0)
-            })
+                setPadding(0, dp(5), 0, 0)
+            }, LinearLayout.LayoutParams(dp(100), dp(24)))
+
             sportsRow.addView(brandCard, LinearLayout.LayoutParams(
                 dp(112), dp(91)
             ).apply { setMargins(dp(4), dp(2), dp(4), dp(5)) })
@@ -438,7 +435,6 @@ class MainActivity : Activity() {
         val platformItems = listOf(
             "NETFLIX" to Color.rgb(240, 40, 52),
             "Disney+" to Color.rgb(80, 145, 255),
-            "STARZPLAY" to Color.rgb(255, 213, 55),
             "prime video" to Color.rgb(75, 190, 245)
         )
         platformItems.forEach { item ->
@@ -1407,6 +1403,35 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
         }
 
         if (imageUrl.isBlank()) {
+            if (channelName.contains("bein", ignoreCase = true)) {
+                // Built-in lightweight logo fallback so beIN cards are never empty when
+                // no remote image has been configured in the image manager.
+                val logo = LinearLayout(this).apply {
+                    orientation = LinearLayout.VERTICAL
+                    gravity = Gravity.CENTER
+                    setPadding(dp(2), dp(2), dp(2), dp(2))
+                    setBackgroundColor(Color.TRANSPARENT)
+                    contentDescription = "$channelName logo"
+                }
+                logo.addView(TextView(this).apply {
+                    text = "beIN"
+                    textSize = 21f
+                    gravity = Gravity.CENTER
+                    setTextColor(Color.rgb(171, 105, 235))
+                    setTypeface(null, Typeface.NORMAL)
+                    includeFontPadding = false
+                }, LinearLayout.LayoutParams(-2, 0, 1f))
+                logo.addView(TextView(this).apply {
+                    text = "SPORTS"
+                    textSize = 8f
+                    gravity = Gravity.CENTER
+                    setTextColor(Color.rgb(171, 105, 235))
+                    setTypeface(null, Typeface.BOLD)
+                    includeFontPadding = false
+                }, LinearLayout.LayoutParams(-2, dp(13)))
+                return logo
+            }
+
             imageView.setImageDrawable(null)
             imageView.setBackground(
                 GradientDrawable().apply {
