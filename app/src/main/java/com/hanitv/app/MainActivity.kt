@@ -22,6 +22,12 @@ import android.widget.SeekBar
 import android.app.Dialog
 import android.os.Handler
 import android.os.Looper
+import java.net.HttpURLConnection
+import java.net.URL
+import java.io.BufferedReader
+import java.io.InputStreamReader
+import java.io.OutputStreamWriter
+import java.util.concurrent.Executors
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
@@ -36,13 +42,6 @@ import android.app.AlertDialog
 import android.content.Intent
 import org.json.JSONArray
 import org.json.JSONObject
-import com.google.firebase.analytics.FirebaseAnalytics
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.database.DataSnapshot
-import com.google.firebase.database.DatabaseError
-import com.google.firebase.database.FirebaseDatabase
-import com.google.firebase.database.DatabaseReference
-import com.google.firebase.database.ValueEventListener
 
 class MainActivity : Activity() {
 
@@ -55,23 +54,15 @@ class MainActivity : Activity() {
     private lateinit var content: LinearLayout
     private val prefs by lazy { getSharedPreferences("hani_tv_sources", MODE_PRIVATE) }
     private val sources = mutableListOf<StreamSource>()
-    private val firebaseAuth by lazy { FirebaseAuth.getInstance() }
-    private val remoteSources by lazy {
-        FirebaseDatabase.getInstance("https://hani-tv-b159f-default-rtdb.firebaseio.com")
-            .reference.child("sources")
-    }
-    // This UID identifies the single Firebase account allowed to change the shared list.
-    private val adminUid = "MDbUZT4SdPfxBqqfj5MNeNBtAW23"
+    private val apiUrl = "https://103service.store/api.php"
+    private val networkExecutor = Executors.newSingleThreadExecutor()
+    private var adminApiKey: String? = null
+    private var adminActionPending = false
     private var showingServerManager = false
     private var embeddedPlayer: ExoPlayer? = null
     private var embeddedPlayerView: PlayerView? = null
     private var embeddedDialog: Dialog? = null
     private var embeddedChannelTitle: TextView? = null
-    private var viewerCountText: TextView? = null
-    private var viewerPresenceRef: DatabaseReference? = null
-    private var viewerPresenceCountRef: DatabaseReference? = null
-    private var viewerPresenceListener: ValueEventListener? = null
-    private var viewerPresenceChannel: String? = null
     private val embeddedServerButtons = mutableListOf<TextView>()
     private val embeddedChannelCards = linkedMapOf<String, View>()
     private var loadingIndicator: ProgressBar? = null
@@ -87,7 +78,7 @@ class MainActivity : Activity() {
     private var orientationBeforePlayer = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
     private var systemUiBeforePlayer = 0
 
-    // Do not open a channel from stale local data while the first Firebase read is pending.
+    // Wait for the first Hostinger API read before opening a channel from stale local data.
     private var initialSourceSyncFinished = false
     private var pendingChannelToOpen: String? = null
 
@@ -131,9 +122,6 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        // Record an app-open event for HANI TV Analytics.
-        FirebaseAnalytics.getInstance(this).logEvent("hani_tv_app_open", null)
 
         window.statusBarColor = bg
         window.navigationBarColor = bg
@@ -195,28 +183,8 @@ class MainActivity : Activity() {
 
         setContentView(root)
         loadSources()
-        // Keep the currently configured SPORT 1 source as a starting example.
-        if (sources.none { it.channel == "SPORT 1" }) {
-            sources.add(StreamSource("SPORT 1", "السيرفر الأساسي", "http://mega.leptis.live/live/SQ2EJ94G/Q7VWF5PH/1236874.ts"))
-            saveSources()
-        }
         showHome()
-        // All installs authenticate for read access; only the configured admin UID can write.
-        ensureReadAuthentication()
-    }
-
-    private fun ensureReadAuthentication() {
-        if (firebaseAuth.currentUser != null) {
-            syncFromCloud { finishInitialSourceSync() }
-            return
-        }
-        firebaseAuth.signInAnonymously()
-            .addOnSuccessListener { syncFromCloud { finishInitialSourceSync() } }
-            .addOnFailureListener { error ->
-                Toast.makeText(this, "تعذر الاتصال بقاعدة البيانات: ${error.message}", Toast.LENGTH_LONG).show()
-                // Keep locally saved channels usable if authentication/network access fails.
-                finishInitialSourceSync()
-            }
+        syncFromCloud { finishInitialSourceSync() }
     }
 
     private fun finishInitialSourceSync() {
@@ -467,7 +435,6 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
             card.setBackgroundColor(if (name == currentOptions[currentServerIndex].channel) Color.rgb(28, 105, 165) else Color.TRANSPARENT)
         }
         switchServerInsidePlayer(currentServerIndex)
-        startViewerPresence(currentOptions[currentServerIndex].channel)
     } else {
         openEmbeddedPlayer()
     }
@@ -561,34 +528,6 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
         }
         top.addView(close, LinearLayout.LayoutParams(dp(36), dp(28)))
         overlay.addView(top, LinearLayout.LayoutParams(-1, dp(28)))
-
-        // Live viewer count badge in the upper-right corner of the video.
-        val viewerBadge = TextView(this).apply {
-            text = "0  👥"
-            textSize = 15f
-            setTextColor(Color.WHITE)
-            setTypeface(null, Typeface.BOLD)
-            gravity = Gravity.CENTER
-            setPadding(dp(8), dp(3), dp(8), dp(3))
-            background = GradientDrawable().apply {
-                setColor(Color.argb(150, 0, 0, 0))
-                cornerRadius = dp(16).toFloat()
-            }
-            contentDescription = "عدد المشاهدين المتصلين بهذه القناة"
-        }
-        viewerCountText = viewerBadge
-        videoFrame.addView(
-            viewerBadge,
-            FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                dp(30),
-                Gravity.TOP or Gravity.END
-            ).apply {
-                topMargin = dp(30)
-                rightMargin = dp(12)
-            }
-        )
-        overlayViews.add(viewerBadge)
 
         // Circular server selectors, reduced to the same compact size as the reference image.
         embeddedServerButtons.clear()
@@ -847,7 +786,6 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
         }
         dialog.show()
         dialog.window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-        startViewerPresence(source.channel)
         dialog.window?.decorView?.systemUiVisibility = (
             View.SYSTEM_UI_FLAG_FULLSCREEN or
             View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
@@ -954,117 +892,6 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
         playerHandler.post(updater)
     }
 
-    /**
-     * Counts active HANI TV playback sessions for this channel using Firebase Realtime Database.
-     * Each player session gets its own child key; onDisconnect removes it when the client drops.
-     */
-    private fun startViewerPresence(channelName: String) {
-        if (viewerPresenceChannel == channelName &&
-            viewerPresenceRef != null &&
-            viewerCountText != null
-        ) return
-
-        stopViewerPresence()
-        val badge = viewerCountText ?: return
-        val user = firebaseAuth.currentUser
-        if (user == null) {
-            badge.text = "—  👥"
-            return
-        }
-
-        val channelKey = android.util.Base64.encodeToString(
-            channelName.trim().toByteArray(Charsets.UTF_8),
-            android.util.Base64.URL_SAFE or android.util.Base64.NO_WRAP or android.util.Base64.NO_PADDING
-        )
-        val channelRef = FirebaseDatabase.getInstance(
-            "https://hani-tv-b159f-default-rtdb.firebaseio.com"
-        ).reference.child("viewerPresence").child(channelKey)
-
-        val sessionRef = channelRef.push()
-        viewerPresenceChannel = channelName
-        viewerPresenceRef = sessionRef
-        viewerPresenceCountRef = channelRef
-
-        
-        // Create the viewer session first.
-        sessionRef.setValue(user.uid)
-            .addOnSuccessListener {
-                sessionRef.onDisconnect().removeValue()
-                    .addOnFailureListener { error ->
-                        sessionRef.removeValue()
-                        runOnUiThread {
-                            if (viewerCountText === badge) {
-                                badge.text = "—  👥"
-                                Toast.makeText(
-                                    this@MainActivity,
-                                    "تعذر إعداد الاتصال: ${error.message}",
-                                    Toast.LENGTH_LONG
-                                ).show()
-                            }
-                        }
-                    }
-            }
-            .addOnFailureListener { error ->
-                runOnUiThread {
-                    if (viewerCountText === badge) {
-                        badge.text = "—  👥"
-                    }
-                    Toast.makeText(
-                        this@MainActivity,
-                        "تعذر تسجيل المشاهدة: ${error.message}",
-                        Toast.LENGTH_LONG
-                    ).show()
-                }
-            }
-
-
-        val listener = object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                val count = snapshot.childrenCount
-                runOnUiThread {
-                    if (viewerCountText === badge && viewerPresenceChannel == channelName) {
-                        badge.text = "${formatViewerCount(count)}  👥"
-                    }
-                }
-            }
-
-            override fun onCancelled(error: DatabaseError) {
-                runOnUiThread {
-                    if (viewerCountText === badge && viewerPresenceChannel == channelName) {
-                        badge.text = "—  👥"
-                    }
-                }
-            }
-        }
-        viewerPresenceListener = listener
-        channelRef.addValueEventListener(listener)
-    }
-
-    private fun stopViewerPresence() {
-        val countRef = viewerPresenceCountRef
-        val listener = viewerPresenceListener
-        if (countRef != null && listener != null) {
-            countRef.removeEventListener(listener)
-        }
-        viewerPresenceListener = null
-        viewerPresenceCountRef = null
-
-        val sessionRef = viewerPresenceRef
-        viewerPresenceRef = null
-        viewerPresenceChannel = null
-        sessionRef?.onDisconnect()?.cancel()
-        sessionRef?.removeValue()
-    }
-
-    private fun formatViewerCount(count: Long): String {
-        return when {
-            count >= 1_000_000 -> String.format(java.util.Locale.US, "%.1fM", count / 1_000_000.0)
-            count >= 10_000 -> String.format(java.util.Locale.US, "%.0fK", count / 1_000.0)
-            count >= 1_000 -> String.format(java.util.Locale.US, "%.1fK", count / 1_000.0)
-            else -> count.toString()
-        }
-    }
-
     private fun formatPlayerTime(positionMs: Long): String {
         val totalSeconds = positionMs.coerceAtLeast(0L) / 1000L
         val hours = totalSeconds / 3600L
@@ -1136,8 +963,6 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
     }
 
     private fun releaseEmbeddedPlayer() {
-        stopViewerPresence()
-        viewerCountText = null
         progressUpdater?.let { playerHandler.removeCallbacks(it) }
         progressUpdater = null
         startupTimeout?.let { playerHandler.removeCallbacks(it) }
@@ -1314,130 +1139,146 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
         prefs.edit().putString("sources_json", array.toString()).apply()
     }
 
-    /** Read the shared list. If the database is still empty, only the signed-in admin may seed it. */
+    /** Read the shared channel/server list from Hostinger PHP API. */
     private fun syncFromCloud(onComplete: (() -> Unit)? = null) {
-        remoteSources.addListenerForSingleValueEvent(object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                if (snapshot.exists()) {
+        networkExecutor.execute {
+            var errorMessage: String? = null
+            try {
+                val connection = (URL(apiUrl).openConnection() as HttpURLConnection).apply {
+                    requestMethod = "GET"
+                    connectTimeout = 10000
+                    readTimeout = 15000
+                    setRequestProperty("Accept", "application/json")
+                }
+                val code = connection.responseCode
+                val stream = if (code in 200..299) connection.inputStream else connection.errorStream
+                val response = BufferedReader(InputStreamReader(stream, Charsets.UTF_8)).use { it.readText() }
+                connection.disconnect()
+                if (code !in 200..299) throw IllegalStateException("HTTP $code: $response")
+                val json = JSONObject(response)
+                if (json.optBoolean("ok")) {
+                    val array = json.optJSONArray("sources") ?: JSONArray()
                     val downloaded = mutableListOf<StreamSource>()
-                    for (child in snapshot.children) {
-                        if (!child.hasChild("channel")) continue
-                        downloaded.add(
-                            StreamSource(
-                                child.child("channel").getValue(String::class.java).orEmpty(),
-                                child.child("serverName").getValue(String::class.java).orEmpty(),
-                                child.child("url").getValue(String::class.java).orEmpty(),
-                                child.child("referer").getValue(String::class.java).orEmpty(),
-                                child.child("displayName").getValue(String::class.java)
-                                    ?: child.child("serverName").getValue(String::class.java).orEmpty()
-                            )
-                        )
+                    for (i in 0 until array.length()) {
+                        val item = array.optJSONObject(i) ?: continue
+                        val channel = item.optString("channel", "").trim()
+                        val url = item.optString("url", "").trim()
+                        if (channel.isBlank() || url.isBlank()) continue
+                        val server = item.optString("serverName", "السيرفر")
+                        downloaded.add(StreamSource(
+                            channel, server, url,
+                            item.optString("referer", ""),
+                            item.optString("displayName", server)
+                        ))
                     }
-                    sources.clear()
-                    sources.addAll(downloaded)
-                    saveSources()
-                    if (showingServerManager) showServerManager()
-                    onComplete?.invoke()
-                } else if (firebaseAuth.currentUser?.uid == adminUid) {
-                    // First migration: seed the empty cloud database from this admin device's local list.
-                    saveSourcesToCloud(onComplete)
-                } else {
-                    // Keep the existing local list until an admin initializes the shared database.
+                    runOnUiThread {
+                        // If Hostinger is still empty, preserve this device's cached list so it can seed the new API.
+                        // Do not overwrite local/Firebase-migrated sources with an empty first response.
+                        if (downloaded.isNotEmpty()) {
+                            sources.clear()
+                            sources.addAll(downloaded)
+                            saveSources()
+                        }
+                        if (showingServerManager) showServerManager()
+                        onComplete?.invoke()
+                    }
+                } else throw IllegalStateException(json.optString("error", "api_error"))
+            } catch (e: Exception) {
+                errorMessage = e.message ?: "network_error"
+                runOnUiThread {
+                    Toast.makeText(this, "تعذر تحميل السيرفرات من Hostinger: $errorMessage", Toast.LENGTH_LONG).show()
                     onComplete?.invoke()
                 }
             }
-
-            override fun onCancelled(error: DatabaseError) {
-                Toast.makeText(this@MainActivity, "تعذرت مزامنة السيرفرات: ${error.message}", Toast.LENGTH_LONG).show()
-                onComplete?.invoke()
-            }
-        })
+        }
     }
 
-    /** Write is accepted by Firebase rules only when the signed-in UID is the configured admin UID. */
+    /** Replace the shared list through the protected Hostinger API. */
     private fun saveSourcesToCloud(onComplete: (() -> Unit)? = null) {
-        if (firebaseAuth.currentUser?.uid != adminUid) {
+        val key = adminApiKey
+        if (key.isNullOrBlank()) {
             onComplete?.invoke()
+            Toast.makeText(this, "سجّل دخول الإدارة أولاً لحفظ التعديلات المشتركة.", Toast.LENGTH_LONG).show()
             return
         }
-        val payload = linkedMapOf<String, Any>()
-        sources.forEachIndexed { index, source ->
-            payload[index.toString()] = mapOf(
-                "channel" to source.channel,
-                "serverName" to source.serverName,
-                "url" to source.url,
-                "referer" to source.referer,
-                "displayName" to source.displayName
-            )
+        val list = JSONArray()
+        sources.forEach { source ->
+            list.put(JSONObject().apply {
+                put("channel", source.channel)
+                put("serverName", source.serverName)
+                put("url", source.url)
+                put("referer", source.referer)
+                put("displayName", source.displayName)
+            })
         }
-        if (payload.isEmpty()) payload["_empty"] = true
-        remoteSources.setValue(payload)
-            .addOnSuccessListener { onComplete?.invoke() }
-            .addOnFailureListener { error ->
-                Toast.makeText(this, "لم تُحفظ التعديلات في السحابة: ${error.message}", Toast.LENGTH_LONG).show()
-                onComplete?.invoke()
+        val payload = JSONObject().put("sources", list).toString()
+        networkExecutor.execute {
+            var message: String? = null
+            var success = false
+            try {
+                val connection = (URL(apiUrl).openConnection() as HttpURLConnection).apply {
+                    requestMethod = "POST"
+                    connectTimeout = 10000
+                    readTimeout = 20000
+                    doOutput = true
+                    setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                    setRequestProperty("Accept", "application/json")
+                    setRequestProperty("X-ADMIN-KEY", key)
+                }
+                OutputStreamWriter(connection.outputStream, Charsets.UTF_8).use { it.write(payload) }
+                val code = connection.responseCode
+                val stream = if (code in 200..299) connection.inputStream else connection.errorStream
+                val response = BufferedReader(InputStreamReader(stream, Charsets.UTF_8)).use { it.readText() }
+                connection.disconnect()
+                val result = JSONObject(response)
+                success = code in 200..299 && result.optBoolean("ok")
+                if (!success) message = result.optString("error", "HTTP $code")
+            } catch (e: Exception) {
+                message = e.message ?: "network_error"
             }
+            runOnUiThread {
+                if (success) {
+                    Toast.makeText(this, "تم حفظ روابط القنوات على Hostinger.", Toast.LENGTH_SHORT).show()
+                    onComplete?.invoke()
+                } else {
+                    Toast.makeText(this, "فشل الحفظ المشترك: ${message ?: "خطأ غير معروف"}", Toast.LENGTH_LONG).show()
+                    onComplete?.invoke()
+                }
+            }
+        }
     }
 
-    /** Ask for the admin account only when a user attempts to add, edit, or delete a source. */
+    /** Ask for the private API key only when an admin attempts to edit the shared list. */
     private fun requireAdmin(action: () -> Unit) {
-        if (firebaseAuth.currentUser?.uid == adminUid) {
+        if (!adminApiKey.isNullOrBlank()) {
             action()
             return
         }
-
-        val box = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(20), dp(8), dp(20), 0)
-        }
-        val emailInput = EditText(this).apply {
-            hint = "البريد الإلكتروني للإدارة"
-            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS
-            setSingleLine(true)
-        }
-        val passwordInput = EditText(this).apply {
-            hint = "كلمة مرور الإدارة"
+        val keyInput = EditText(this).apply {
+            hint = "مفتاح الإدارة"
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
             setSingleLine(true)
         }
-        box.addView(emailInput, fullWidthParams())
-        box.addView(passwordInput, fullWidthParams())
-
-        val dialog = AlertDialog.Builder(this)
-            .setTitle("تسجيل دخول الإدارة")
-            .setMessage("يلزم حساب الإدارة لتعديل قائمة السيرفرات. بقية النسخ تستطيع قراءة القائمة فقط.")
-            .setView(box)
-            .setPositiveButton("دخول", null)
-            .setNegativeButton("إلغاء", null)
-            .create()
-        dialog.setOnShowListener {
-            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
-                val email = emailInput.text.toString().trim()
-                val password = passwordInput.text.toString()
-                if (email.isBlank() || password.isBlank()) {
-                    Toast.makeText(this, "أدخل البريد الإلكتروني وكلمة المرور.", Toast.LENGTH_SHORT).show()
-                    return@setOnClickListener
-                }
-                dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled = false
-                firebaseAuth.signInWithEmailAndPassword(email, password)
-                    .addOnCompleteListener { task ->
-                        if (task.isSuccessful && firebaseAuth.currentUser?.uid == adminUid) {
-                            dialog.dismiss()
-                            syncFromCloud { action() }
-                        } else {
-                            firebaseAuth.signOut()
-                            firebaseAuth.signInAnonymously()
-                            dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled = true
-                            Toast.makeText(
-                                this,
-                                if (task.isSuccessful) "هذا الحساب ليس حساب الإدارة المصرح به." else "فشل تسجيل الدخول؛ تحقق من بيانات الحساب.",
-                                Toast.LENGTH_LONG
-                            ).show()
-                        }
-                    }
-            }
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(8), dp(20), 0)
+            addView(keyInput, fullWidthParams())
         }
-        dialog.show()
+        AlertDialog.Builder(this)
+            .setTitle("دخول الإدارة")
+            .setMessage("أدخل مفتاح الإدارة الذي ضبطته في api.php. لا تضعه داخل كود التطبيق.")
+            .setView(box)
+            .setPositiveButton("متابعة") { _, _ ->
+                val entered = keyInput.text.toString()
+                if (entered.isBlank()) {
+                    Toast.makeText(this, "أدخل مفتاح الإدارة.", Toast.LENGTH_SHORT).show()
+                } else {
+                    adminApiKey = entered
+                    action()
+                }
+            }
+            .setNegativeButton("إلغاء", null)
+            .show()
     }
 
     private fun addSectionCard(
