@@ -47,11 +47,18 @@ import org.json.JSONObject
 
 class MainActivity : Activity() {
 
-    private val bg = Color.rgb(12, 12, 15)
-    private val panel = Color.rgb(25, 25, 30)
-    private val red = Color.rgb(210, 20, 35)
-    private val white = Color.WHITE
-    private val gray = Color.rgb(175, 175, 185)
+    // These defaults preserve the existing design. Hostinger can override them after sync.
+    private var bg = Color.rgb(12, 12, 15)
+    private var panel = Color.rgb(25, 25, 30)
+    private var red = Color.rgb(210, 20, 35)
+    private var white = Color.WHITE
+    private var gray = Color.rgb(175, 175, 185)
+    private var bannerColor = Color.rgb(75, 12, 22)
+    private var homeTitle = "مرحباً بك في HANI TV"
+    private var homeSubtitle = "قنواتك المفضلة في مكان واحد"
+    private var bannerTitle = "HANI TV"
+    private var bannerSubtitle = "اكتشف أقسام القنوات"
+    private var showMoviesSection = true
 
     private lateinit var content: LinearLayout
     private val prefs by lazy { getSharedPreferences("hani_tv_sources", MODE_PRIVATE) }
@@ -147,7 +154,7 @@ class MainActivity : Activity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(18), dp(15), dp(18), dp(15))
-            setBackgroundColor(Color.rgb(18, 18, 22))
+            setBackgroundColor(panel)
         }
 
         header.addView(TextView(this).apply {
@@ -189,6 +196,7 @@ class MainActivity : Activity() {
         content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(16), dp(16), dp(16), dp(24))
+            setBackgroundColor(bg)
         }
 
         scroll.addView(content)
@@ -223,27 +231,27 @@ class MainActivity : Activity() {
         showingServerManager = false
         content.removeAllViews()
 
-        addText("مرحباً بك في HANI TV", 23f, white, true)
-        addText(
-            "قنواتك المفضلة في مكان واحد",
-            14f, gray, false
-        )
+        content.setBackgroundColor(bg)
+        window.statusBarColor = bg
+        window.navigationBarColor = bg
+        addText(homeTitle, 23f, white, true)
+        addText(homeSubtitle, 14f, gray, false)
 
         val banner = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(20), dp(24), dp(20), dp(24))
-            setBackgroundColor(Color.rgb(75, 12, 22))
+            setBackgroundColor(bannerColor)
         }
 
         banner.addView(TextView(this).apply {
-            text = "HANI TV"
+            text = bannerTitle
             textSize = 30f
             setTextColor(white)
             setTypeface(null, Typeface.BOLD)
         })
 
         banner.addView(TextView(this).apply {
-            text = "اكتشف أقسام القنوات"
+            text = bannerSubtitle
             textSize = 17f
             setTextColor(white)
             setPadding(0, dp(8), 0, dp(14))
@@ -269,13 +277,11 @@ class MainActivity : Activity() {
             addCategoryCard(category)
         }
 
-        addText("الأفلام والمسلسلات", 21f, white, true, 12)
-        addSectionCard("🎬", "تصفح الأفلام والمسلسلات") {
-            Toast.makeText(
-                this,
-                "سيتم إضافة محتوى هذا القسم لاحقاً",
-                Toast.LENGTH_SHORT
-            ).show()
+        if (showMoviesSection) {
+            addText("الأفلام والمسلسلات", 21f, white, true, 12)
+            addSectionCard("🎬", "تصفح الأفلام والمسلسلات") {
+                Toast.makeText(this, "سيتم إضافة محتوى هذا القسم لاحقاً", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 
@@ -1425,7 +1431,26 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
         }
     }
 
-    /** Read the shared channel/server list from Hostinger PHP API. */
+    private fun applyRemoteSettings(settings: JSONObject?) {
+        if (settings == null) return
+        fun color(key: String, fallback: Int): Int {
+            val value = settings.optString(key, "").trim()
+            return try { if (value.matches(Regex("^#[0-9a-fA-F]{6}$"))) Color.parseColor(value) else fallback } catch (_: Exception) { fallback }
+        }
+        bg = color("backgroundColor", bg)
+        panel = color("panelColor", panel)
+        red = color("accentColor", red)
+        white = color("textColor", white)
+        gray = color("mutedTextColor", gray)
+        bannerColor = color("bannerColor", bannerColor)
+        homeTitle = settings.optString("homeTitle", homeTitle).ifBlank { homeTitle }
+        homeSubtitle = settings.optString("homeSubtitle", homeSubtitle).ifBlank { homeSubtitle }
+        bannerTitle = settings.optString("bannerTitle", bannerTitle).ifBlank { bannerTitle }
+        bannerSubtitle = settings.optString("bannerSubtitle", bannerSubtitle).ifBlank { bannerSubtitle }
+        showMoviesSection = settings.optString("showMoviesSection", if (showMoviesSection) "1" else "0") != "0"
+    }
+
+    /** Read the shared channel/server list and design settings from Hostinger PHP API. */
     private fun syncFromCloud(silent: Boolean = false, onComplete: (() -> Unit)? = null) {
         networkExecutor.execute {
             var errorMessage: String? = null
@@ -1442,6 +1467,7 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
                 connection.disconnect()
                 if (code !in 200..299) throw IllegalStateException("HTTP $code: $response")
                 val json = JSONObject(response)
+                val remoteSettings = json.optJSONObject("settings")
                 if (json.optBoolean("ok")) {
                     val array = json.optJSONArray("sources") ?: JSONArray()
                     val downloaded = mutableListOf<StreamSource>()
@@ -1486,6 +1512,7 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
                     }
 
                     runOnUiThread {
+                        applyRemoteSettings(remoteSettings)
                         if (channelArray.length() > 0 || remoteChannelNames.isNotEmpty()) {
                             channelImageUrls.clear()
                             channelImageUrls.putAll(downloadedImages)
