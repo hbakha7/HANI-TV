@@ -1391,6 +1391,71 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
     }
 
     private fun channelLogoView(
+        channelName: String,
+        fallback: String,
+        width: Int,
+        height: Int
+    ): View {
+        val imageUrl = channelImageUrls[channelName].orEmpty().trim()
+
+        // Use a lightweight ImageView and keep a readable fallback when no logo URL exists.
+        val imageView = ImageView(this).apply {
+            layoutParams = LinearLayout.LayoutParams(width, height)
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            contentDescription = channelName
+            setBackgroundColor(Color.TRANSPARENT)
+        }
+
+        if (imageUrl.isBlank()) {
+            imageView.setImageDrawable(null)
+            imageView.setBackground(
+                GradientDrawable().apply {
+                    setColor(Color.rgb(25, 25, 30))
+                    cornerRadius = dp(8).toFloat()
+                    setStroke(dp(1), Color.rgb(65, 65, 75))
+                }
+            )
+            imageView.setOnClickListener {
+                Toast.makeText(this, channelName, Toast.LENGTH_SHORT).show()
+            }
+            return imageView
+        }
+
+        networkExecutor.execute {
+            var bitmap: android.graphics.Bitmap? = null
+            try {
+                val connection = (URL(imageUrl).openConnection() as HttpURLConnection).apply {
+                    connectTimeout = 8000
+                    readTimeout = 10000
+                    instanceFollowRedirects = true
+                }
+                connection.inputStream.use { stream ->
+                    bitmap = BitmapFactory.decodeStream(stream)
+                }
+                connection.disconnect()
+            } catch (_: Exception) {
+                // Keep the fallback background if the remote logo cannot be loaded.
+            }
+
+            val loadedBitmap = bitmap
+            if (loadedBitmap != null) {
+                runOnUiThread {
+                    // Do not update a detached view after a screen change.
+                    if (imageView.parent != null) {
+                        imageView.setImageBitmap(loadedBitmap)
+                        imageView.background = null
+                    }
+                }
+            }
+        }
+
+        imageView.background = GradientDrawable().apply {
+            setColor(Color.rgb(25, 25, 30))
+            cornerRadius = dp(8).toFloat()
+            setStroke(dp(1), Color.rgb(65, 65, 75))
+        }
+        return imageView
+    }
 
     private fun saveChannelSettingsToCloud(onComplete: (() -> Unit)? = null) {
         val key = adminApiKey
