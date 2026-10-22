@@ -1634,6 +1634,39 @@ private fun loadEpisodes(series: Channel) {
     }  
 }
 
+
+/**
+ * Recognize HLS playlists hidden behind proxy.php?stream=<Base64 path>.
+ * The URL itself may not end in .m3u8, but the decoded stream path can.
+ */
+private fun isHlsStreamUrl(url: String): Boolean {
+    val uri = try {
+        android.net.Uri.parse(url)
+    } catch (_: Exception) {
+        return false
+    }
+
+    val path = uri.path.orEmpty().lowercase(java.util.Locale.ROOT)
+    if (path.endsWith(".m3u8")) return true
+
+    val encodedStream = uri.getQueryParameter("stream")?.trim().orEmpty()
+    if (encodedStream.isBlank()) return false
+
+    val decoded = sequenceOf(
+        Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING,
+        Base64.DEFAULT
+    ).mapNotNull { flags ->
+        try {
+            String(Base64.decode(encodedStream, flags), Charsets.UTF_8)
+        } catch (_: Exception) {
+            null
+        }
+    }.firstOrNull { it.isNotBlank() }.orEmpty()
+
+    return decoded.substringBefore('?').substringBefore('#')
+        .lowercase(java.util.Locale.ROOT).endsWith(".m3u8")
+}
+
 private fun play(ch: Channel) {
 try {
 // إنشاء مشغّل جديد لضمان تطبيق رؤوس الطلبات الحالية
@@ -1661,7 +1694,7 @@ if (playerView == null) {
     } catch (_: Exception) {
         ""
     }
-    if (normalizedPath.endsWith("/index.html") || normalizedPath == "index.html") {
+    if (isHlsStreamUrl(ch.url) || normalizedPath.endsWith("/index.html") || normalizedPath == "index.html") {
         itemBuilder.setMimeType(MimeTypes.APPLICATION_M3U8)
     }
 
