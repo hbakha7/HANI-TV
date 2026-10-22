@@ -76,6 +76,7 @@ class MainActivity : Activity() {
     private var serverRefreshRunnable: Runnable? = null
     private val embeddedChannelCards = linkedMapOf<String, View>()
     private var loadingIndicator: ProgressBar? = null
+    private var scheduleOverlayHideAction: (() -> Unit)? = null
     private var progressUpdater: Runnable? = null
     private var currentOptions: List<StreamSource> = emptyList()
     private var currentServerIndex = 0
@@ -670,26 +671,59 @@ private fun displayChannelName(name: String): String {
 private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
     if (options.isEmpty()) return
 
-    // Replace the active channel's complete source list before rebuilding the player.
+    val playerAlreadyOpen = embeddedDialog?.isShowing == true && embeddedPlayer != null
+
+    // Update the active channel's sources. When the player is already open, keep the
+    // same dialog and PlayerView alive so the underlying screen/dialog cannot flash
+    // between channel taps.
     currentOptions = options
     currentServerIndex = selectedIndex.coerceIn(0, options.lastIndex)
 
-    if (embeddedDialog?.isShowing == true && embeddedPlayer != null) {
-        // Keep the original screen state, but rebuild ExoPlayer for the new channel.
-        // Each channel may need its own Referer/request headers; replacing only the
-        // media item can leave the previous channel's HTTP settings active.
-        val originalOrientation = orientationBeforePlayer
-        val originalSystemUi = systemUiBeforePlayer
-        val originalKeepScreenOn = keepScreenOnWasSet
+    if (playerAlreadyOpen) {
+        // Update the selected channel card without rebuilding the entire player UI.
+        embeddedChannelCards.forEach { (name, card) ->
+            card.setBackgroundColor(
+                if (name == options.first().channel) Color.rgb(28, 105, 165)
+                else Color.TRANSPARENT
+            )
+        }
 
-        openEmbeddedPlayer()
+        // Rebuild only the circular server choices for the newly selected channel.
+        embeddedServerContent?.let { serverContent ->
+            if (serverContent.childCount > 1) {
+                serverContent.removeViews(1, serverContent.childCount - 1)
+            }
+            embeddedServerButtons.clear()
+            currentOptions.forEachIndexed { index, item ->
+                val label = item.displayName.ifBlank { item.serverName }
+                    .replace("السيرفر الأساسي", "السيرفر")
+                    .take(8)
+                val button = TextView(this).apply {
+                    text = "${index + 1}\n$label"
+                    textSize = 9f
+                    gravity = Gravity.CENTER
+                    setTextColor(Color.WHITE)
+                    isClickable = true
+                    isFocusable = true
+                    background = GradientDrawable().apply {
+                        shape = GradientDrawable.OVAL
+                        setColor(Color.argb(45, 0, 0, 0))
+                        setStroke(dp(2), if (index == currentServerIndex) Color.rgb(25, 155, 240) else Color.LTGRAY)
+                    }
+                    setOnClickListener { switchServerInsidePlayer(index) }
+                }
+                embeddedServerButtons.add(button)
+                serverContent.addView(button, LinearLayout.LayoutParams(dp(50), dp(50)).apply {
+                    setMargins(dp(3), 0, dp(3), 0)
+                })
+            }
+        }
 
-        // openEmbeddedPlayer captures the current (already-landscape) state.
-        // Restore the state from before the player was first opened so closing it
-        // returns the user to the original screen orientation and system UI.
-        orientationBeforePlayer = originalOrientation
-        systemUiBeforePlayer = originalSystemUi
-        keepScreenOnWasSet = originalKeepScreenOn
+        // Clear the previous frame while the next channel starts, preventing a brief
+        // flash of the old channel's picture in the middle of the transition.
+        embeddedPlayerView?.setKeepContentOnPlayerReset(false)
+        embeddedPlayerView?.setShutterBackgroundColor(Color.BLACK)
+        switchServerInsidePlayer(currentServerIndex)
     } else {
         openEmbeddedPlayer()
     }
@@ -734,6 +768,8 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
             resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FILL
         }
         embeddedPlayerView = video
+        video.setKeepContentOnPlayerReset(false)
+        video.setShutterBackgroundColor(Color.BLACK)
         // Do not add extra zoom; only use the selected resize mode.
         video.scaleX = 1.0f
         video.scaleY = 1.0f
@@ -756,6 +792,7 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
             playerHandler.removeCallbacks(hideOverlaysRunnable)
             playerHandler.postDelayed(hideOverlaysRunnable, 3_000L)
         }
+        scheduleOverlayHideAction = { scheduleOverlayHide() }
         fun showOverlaysAndScheduleHide() {
             overlaysVisible = true
             overlayViews.forEach { it.visibility = View.VISIBLE }
@@ -1011,7 +1048,10 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
                 setBackgroundColor(if (selected) Color.rgb(28, 105, 165) else Color.TRANSPARENT)
                 isClickable = true
                 isFocusable = true
-                setOnClickListener { openChannel(channel.first) }
+                setOnClickListener {
+                    scheduleOverlayHideAction?.invoke()
+                    openChannel(channel.first)
+                }
             }
             card.addView(
                 channelLogoView(channel.first, channel.second, dp(76), dp(54)),
@@ -1297,6 +1337,7 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
         embeddedPlayer = null
         embeddedPlayerView = null
         loadingIndicator = null
+        scheduleOverlayHideAction = null
         embeddedDialog = null
         embeddedChannelTitle = null
         embeddedServerButtons.clear()
