@@ -669,20 +669,31 @@ private fun displayChannelName(name: String): String {
 
 private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
     if (options.isEmpty()) return
+
+    // Replace the active channel's complete source list before rebuilding the player.
     currentOptions = options
     currentServerIndex = selectedIndex.coerceIn(0, options.lastIndex)
+
     if (embeddedDialog?.isShowing == true && embeddedPlayer != null) {
-        // If a channel is selected while the player is already open, keep the player visible.
-        embeddedChannelTitle?.text = currentOptions[currentServerIndex].channel
-        embeddedChannelCards.forEach { (name, card) ->
-            card.setBackgroundColor(if (name == currentOptions[currentServerIndex].channel) Color.rgb(28, 105, 165) else Color.TRANSPARENT)
-        }
-        switchServerInsidePlayer(currentServerIndex)
+        // Keep the original screen state, but rebuild ExoPlayer for the new channel.
+        // Each channel may need its own Referer/request headers; replacing only the
+        // media item can leave the previous channel's HTTP settings active.
+        val originalOrientation = orientationBeforePlayer
+        val originalSystemUi = systemUiBeforePlayer
+        val originalKeepScreenOn = keepScreenOnWasSet
+
+        openEmbeddedPlayer()
+
+        // openEmbeddedPlayer captures the current (already-landscape) state.
+        // Restore the state from before the player was first opened so closing it
+        // returns the user to the original screen orientation and system UI.
+        orientationBeforePlayer = originalOrientation
+        systemUiBeforePlayer = originalSystemUi
+        keepScreenOnWasSet = originalKeepScreenOn
     } else {
         openEmbeddedPlayer()
     }
 }
-
 
 
     /** Embedded sports player: video, circular servers, controls, and channel carousel. */
