@@ -46,11 +46,6 @@ import androidx.media3.ui.TrackSelectionDialogBuilder
 import android.text.InputType
 import android.app.AlertDialog
 import android.content.Intent
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
-import android.text.Editable
-import android.text.TextWatcher
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -59,12 +54,6 @@ class MainActivity : Activity() {
     private val bg = Color.rgb(12, 12, 15)
     private val panel = Color.rgb(25, 25, 30)
     private val red = Color.rgb(210, 20, 35)
-    private val adminPurple = Color.rgb(151, 86, 235)
-    private val adminPurpleDark = Color.rgb(48, 27, 70)
-    private val adminCard = Color.rgb(22, 20, 30)
-    private var managerSearchQuery = ""
-    private var managerSelectedCategory = "الكل"
-    private val serverStatus = linkedMapOf<String, String>()
     private val white = Color.WHITE
     private val gray = Color.rgb(175, 175, 185)
 
@@ -115,12 +104,10 @@ class MainActivity : Activity() {
         val cookie: String = "",
         val authorization: String = "",
         val extraHeaders: String = "",
-        val category: String = "",
         val licenseUrl: String = "",
         val scheme: String = "",
         val drmScheme: String = "",
-        val playerType: String = "Exo Player",
-        val isPrimary: Boolean = serverName.contains("أساسي", ignoreCase = true)
+        val playerType: String = "Exo Player"
     )
 
     private val channelGroups = linkedMapOf(
@@ -1221,7 +1208,18 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
             }
         })
         val mediaItemBuilder = MediaItem.Builder().setUri(source.url)
-        configureSourceMediaItem(mediaItemBuilder, source)
+        // Detect common streaming formats from the URL path (query parameters are ignored).
+        val normalizedPath = try {
+            android.net.Uri.parse(source.url).path.orEmpty().lowercase(java.util.Locale.ROOT)
+        } catch (_: Exception) {
+            ""
+        }
+        when {
+            normalizedPath.endsWith(".m3u8") || normalizedPath.endsWith("/index.html") || normalizedPath == "index.html" ->
+                mediaItemBuilder.setMimeType(androidx.media3.common.MimeTypes.APPLICATION_M3U8)
+            normalizedPath.endsWith(".mpd") ->
+                mediaItemBuilder.setMimeType("application/dash+xml")
+        }
         exo.setMediaItem(mediaItemBuilder.build())
         exo.prepare()
         exo.playWhenReady = true
@@ -1275,37 +1273,6 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
             }
         }
         return headers
-    }
-
-    /** Apply an explicitly selected stream format and optional DRM license to the existing ExoPlayer path. */
-    private fun configureSourceMediaItem(builder: MediaItem.Builder, source: StreamSource) {
-        val normalizedPath = try {
-            android.net.Uri.parse(source.url).path.orEmpty().lowercase(java.util.Locale.ROOT)
-        } catch (_: Exception) { "" }
-        val selectedScheme = source.scheme.trim().lowercase(java.util.Locale.ROOT)
-        when {
-            selectedScheme in listOf("hls", "m3u8", "application/x-mpegurl") ||
-                normalizedPath.endsWith(".m3u8") || normalizedPath.endsWith("/index.html") || normalizedPath == "index.html" ->
-                builder.setMimeType(androidx.media3.common.MimeTypes.APPLICATION_M3U8)
-            selectedScheme in listOf("dash", "mpd", "application/dash+xml") || normalizedPath.endsWith(".mpd") ->
-                builder.setMimeType("application/dash+xml")
-        }
-        if (source.licenseUrl.isNotBlank()) {
-            val drmUuid = when (source.drmScheme.trim().lowercase(java.util.Locale.ROOT)) {
-                "widevine", "com.widevine.alpha" -> java.util.UUID.fromString("edef8ba9-79d6-4ace-a3c8-27dcd51d21ed")
-                "playready", "com.microsoft.playready" -> java.util.UUID.fromString("9a04f079-9840-4286-ab92-e65be0885f95")
-                "clearkey", "org.w3.clearkey" -> java.util.UUID.fromString("e2719d58-a985-b3c9-781a-b030af78d30e")
-                else -> null
-            }
-            if (drmUuid != null) {
-                builder.setDrmConfiguration(
-                    MediaItem.DrmConfiguration.Builder(drmUuid)
-                        .setLicenseUri(android.net.Uri.parse(source.licenseUrl))
-                        .setLicenseRequestHeaders(buildSourceHeaders(source))
-                        .build()
-                )
-            }
-        }
     }
 
     private fun isUsingMobileData(): Boolean {
@@ -1362,7 +1329,18 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
         embeddedHttpFactory?.setUserAgent(selectedUserAgent)
         embeddedHttpFactory?.setDefaultRequestProperties(buildSourceHeaders(source))
         val mediaItemBuilder = MediaItem.Builder().setUri(source.url)
-        configureSourceMediaItem(mediaItemBuilder, source)
+        // Apply the same format detection when switching servers.
+        val normalizedPath = try {
+            android.net.Uri.parse(source.url).path.orEmpty().lowercase(java.util.Locale.ROOT)
+        } catch (_: Exception) {
+            ""
+        }
+        when {
+            normalizedPath.endsWith(".m3u8") || normalizedPath.endsWith("/index.html") || normalizedPath == "index.html" ->
+                mediaItemBuilder.setMimeType(androidx.media3.common.MimeTypes.APPLICATION_M3U8)
+            normalizedPath.endsWith(".mpd") ->
+                mediaItemBuilder.setMimeType("application/dash+xml")
+        }
         player.stop()
         player.clearMediaItems()
         player.setMediaItem(mediaItemBuilder.build())
@@ -1421,362 +1399,179 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
     private fun showServerManager() {
         showingServerManager = true
         content.removeAllViews()
-        content.setPadding(dp(12), dp(8), dp(12), dp(12))
+        val purple = Color.rgb(169, 112, 245)
+        val darkCard = Color.rgb(25, 24, 32)
+        val lineColor = Color.rgb(58, 48, 71)
+        addText("إدارة السيرفرات", 24f, white, true)
+        addText("إدارة موحّدة حسب الفئة والقناة — جميع السيرفرات متساوية.", 13f, gray, false)
 
-        val heading = TextView(this).apply {
-            text = "إدارة السيرفرات"
-            textSize = 25f
-            setTextColor(white)
-            setTypeface(null, Typeface.BOLD)
-            gravity = Gravity.END
-            setPadding(0, dp(4), 0, dp(4))
+        val stats = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        fun stat(label: String, value: String): View = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(10), dp(9), dp(10), dp(9))
+            background = GradientDrawable().apply { setColor(Color.rgb(33, 23, 47)); cornerRadius = dp(10).toFloat() }
+            addView(TextView(this@MainActivity).apply { text = value; textSize = 19f; setTextColor(white); setTypeface(null, Typeface.BOLD) })
+            addView(TextView(this@MainActivity).apply { text = label; textSize = 11f; setTextColor(purple) })
         }
-        content.addView(heading, fullWidthParams())
-        val subtitle = TextView(this).apply {
-            text = "لوحة الإدارة المتكاملة • فئات، قنوات، سيرفرات وإعدادات التشغيل"
-            textSize = 12f
-            setTextColor(gray)
-            gravity = Gravity.END
-            setPadding(0, 0, 0, dp(12))
-        }
-        content.addView(subtitle, fullWidthParams())
-
-        val stats = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
-        }
-        val channelCount = sources.map { it.channel }.distinct().size
-        val categoryCount = (serverManagerCategories() - "الكل").size
-        listOf("السيرفرات" to sources.size.toString(), "القنوات" to channelCount.toString(), "الفئات" to categoryCount.toString()).forEach { (label, value) ->
-            val stat = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                gravity = Gravity.CENTER
-                setPadding(dp(8), dp(10), dp(8), dp(10))
-                background = roundedBackground(adminCard, adminPurple, 12)
-                addView(TextView(this@MainActivity).apply {
-                    text = value; textSize = 20f; setTextColor(adminPurple); setTypeface(null, Typeface.BOLD); gravity = Gravity.CENTER
-                })
-                addView(TextView(this@MainActivity).apply {
-                    text = label; textSize = 11f; setTextColor(gray); gravity = Gravity.CENTER
-                })
-            }
-            stats.addView(stat, LinearLayout.LayoutParams(0, -2, 1f).apply { setMargins(dp(3), 0, dp(3), dp(8)) })
-        }
-        content.addView(stats, fullWidthParams())
+        stats.addView(stat("الفئات", allCategories().size.toString()), LinearLayout.LayoutParams(0, -2, 1f).apply { setMargins(0, 0, dp(5), 0) })
+        stats.addView(stat("القنوات", sources.map { it.channel }.distinct().size.toString()), LinearLayout.LayoutParams(0, -2, 1f).apply { setMargins(dp(3), 0, dp(3), 0) })
+        stats.addView(stat("السيرفرات", sources.size.toString()), LinearLayout.LayoutParams(0, -2, 1f).apply { setMargins(dp(5), 0, 0, 0) })
+        content.addView(stats, fullWidthParams().apply { topMargin = dp(10); bottomMargin = dp(10) })
 
         val search = EditText(this).apply {
-            hint = "بحث باسم القناة أو السيرفر أو الرابط أو الفئة…"
-            setText(managerSearchQuery)
-            setTextColor(white)
-            setHintTextColor(gray)
-            textSize = 14f
-            isSingleLine = true
-            setPadding(dp(14), dp(10), dp(14), dp(10))
-            background = roundedBackground(Color.rgb(25, 23, 33), adminPurple, 12)
+            hint = "بحث بالقناة أو السيرفر أو الرابط..."
+            setTextColor(white); setHintTextColor(gray); textSize = 14f; setSingleLine(true)
+            setPadding(dp(12), dp(9), dp(12), dp(9))
+            background = GradientDrawable().apply { setColor(darkCard); cornerRadius = dp(10).toFloat(); setStroke(dp(1), lineColor) }
         }
         content.addView(search, fullWidthParams().apply { bottomMargin = dp(8) })
 
-        val categoryScroll = HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false }
-        val categoryRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        serverManagerCategories().forEach { category ->
-            val chip = TextView(this).apply {
-                text = if (category == "الكل") "الكل (${sources.size})" else "$category (${sources.count { sourceCategory(it) == category }})"
-                textSize = 12f
-                gravity = Gravity.CENTER
-                setTextColor(white)
-                setPadding(dp(13), dp(9), dp(13), dp(9))
-                background = roundedBackground(if (managerSelectedCategory == category) adminPurple else adminCard,
-                    if (managerSelectedCategory == category) adminPurple else Color.rgb(64, 52, 78), 20)
-                setOnClickListener {
-                    managerSelectedCategory = category
-                    showServerManager()
-                }
-            }
-            categoryRow.addView(chip, LinearLayout.LayoutParams(-2, -2).apply { setMargins(dp(3), 0, dp(3), dp(8)) })
-        }
-        categoryScroll.addView(categoryRow)
-        content.addView(categoryScroll, fullWidthParams())
-
-        val primaryActions = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        val add = adminButton("＋  إضافة سيرفر / رابط قناة")
-        add.setOnClickListener { requireAdmin { showAddSourceDialog(category = managerSelectedCategory.takeIf { it != "الكل" } ?: "") } }
-        primaryActions.addView(add, fullWidthParams().apply { bottomMargin = dp(7) })
-        val secondRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        val addCategory = adminButton("＋ فئة جديدة")
-        addCategory.textSize = 13f
-        addCategory.setOnClickListener { requireAdmin { showAddServerCategoryDialog() } }
-        val manageImages = adminButton("🖼 صور القنوات")
-        manageImages.textSize = 13f
+        val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        val add = makeButton("＋ إضافة سيرفر")
+        add.setOnClickListener { requireAdmin { showAddSourceDialog() } }
+        val manageImages = makeButton("إدارة الفئات والصور")
         manageImages.setOnClickListener { requireAdmin { showChannelImageManager() } }
-        secondRow.addView(addCategory, LinearLayout.LayoutParams(0, -2, 1f).apply { setMargins(0, 0, dp(4), 0) })
-        secondRow.addView(manageImages, LinearLayout.LayoutParams(0, -2, 1f).apply { setMargins(dp(4), 0, 0, 0) })
-        primaryActions.addView(secondRow, fullWidthParams())
-        content.addView(primaryActions, fullWidthParams().apply { bottomMargin = dp(10) })
+        actions.addView(add, LinearLayout.LayoutParams(0, -2, 1f).apply { setMargins(0, 0, dp(4), 0) })
+        actions.addView(manageImages, LinearLayout.LayoutParams(0, -2, 1f).apply { setMargins(dp(4), 0, 0, 0) })
+        content.addView(actions, fullWidthParams().apply { bottomMargin = dp(10) })
 
-        val cardsContainer = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        content.addView(cardsContainer, fullWidthParams())
-        renderServerManagerCards(cardsContainer, managerSearchQuery, managerSelectedCategory)
-        search.addTextChangedListener(object : TextWatcher {
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
-                managerSearchQuery = s?.toString().orEmpty()
-                renderServerManagerCards(cardsContainer, managerSearchQuery, managerSelectedCategory)
-            }
-            override fun afterTextChanged(s: Editable?) {}
-        })
+        val categoryRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        val categoryScroll = HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false; addView(categoryRow) }
+        content.addView(categoryScroll, fullWidthParams().apply { bottomMargin = dp(10) })
+        val listHost = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        content.addView(listHost, fullWidthParams())
         addBackButton()
-    }
 
-    private fun roundedBackground(fill: Int, stroke: Int, radiusDp: Int): GradientDrawable =
-        GradientDrawable().apply {
-            setColor(fill)
-            cornerRadius = dp(radiusDp).toFloat()
-            setStroke(dp(1), stroke)
+        var selectedCategory = "الكل"
+        val expandedChannels = mutableSetOf<String>()
+        fun chip(label: String, selected: Boolean, onClick: () -> Unit) = TextView(this).apply {
+            text = label; textSize = 12f; gravity = Gravity.CENTER; setTextColor(white)
+            setPadding(dp(12), dp(9), dp(12), dp(9))
+            background = GradientDrawable().apply { setColor(if (selected) Color.rgb(117, 65, 183) else darkCard); cornerRadius = dp(9).toFloat(); setStroke(dp(1), if (selected) purple else lineColor) }
+            setOnClickListener { onClick() }
         }
-
-    private fun adminButton(label: String): TextView = TextView(this).apply {
-        text = label
-        textSize = 15f
-        gravity = Gravity.CENTER
-        setTextColor(white)
-        setTypeface(null, Typeface.BOLD)
-        setPadding(dp(12), dp(12), dp(12), dp(12))
-        background = roundedBackground(adminPurpleDark, adminPurple, 11)
-        isClickable = true
-        isFocusable = true
-    }
-
-    private fun sourceCategory(source: StreamSource): String =
-        source.category.trim().ifBlank { channelCategories[source.channel] ?: defaultCategoryFor(source.channel) }
-
-    private fun serverManagerCategories(): List<String> {
-        val saved = try {
-            val a = JSONArray(prefs.getString("server_manager_categories", "[]") ?: "[]")
-            (0 until a.length()).map { a.optString(it).trim() }.filter { it.isNotBlank() }
-        } catch (_: Exception) { emptyList() }
-        return (listOf("الكل") + saved + sources.map { sourceCategory(it) } + allCategories()).distinct()
-    }
-
-    private fun showAddServerCategoryDialog() {
-        val input = EditText(this).apply {
-            hint = "اسم الفئة الجديدة"
-            setTextColor(white); setHintTextColor(gray); setPadding(dp(12), dp(8), dp(12), dp(8))
-        }
-        val wrapper = LinearLayout(this).apply {
-            setPadding(dp(20), dp(8), dp(20), 0)
-            addView(input, fullWidthParams())
-        }
-        AlertDialog.Builder(this)
-            .setTitle("إضافة فئة جديدة")
-            .setView(wrapper)
-            .setPositiveButton("إضافة") { _, _ ->
-                val name = input.text.toString().trim()
-                if (name.isBlank() || name == "الكل") {
-                    Toast.makeText(this, "أدخل اسم فئة صحيحًا.", Toast.LENGTH_SHORT).show()
-                    return@setPositiveButton
+        fun renderList() {
+            categoryRow.removeAllViews()
+            (listOf("الكل") + allCategories()).distinct().forEach { category ->
+                categoryRow.addView(chip(category, category == selectedCategory) { selectedCategory = category; renderList() }, LinearLayout.LayoutParams(-2, -2).apply { marginEnd = dp(6) })
+            }
+            listHost.removeAllViews()
+            val query = search.text.toString().trim().lowercase(java.util.Locale.ROOT)
+            val filtered = sources.withIndex().filter { (_, item) ->
+                val cat = channelCategories[item.channel] ?: defaultCategoryFor(item.channel)
+                (selectedCategory == "الكل" || cat == selectedCategory) &&
+                    (query.isBlank() || item.channel.lowercase().contains(query) || item.serverName.lowercase().contains(query) || item.displayName.lowercase().contains(query) || item.url.lowercase().contains(query) || cat.lowercase().contains(query))
+            }
+            if (filtered.isEmpty()) {
+                listHost.addView(TextView(this).apply { text = if (sources.isEmpty()) "لا توجد سيرفرات محفوظة بعد." else "لا توجد نتائج مطابقة."; setTextColor(gray); textSize = 14f; setPadding(dp(8), dp(18), dp(8), dp(18)) })
+                return
+            }
+            val channelOrder = filtered.map { it.value.channel }.distinct()
+            channelOrder.forEach { channel ->
+                val channelItems = filtered.filter { it.value.channel == channel }
+                val category = channelCategories[channel] ?: defaultCategoryFor(channel)
+                val channelCard = LinearLayout(this).apply {
+                    orientation = LinearLayout.VERTICAL; setPadding(dp(12), dp(10), dp(12), dp(10))
+                    background = GradientDrawable().apply { setColor(darkCard); cornerRadius = dp(12).toFloat(); setStroke(dp(1), lineColor) }
                 }
-                val categories = serverManagerCategories().filter { it != "الكل" }.toMutableList()
-                if (!categories.contains(name)) categories.add(name)
-                val array = JSONArray(); categories.forEach { array.put(it) }
-                prefs.edit().putString("server_manager_categories", array.toString()).apply()
-                managerSelectedCategory = name
-                Toast.makeText(this, "تمت إضافة الفئة. اخترها عند إضافة أو تعديل السيرفر.", Toast.LENGTH_LONG).show()
-                showServerManager()
-            }
-            .setNegativeButton("إلغاء", null)
-            .show()
-    }
-
-    private fun renderServerManagerCards(container: LinearLayout, query: String, category: String) {
-        container.removeAllViews()
-        val q = query.trim().lowercase(java.util.Locale.ROOT)
-        val filtered = sources.withIndex().filter { (_, source) ->
-            (category == "الكل" || sourceCategory(source) == category) &&
-                (q.isBlank() || listOf(source.channel, source.serverName, source.displayName, source.url,
-                    sourceCategory(source), source.userAgent, source.referer, source.drmScheme, source.playerType)
-                    .any { it.lowercase(java.util.Locale.ROOT).contains(q) })
-        }
-        val resultLabel = TextView(this).apply {
-            text = "النتائج: ${filtered.size} سيرفر • اسحب البطاقة لإعادة ترتيبها"
-            textSize = 12f; setTextColor(gray); gravity = Gravity.END
-            setPadding(0, dp(2), 0, dp(8))
-        }
-        container.addView(resultLabel, fullWidthParams())
-        if (filtered.isEmpty()) {
-            val empty = TextView(this).apply {
-                text = if (sources.isEmpty()) "لا توجد سيرفرات بعد. اضغط إضافة سيرفر للبدء." else "لا توجد نتائج مطابقة للبحث أو الفئة المحددة."
-                textSize = 14f; setTextColor(gray); gravity = Gravity.CENTER; setPadding(dp(12), dp(24), dp(12), dp(24))
-            }
-            container.addView(empty, fullWidthParams())
-            return
-        }
-        var previousChannel = ""
-        filtered.forEach { indexed ->
-            val originalIndex = indexed.index
-            val source = indexed.value
-            if (source.channel != previousChannel) {
-                previousChannel = source.channel
-                val count = sources.count { it.channel == source.channel }
-                container.addView(TextView(this).apply {
-                    text = "${source.channel}   •   $count سيرفر"
-                    textSize = 16f; setTextColor(adminPurple); setTypeface(null, Typeface.BOLD)
-                    gravity = Gravity.END; setPadding(dp(4), dp(12), dp(4), dp(5))
-                }, fullWidthParams())
-            }
-            val card = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                setPadding(dp(13), dp(12), dp(13), dp(12))
-                background = roundedBackground(adminCard, Color.rgb(83, 55, 111), 14)
-                tag = source.url
-                setOnLongClickListener {
-                    val clip = ClipData.newPlainText("server_url", source.url)
-                    @Suppress("DEPRECATION")
-                    startDrag(clip, View.DragShadowBuilder(this), source.url, 0)
-                }
-                setOnDragListener { target, event ->
-                    when (event.action) {
-                        android.view.DragEvent.ACTION_DRAG_STARTED -> true
-                        android.view.DragEvent.ACTION_DRAG_ENTERED -> { target.alpha = 0.72f; true }
-                        android.view.DragEvent.ACTION_DRAG_EXITED -> { target.alpha = 1f; true }
-                        android.view.DragEvent.ACTION_DROP -> {
-                            target.alpha = 1f
-                            val draggedUrl = event.localState as? String
-                            val from = sources.indexOfFirst { it.url == draggedUrl }
-                            val to = sources.indexOfFirst { it.url == source.url }
-                            if (from >= 0 && to >= 0 && from != to) {
-                                val moved = sources.removeAt(from)
-                                sources.add(to.coerceIn(0, sources.size), moved)
-                                saveSources(); saveSourcesToCloud()
-                                showServerManager()
-                                Toast.makeText(this@MainActivity, "تم تحديث ترتيب السيرفرات.", Toast.LENGTH_SHORT).show()
+                val header = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+                header.addView(TextView(this).apply { text = "▦"; textSize = 20f; setTextColor(purple); gravity = Gravity.CENTER }, LinearLayout.LayoutParams(dp(30), dp(42)))
+                val info = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+                info.addView(TextView(this).apply { text = channel; textSize = 15f; setTextColor(white); setTypeface(null, Typeface.BOLD) })
+                info.addView(TextView(this).apply { text = "$category · ${channelItems.size} سيرفر"; textSize = 11f; setTextColor(gray) })
+                header.addView(info, LinearLayout.LayoutParams(0, -2, 1f))
+                header.addView(TextView(this).apply { text = if (expandedChannels.contains(channel)) "⌃" else "⌄"; textSize = 20f; setTextColor(purple); gravity = Gravity.CENTER; setPadding(dp(10), dp(5), dp(10), dp(5)); setOnClickListener { if (!expandedChannels.add(channel)) expandedChannels.remove(channel); renderList() } })
+                header.setOnClickListener { if (!expandedChannels.add(channel)) expandedChannels.remove(channel); renderList() }
+                channelCard.addView(header)
+                if (expandedChannels.contains(channel) || query.isNotBlank()) {
+                    channelItems.forEach { indexed ->
+                        val originalIndex = indexed.index
+                        val source = indexed.value
+                        val row = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(8), dp(9), dp(4), dp(7)) }
+                        val top = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+                        top.addView(TextView(this).apply { text = "⠿"; textSize = 20f; setTextColor(purple); setPadding(dp(3), 0, dp(10), 0); contentDescription = "اسحب لإعادة الترتيب" })
+                        val details = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+                        details.addView(TextView(this).apply { text = source.displayName.ifBlank { source.serverName }; textSize = 13f; setTextColor(white); setTypeface(null, Typeface.BOLD) })
+                        details.addView(TextView(this).apply { text = source.url; textSize = 10f; setTextColor(gray); maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.MIDDLE })
+                        top.addView(details, LinearLayout.LayoutParams(0, -2, 1f))
+                        val copy = TextView(this).apply { text = "نسخ"; textSize = 11f; setTextColor(purple); setPadding(dp(7), dp(8), dp(7), dp(8)); setOnClickListener { val clipboard = getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager; clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Stream URL", source.url)); Toast.makeText(this@MainActivity, "تم نسخ الرابط", Toast.LENGTH_SHORT).show() } }
+                        top.addView(copy)
+                        row.addView(top)
+                        val rowActions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+                        val edit = TextView(this).apply { text = "تعديل الإعدادات"; textSize = 11f; setTextColor(purple); setPadding(dp(8), dp(7), dp(12), dp(4)); setOnClickListener { requireAdmin { val idx = sources.indexOf(source); if (idx >= 0) showAddSourceDialog(sources[idx], idx) } } }
+                        val moveUp = TextView(this).apply { text = "↑"; textSize = 18f; setTextColor(white); setPadding(dp(10), dp(4), dp(10), dp(4)); setOnClickListener { requireAdmin { val idx = sources.indexOf(source); val prev = (idx - 1).coerceAtLeast(0); if (idx > 0 && sources[prev].channel == source.channel) { java.util.Collections.swap(sources, idx, prev); saveSources(); saveSourcesToCloud(); renderList() } } } }
+                        val moveDown = TextView(this).apply { text = "↓"; textSize = 18f; setTextColor(white); setPadding(dp(8), dp(4), dp(8), dp(4)); setOnClickListener { requireAdmin { val idx = sources.indexOf(source); val next = (idx + 1).coerceAtMost(sources.lastIndex); if (idx >= 0 && next < sources.size && sources[next].channel == source.channel) { java.util.Collections.swap(sources, idx, next); saveSources(); saveSourcesToCloud(); renderList() } } } }
+                        val delete = TextView(this).apply { text = "حذف"; textSize = 11f; setTextColor(Color.rgb(255, 110, 125)); setPadding(dp(8), dp(7), dp(8), dp(4)); setOnClickListener { requireAdmin { AlertDialog.Builder(this@MainActivity).setMessage("حذف ${source.serverName} من $channel؟").setPositiveButton("حذف") { _, _ -> val idx = sources.indexOf(source); if (idx >= 0) { sources.removeAt(idx); saveSources(); saveSourcesToCloud(); renderList() } }.setNegativeButton("إلغاء", null).show() } } }
+                        val check = TextView(this).apply {
+                            text = "فحص"; textSize = 11f; setTextColor(Color.rgb(65, 210, 160)); setPadding(dp(8), dp(7), dp(8), dp(4))
+                            setOnClickListener {
+                                isEnabled = false
+                                text = "..."
+                                networkExecutor.execute {
+                                    val result = try {
+                                        val connection = (URL(source.url).openConnection() as HttpURLConnection).apply {
+                                            requestMethod = "GET"; connectTimeout = 5000; readTimeout = 5000
+                                            setRequestProperty("Range", "bytes=0-0")
+                                            if (source.userAgent.isNotBlank()) setRequestProperty("User-Agent", source.userAgent)
+                                            if (source.referer.isNotBlank()) setRequestProperty("Referer", source.referer)
+                                            if (source.cookie.isNotBlank()) setRequestProperty("Cookie", source.cookie)
+                                            if (source.authorization.isNotBlank()) setRequestProperty("Authorization", source.authorization)
+                                        }
+                                        val code = connection.responseCode
+                                        connection.disconnect()
+                                        "HTTP $code"
+                                    } catch (e: Exception) { "تعذر الاتصال: ${e.message ?: "خطأ شبكة"}" }
+                                    runOnUiThread {
+                                        isEnabled = true; text = "فحص"
+                                        Toast.makeText(this@MainActivity, "${source.serverName}: $result", Toast.LENGTH_LONG).show()
+                                    }
+                                }
+                            }
+                        }
+                        rowActions.addView(edit); rowActions.addView(check); rowActions.addView(moveUp); rowActions.addView(moveDown); rowActions.addView(delete)
+                        row.addView(rowActions)
+                        row.setOnLongClickListener {
+                            val sourceIndex = sources.indexOf(source)
+                            if (sourceIndex >= 0) {
+                                val clip = android.content.ClipData.newPlainText("source_index", sourceIndex.toString())
+                                row.startDragAndDrop(clip, View.DragShadowBuilder(row), source, 0)
                             }
                             true
                         }
-                        android.view.DragEvent.ACTION_DRAG_ENDED -> { target.alpha = 1f; true }
-                        else -> true
+                        row.setOnDragListener { _, event ->
+                            when (event.action) {
+                                android.view.DragEvent.ACTION_DRAG_STARTED -> true
+                                android.view.DragEvent.ACTION_DROP -> {
+                                    val from = (event.localState as? StreamSource)?.let { sources.indexOf(it) } ?: -1
+                                    val to = sources.indexOf(source)
+                                    if (from >= 0 && to >= 0 && from != to && sources[from].channel == sources[to].channel) {
+                                        val moved = sources.removeAt(from)
+                                        sources.add(to, moved)
+                                        saveSources()
+                                        saveSourcesToCloud()
+                                        renderList()
+                                    }
+                                    true
+                                }
+                                android.view.DragEvent.ACTION_DRAG_ENDED -> true
+                                else -> true
+                            }
+                        }
+                        channelCard.addView(row)
+                        channelCard.addView(View(this).apply { setBackgroundColor(lineColor) }, LinearLayout.LayoutParams(-1, dp(1)))
                     }
+                    val addForChannel = TextView(this).apply { text = "＋ إضافة سيرفر لهذه القناة"; textSize = 12f; gravity = Gravity.CENTER; setTextColor(purple); setPadding(dp(8), dp(10), dp(8), dp(4)); setOnClickListener { requireAdmin { showAddSourceDialog(channelName = channel) } } }
+                    channelCard.addView(addForChannel)
                 }
-            }
-            val titleRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-            val title = TextView(this).apply {
-                text = source.serverName.ifBlank { source.displayName }
-                textSize = 15f; setTextColor(white); setTypeface(null, Typeface.BOLD)
-            }
-            titleRow.addView(title, LinearLayout.LayoutParams(0, -2, 1f))
-            val role = TextView(this).apply {
-                text = if (source.isPrimary) "أساسي" else "احتياطي"
-                textSize = 11f; setTextColor(white); gravity = Gravity.CENTER
-                setPadding(dp(8), dp(5), dp(8), dp(5))
-                background = roundedBackground(if (source.isPrimary) Color.rgb(83, 48, 115) else Color.rgb(39, 44, 58), if (source.isPrimary) adminPurple else Color.rgb(95, 104, 126), 18)
-            }
-            titleRow.addView(role)
-            card.addView(titleRow)
-            card.addView(TextView(this).apply {
-                text = "${sourceCategory(source)}  •  ${source.playerType}"
-                textSize = 11f; setTextColor(adminPurple); setPadding(0, dp(5), 0, dp(4))
-            })
-            card.addView(TextView(this).apply {
-                text = source.url; textSize = 11f; setTextColor(gray); setPadding(0, dp(2), 0, dp(7))
-            })
-            val status = serverStatus[source.url] ?: "غير مفحوص"
-            val statusRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-            statusRow.addView(TextView(this).apply {
-                text = "الحالة: $status"; textSize = 11f
-                setTextColor(when { status.startsWith("متصل") -> Color.rgb(90, 210, 140); status.startsWith("فشل") -> Color.rgb(255, 105, 115); else -> gray })
-            }, LinearLayout.LayoutParams(0, -2, 1f))
-            val check = smallAdminButton("فحص")
-            check.setOnClickListener { checkServerStatus(source, this@MainActivity::showServerManager) }
-            statusRow.addView(check)
-            card.addView(statusRow)
-            val details = TextView(this).apply {
-                val filled = listOf("User-Agent" to source.userAgent, "Referer" to source.referer,
-                    "Cookie" to source.cookie, "Authorization" to source.authorization,
-                    "Headers" to source.extraHeaders, "License" to source.licenseUrl,
-                    "Scheme" to source.scheme, "DRM" to source.drmScheme).count { it.second.isNotBlank() }
-                text = "إعدادات محفوظة: $filled/8"
-                textSize = 11f; setTextColor(gray); setPadding(0, dp(5), 0, dp(5))
-            }
-            card.addView(details)
-            val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-            val copy = smallAdminButton("نسخ الرابط")
-            copy.setOnClickListener {
-                val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                clipboard.setPrimaryClip(ClipData.newPlainText("HANI TV server URL", source.url))
-                Toast.makeText(this@MainActivity, "تم نسخ الرابط.", Toast.LENGTH_SHORT).show()
-            }
-            val roleToggle = smallAdminButton(if (source.isPrimary) "جعله احتياطيًا" else "جعله أساسيًا")
-            roleToggle.setOnClickListener {
-                requireAdmin {
-                    val i = sources.indexOf(source)
-                    if (i >= 0) {
-                        sources[i] = source.copy(isPrimary = !source.isPrimary,
-                            serverName = if (!source.isPrimary) source.serverName.replace("احتياطي", "أساسي").let { if (it == source.serverName) "السيرفر الأساسي" else it }
-                                         else source.serverName.replace("أساسي", "احتياطي").let { if (it == source.serverName) "السيرفر الاحتياطي" else it })
-                        saveSources(); saveSourcesToCloud(); showServerManager()
-                    }
-                }
-            }
-            val edit = smallAdminButton("تعديل")
-            edit.setOnClickListener {
-                requireAdmin {
-                    val i = sources.indexOf(source)
-                    if (i >= 0) showAddSourceDialog(sources[i], i, sourceCategory(source))
-                }
-            }
-            val delete = smallAdminButton("حذف")
-            delete.setOnClickListener {
-                requireAdmin {
-                    val i = sources.indexOf(source)
-                    if (i >= 0) AlertDialog.Builder(this@MainActivity)
-                        .setMessage("حذف سيرفر ${source.serverName} للقناة ${source.channel}؟")
-                        .setPositiveButton("حذف") { _, _ ->
-                            sources.removeAt(i); serverStatus.remove(source.url)
-                            saveSources(); saveSourcesToCloud(); showServerManager()
-                        }.setNegativeButton("إلغاء", null).show()
-                }
-            }
-            listOf(copy, roleToggle, edit, delete).forEachIndexed { i, button ->
-                actions.addView(button, LinearLayout.LayoutParams(0, -2, 1f).apply {
-                    if (i > 0) marginStart = dp(4)
-                })
-            }
-            card.addView(actions, fullWidthParams().apply { topMargin = dp(7) })
-            container.addView(card, fullWidthParams().apply { bottomMargin = dp(8) })
-        }
-    }
-
-    private fun smallAdminButton(label: String): TextView = TextView(this).apply {
-        text = label; textSize = 11f; gravity = Gravity.CENTER; setTextColor(white)
-        setPadding(dp(5), dp(9), dp(5), dp(9))
-        background = roundedBackground(Color.rgb(39, 30, 51), adminPurple, 8)
-        isClickable = true; isFocusable = true
-    }
-
-    private fun checkServerStatus(source: StreamSource, refresh: () -> Unit) {
-        serverStatus[source.url] = "جارٍ الفحص…"
-        refresh()
-        networkExecutor.execute {
-            val result = try {
-                val connection = (URL(source.url).openConnection() as HttpURLConnection).apply {
-                    requestMethod = "GET"
-                    connectTimeout = 4500
-                    readTimeout = 4500
-                    instanceFollowRedirects = true
-                    setRequestProperty("Range", "bytes=0-0")
-                    setRequestProperty("User-Agent", source.userAgent.ifBlank { "HANI-TV/1.0" })
-                    if (source.referer.isNotBlank()) setRequestProperty("Referer", source.referer)
-                    if (source.cookie.isNotBlank()) setRequestProperty("Cookie", source.cookie)
-                    if (source.authorization.isNotBlank()) setRequestProperty("Authorization", source.authorization)
-                }
-                val code = connection.responseCode
-                connection.disconnect()
-                if (code in 200..399) "متصل • HTTP $code" else "فشل • HTTP $code"
-            } catch (e: Exception) { "فشل • ${e.javaClass.simpleName}" }
-            runOnUiThread {
-                serverStatus[source.url] = result
-                if (showingServerManager) showServerManager()
+                listHost.addView(channelCard, fullWidthParams().apply { bottomMargin = dp(8) })
             }
         }
+        search.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) { renderList() }
+            override fun afterTextChanged(s: android.text.Editable?) {}
+        })
+        renderList()
     }
 
 
@@ -2010,7 +1805,7 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
         }
     }
 
-    private fun showAddSourceDialog(existing: StreamSource? = null, editIndex: Int = -1, category: String = "") {
+    private fun showAddSourceDialog(existing: StreamSource? = null, editIndex: Int = -1, channelName: String? = null) {
         val box = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(20), dp(8), dp(20), 0)
@@ -2032,8 +1827,7 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
             }.also { box.addView(it) }
         }
         val channelNames = channelGroups.values.flatten().map { it.first }.distinct()
-        val channelInput = field("اسم القناة (مثال: SPORT 1)", existing?.channel ?: channelNames.firstOrNull().orEmpty())
-        val categoryInput = field("الفئة (رياضية / عربية / فئة جديدة)", existing?.category?.ifBlank { category } ?: category)
+        val channelInput = field("اسم القناة (مثال: SPORT 1)", existing?.channel ?: channelName ?: channelNames.firstOrNull().orEmpty())
         val serverInput = field("اسم السيرفر للإدارة (مثال: السيرفر الاحتياطي)", existing?.serverName ?: "السيرفر الأساسي")
         val displayNameInput = field("الاسم الذي يظهر داخل المشغّل", existing?.displayName ?: existing?.serverName ?: "السيرفر الأساسي")
         val urlInput = field("رابط البث الكامل", existing?.url ?: "")
@@ -2046,35 +1840,10 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
             existing?.extraHeaders ?: "",
             multiline = true
         )
-        val licenseInput = field("License URL (اختياري)", existing?.licenseUrl ?: "")
-        val schemeInput = field("Scheme (اختياري)", existing?.scheme ?: "")
-        val drmSchemeInput = field("DRM Scheme: Widevine / PlayReady / ClearKey", existing?.drmScheme ?: "")
-        val playerTypeInput = field("نوع المشغّل المفضل (اضغط للاختيار)", existing?.playerType ?: "Exo Player")
-        playerTypeInput.isFocusable = false
-        playerTypeInput.isClickable = true
-        playerTypeInput.setOnClickListener {
-            AlertDialog.Builder(this)
-                .setTitle("اختر نوع المشغّل")
-                .setSingleChoiceItems(arrayOf("Exo Player", "Web Player"), if (playerTypeInput.text.toString() == "Web Player") 1 else 0) { picker, which ->
-                    playerTypeInput.setText(if (which == 1) "Web Player" else "Exo Player")
-                    picker.dismiss()
-                }
-                .setNegativeButton("إلغاء", null)
-                .show()
-        }
-        val primaryInput = field("نوع السيرفر (اضغط للاختيار)", if (existing?.isPrimary != false) "أساسي" else "احتياطي")
-        primaryInput.isFocusable = false
-        primaryInput.isClickable = true
-        primaryInput.setOnClickListener {
-            AlertDialog.Builder(this)
-                .setTitle("دور السيرفر")
-                .setSingleChoiceItems(arrayOf("أساسي", "احتياطي"), if (primaryInput.text.toString().contains("احتياطي")) 1 else 0) { picker, which ->
-                    primaryInput.setText(if (which == 1) "احتياطي" else "أساسي")
-                    picker.dismiss()
-                }
-                .setNegativeButton("إلغاء", null)
-                .show()
-        }
+        val licenseUrlInput = field("License URL (اختياري)", existing?.licenseUrl ?: "")
+        val schemeInput = field("Scheme (مثال: widevine / clearkey)", existing?.scheme ?: "")
+        val drmSchemeInput = field("DRM Scheme / UUID (اختياري)", existing?.drmScheme ?: "")
+        val playerTypeInput = field("نوع المشغّل: Exo Player أو Web Player", existing?.playerType ?: "Exo Player")
         val formScroll = ScrollView(this).apply {
             isFillViewport = true
             addView(box)
@@ -2096,12 +1865,10 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
                         val cookie = cookieInput.text.toString().trim()
                         val authorization = authorizationInput.text.toString().trim()
                         val extraHeaders = extraHeadersInput.text.toString().trim()
-                        val categoryValue = categoryInput.text.toString().trim()
-                        val licenseUrl = licenseInput.text.toString().trim()
+                        val licenseUrl = licenseUrlInput.text.toString().trim()
                         val scheme = schemeInput.text.toString().trim()
                         val drmScheme = drmSchemeInput.text.toString().trim()
-                        val playerType = if (playerTypeInput.text.toString().trim().equals("Web Player", true)) "Web Player" else "Exo Player"
-                        val isPrimary = !primaryInput.text.toString().contains("احتياطي")
+                        val playerType = playerTypeInput.text.toString().trim().ifBlank { "Exo Player" }
                         if (channel.isBlank() || server.isBlank() || url.isBlank() ||
                             !(url.startsWith("http://") || url.startsWith("https://"))) {
                             Toast.makeText(this, "أدخل اسم القناة والسيرفر ورابطًا يبدأ بـ http:// أو https://", Toast.LENGTH_LONG).show()
@@ -2117,12 +1884,10 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
                             cookie = cookie,
                             authorization = authorization,
                             extraHeaders = extraHeaders,
-                            category = categoryValue,
                             licenseUrl = licenseUrl,
                             scheme = scheme,
                             drmScheme = drmScheme,
-                            playerType = playerType,
-                            isPrimary = isPrimary
+                            playerType = playerType
                         )
                         if (editIndex >= 0 && editIndex < sources.size) sources[editIndex] = item else sources.add(item)
                         saveSources()
@@ -2155,12 +1920,10 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
                     item.optString("cookie", ""),
                     item.optString("authorization", ""),
                     item.optString("extraHeaders", ""),
-                    item.optString("category", ""),
                     item.optString("licenseUrl", ""),
                     item.optString("scheme", ""),
                     item.optString("drmScheme", ""),
-                    item.optString("playerType", "Exo Player"),
-                    item.optBoolean("isPrimary", item.optString("serverName", "").contains("أساسي"))
+                    item.optString("playerType", "Exo Player")
                 ))
             }
         } catch (_: Exception) {
@@ -2181,12 +1944,10 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
                 put("cookie", source.cookie)
                 put("authorization", source.authorization)
                 put("extraHeaders", source.extraHeaders)
-                put("category", source.category)
                 put("licenseUrl", source.licenseUrl)
                 put("scheme", source.scheme)
                 put("drmScheme", source.drmScheme)
                 put("playerType", source.playerType)
-                put("isPrimary", source.isPrimary)
             })
         }
         prefs.edit().putString("sources_json", array.toString()).apply()
@@ -2310,23 +2071,18 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
                         val url = item.optString("url", "").trim()
                         if (channel.isBlank() || url.isBlank()) continue
                         val server = item.optString("serverName", "السيرفر")
-                        val local = sources.firstOrNull { it.url == url }
-                        fun remoteOrLocal(key: String, localValue: String): String =
-                            if (item.has(key)) item.optString(key, localValue) else localValue
                         downloaded.add(StreamSource(
                             channel, server, url,
-                            remoteOrLocal("referer", local?.referer ?: ""),
-                            remoteOrLocal("displayName", local?.displayName ?: server),
-                            remoteOrLocal("userAgent", local?.userAgent ?: ""),
-                            remoteOrLocal("cookie", local?.cookie ?: ""),
-                            remoteOrLocal("authorization", local?.authorization ?: ""),
-                            remoteOrLocal("extraHeaders", local?.extraHeaders ?: ""),
-                            remoteOrLocal("category", local?.category ?: ""),
-                            remoteOrLocal("licenseUrl", local?.licenseUrl ?: ""),
-                            remoteOrLocal("scheme", local?.scheme ?: ""),
-                            remoteOrLocal("drmScheme", local?.drmScheme ?: ""),
-                            remoteOrLocal("playerType", local?.playerType ?: "Exo Player"),
-                            if (item.has("isPrimary")) item.optBoolean("isPrimary") else local?.isPrimary ?: server.contains("أساسي")
+                            item.optString("referer", ""),
+                            item.optString("displayName", server),
+                            item.optString("userAgent", ""),
+                            item.optString("cookie", ""),
+                            item.optString("authorization", ""),
+                            item.optString("extraHeaders", ""),
+                            item.optString("licenseUrl", ""),
+                            item.optString("scheme", ""),
+                            item.optString("drmScheme", ""),
+                            item.optString("playerType", "Exo Player")
                         ))
                     }
                     // If a channel has sources but no separate channel_settings row yet, still show it.
@@ -2413,12 +2169,10 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
                 put("cookie", source.cookie)
                 put("authorization", source.authorization)
                 put("extraHeaders", source.extraHeaders)
-                put("category", source.category)
                 put("licenseUrl", source.licenseUrl)
                 put("scheme", source.scheme)
                 put("drmScheme", source.drmScheme)
                 put("playerType", source.playerType)
-                put("isPrimary", source.isPrimary)
             })
         }
         val payload = JSONObject().put("sources", list).toString()
