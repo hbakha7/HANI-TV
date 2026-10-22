@@ -1470,7 +1470,7 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
             setTextColor(white)
             setHintTextColor(gray)
             textSize = 14f
-            singleLine = true
+            isSingleLine = true
             setPadding(dp(14), dp(10), dp(14), dp(10))
             background = roundedBackground(Color.rgb(25, 23, 33), adminPurple, 12)
         }
