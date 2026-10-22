@@ -604,7 +604,7 @@ class MainActivity : Activity() {
             setBackgroundColor(panel)
             isClickable = true
             isFocusable = true
-            setOnClickListener { openChannel(channel.first); scheduleOverlayHide() }
+            setOnClickListener { openChannel(channel.first) }
         }
 
         card.addView(
@@ -744,7 +744,7 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
         // Fill the player area without any additional scaling.
         video.resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FILL
 
-        // Player overlays hide automatically after 4 seconds. Tapping the video
+        // Player overlays hide automatically after 3 seconds. Tapping the video
         // brings them back and restarts the timer; no manual hide tap is required.
         var overlaysVisible = true
         val overlayViews = mutableListOf<View>()
@@ -754,7 +754,7 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
         }
         fun scheduleOverlayHide() {
             playerHandler.removeCallbacks(hideOverlaysRunnable)
-            playerHandler.postDelayed(hideOverlaysRunnable, 4_000L)
+            playerHandler.postDelayed(hideOverlaysRunnable, 3_000L)
         }
         fun showOverlaysAndScheduleHide() {
             overlaysVisible = true
