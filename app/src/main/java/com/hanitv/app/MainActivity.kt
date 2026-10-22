@@ -1215,7 +1215,7 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
             ""
         }
         when {
-            normalizedPath.endsWith(".m3u8") || normalizedPath.endsWith("/index.html") || normalizedPath == "index.html" ->
+            isHlsStreamUrl(source.url) || normalizedPath.endsWith("/index.html") || normalizedPath == "index.html" ->
                 mediaItemBuilder.setMimeType(androidx.media3.common.MimeTypes.APPLICATION_M3U8)
             normalizedPath.endsWith(".mpd") ->
                 mediaItemBuilder.setMimeType("application/dash+xml")
@@ -1300,6 +1300,39 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
         else String.format(java.util.Locale.US, "%02d:%02d", minutes, seconds)
     }
 
+
+    /**
+     * Detect HLS even when a proxy URL hides the real playlist path in a
+     * Base64 "stream" query parameter, for example proxy.php?stream=...
+     */
+    private fun isHlsStreamUrl(url: String): Boolean {
+        val uri = try {
+            android.net.Uri.parse(url)
+        } catch (_: Exception) {
+            return false
+        }
+
+        val path = uri.path.orEmpty().lowercase(java.util.Locale.ROOT)
+        if (path.endsWith(".m3u8")) return true
+
+        val encodedStream = uri.getQueryParameter("stream")?.trim().orEmpty()
+        if (encodedStream.isBlank()) return false
+
+        val decoded = sequenceOf(
+            android.util.Base64.URL_SAFE or android.util.Base64.NO_WRAP or android.util.Base64.NO_PADDING,
+            android.util.Base64.DEFAULT
+        ).mapNotNull { flags ->
+            try {
+                String(android.util.Base64.decode(encodedStream, flags), Charsets.UTF_8)
+            } catch (_: Exception) {
+                null
+            }
+        }.firstOrNull { it.isNotBlank() }.orEmpty()
+
+        return decoded.substringBefore('?').substringBefore('#')
+            .lowercase(java.util.Locale.ROOT).endsWith(".m3u8")
+    }
+
     private fun switchServerInsidePlayer(index: Int) {
         if (index !in currentOptions.indices) return
         currentServerIndex = index
@@ -1336,7 +1369,7 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
             ""
         }
         when {
-            normalizedPath.endsWith(".m3u8") || normalizedPath.endsWith("/index.html") || normalizedPath == "index.html" ->
+            isHlsStreamUrl(source.url) || normalizedPath.endsWith("/index.html") || normalizedPath == "index.html" ->
                 mediaItemBuilder.setMimeType(androidx.media3.common.MimeTypes.APPLICATION_M3U8)
             normalizedPath.endsWith(".mpd") ->
                 mediaItemBuilder.setMimeType("application/dash+xml")
