@@ -780,11 +780,16 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
         // Fill the player area without any additional scaling.
         video.resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FILL
 
-        // Player overlays hide automatically after 3 seconds. Tapping the video
-        // brings them back and restarts the timer; no manual hide tap is required.
+        // Player overlays auto-hide after 3 seconds. Tapping the video toggles
+        // them immediately: visible -> hide now, hidden -> show and restart timer.
         var overlaysVisible = true
         val overlayViews = mutableListOf<View>()
         val hideOverlaysRunnable = Runnable {
+            overlaysVisible = false
+            overlayViews.forEach { it.visibility = View.GONE }
+        }
+        fun hideOverlaysNow() {
+            playerHandler.removeCallbacks(hideOverlaysRunnable)
             overlaysVisible = false
             overlayViews.forEach { it.visibility = View.GONE }
         }
@@ -803,8 +808,8 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
             isClickable = true
             isFocusable = false
             setOnClickListener {
-                if (!overlaysVisible) showOverlaysAndScheduleHide()
-                else scheduleOverlayHide()
+                if (overlaysVisible) hideOverlaysNow()
+                else showOverlaysAndScheduleHide()
             }
         }
         videoFrame.addView(tapLayer, FrameLayout.LayoutParams(-1, -1))
