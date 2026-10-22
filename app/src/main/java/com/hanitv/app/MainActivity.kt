@@ -604,7 +604,7 @@ class MainActivity : Activity() {
             setBackgroundColor(panel)
             isClickable = true
             isFocusable = true
-            setOnClickListener { openChannel(channel.first) }
+            setOnClickListener { openChannel(channel.first); scheduleOverlayHide() }
         }
 
         card.addView(
@@ -670,73 +670,28 @@ private fun displayChannelName(name: String): String {
 private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
     if (options.isEmpty()) return
 
-    // Replace the channel's server list without dismissing the fullscreen player.
-    // Dismissing/reopening the dialog can briefly expose the underlying channel list.
+    // Replace the active channel's complete source list before rebuilding the player.
     currentOptions = options
     currentServerIndex = selectedIndex.coerceIn(0, options.lastIndex)
 
     if (embeddedDialog?.isShowing == true && embeddedPlayer != null) {
-        val selectedChannel = options.first().channel
+        // Keep the original screen state, but rebuild ExoPlayer for the new channel.
+        // Each channel may need its own Referer/request headers; replacing only the
+        // media item can leave the previous channel's HTTP settings active.
+        val originalOrientation = orientationBeforePlayer
+        val originalSystemUi = systemUiBeforePlayer
+        val originalKeepScreenOn = keepScreenOnWasSet
 
-        // Update the selected channel card in the existing bottom strip.
-        embeddedChannelCards.forEach { (name, card) ->
-            card.setBackgroundColor(
-                if (name == selectedChannel) Color.rgb(28, 105, 165)
-                else Color.TRANSPARENT
-            )
-        }
+        openEmbeddedPlayer()
 
-        // Rebuild only the circular server choices for the newly selected channel.
-        rebuildEmbeddedServerButtons()
-
-        // Switch the media item in the existing player/dialog; do not reopen the Activity UI.
-        switchServerInsidePlayer(currentServerIndex)
+        // openEmbeddedPlayer captures the current (already-landscape) state.
+        // Restore the state from before the player was first opened so closing it
+        // returns the user to the original screen orientation and system UI.
+        orientationBeforePlayer = originalOrientation
+        systemUiBeforePlayer = originalSystemUi
+        keepScreenOnWasSet = originalKeepScreenOn
     } else {
         openEmbeddedPlayer()
-    }
-}
-
-/** Rebuild the circular server buttons while keeping the current player and dialog alive. */
-private fun rebuildEmbeddedServerButtons() {
-    val serverContent = embeddedServerContent ?: return
-
-    // The first child is the persistent "السيرفرات" label; keep it unchanged.
-    if (serverContent.childCount > 1) {
-        serverContent.removeViews(1, serverContent.childCount - 1)
-    }
-    embeddedServerButtons.clear()
-
-    currentOptions.forEachIndexed { index, item ->
-        val label = item.displayName.ifBlank { item.serverName }
-            .replace("السيرفر الأساسي", "السيرفر")
-            .take(8)
-
-        val button = TextView(this).apply {
-            text = "${index + 1}\n$label"
-            textSize = 9f
-            gravity = Gravity.CENTER
-            setTextColor(Color.WHITE)
-            isClickable = true
-            isFocusable = true
-            background = GradientDrawable().apply {
-                shape = GradientDrawable.OVAL
-                setColor(Color.argb(45, 0, 0, 0))
-                setStroke(
-                    dp(2),
-                    if (index == currentServerIndex) Color.rgb(25, 155, 240)
-                    else Color.LTGRAY
-                )
-            }
-            setOnClickListener { switchServerInsidePlayer(index) }
-        }
-
-        embeddedServerButtons.add(button)
-        serverContent.addView(
-            button,
-            LinearLayout.LayoutParams(dp(50), dp(50)).apply {
-                setMargins(dp(3), 0, dp(3), 0)
-            }
-        )
     }
 }
 
@@ -789,18 +744,30 @@ private fun rebuildEmbeddedServerButtons() {
         // Fill the player area without any additional scaling.
         video.resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FILL
 
-        // Tapping the picture toggles every player overlay; controls can be hidden for viewing
-        // and brought back with another tap. The tap layer sits below all interactive controls.
+        // Player overlays hide automatically after 4 seconds. Tapping the video
+        // brings them back and restarts the timer; no manual hide tap is required.
         var overlaysVisible = true
         val overlayViews = mutableListOf<View>()
+        val hideOverlaysRunnable = Runnable {
+            overlaysVisible = false
+            overlayViews.forEach { it.visibility = View.GONE }
+        }
+        fun scheduleOverlayHide() {
+            playerHandler.removeCallbacks(hideOverlaysRunnable)
+            playerHandler.postDelayed(hideOverlaysRunnable, 4_000L)
+        }
+        fun showOverlaysAndScheduleHide() {
+            overlaysVisible = true
+            overlayViews.forEach { it.visibility = View.VISIBLE }
+            scheduleOverlayHide()
+        }
         val tapLayer = View(this).apply {
             setBackgroundColor(Color.TRANSPARENT)
             isClickable = true
             isFocusable = false
             setOnClickListener {
-                overlaysVisible = !overlaysVisible
-                val visibility = if (overlaysVisible) View.VISIBLE else View.GONE
-                overlayViews.forEach { it.visibility = visibility }
+                if (!overlaysVisible) showOverlaysAndScheduleHide()
+                else scheduleOverlayHide()
             }
         }
         videoFrame.addView(tapLayer, FrameLayout.LayoutParams(-1, -1))
@@ -858,7 +825,7 @@ private fun rebuildEmbeddedServerButtons() {
                     setColor(Color.argb(45, 0, 0, 0))
                     setStroke(dp(2), if (index == currentServerIndex) Color.rgb(25, 155, 240) else Color.LTGRAY)
                 }
-                setOnClickListener { switchServerInsidePlayer(index) }
+                setOnClickListener { switchServerInsidePlayer(index); scheduleOverlayHide() }
             }
             embeddedServerButtons.add(button)
             serverContent.addView(button, LinearLayout.LayoutParams(dp(50), dp(50)).apply {
@@ -890,7 +857,7 @@ private fun rebuildEmbeddedServerButtons() {
                 setBackgroundColor(Color.TRANSPARENT)
                 isClickable = true
                 isFocusable = true
-                setOnClickListener { action() }
+                setOnClickListener { action(); scheduleOverlayHide() }
             }
             controls.addView(control, LinearLayout.LayoutParams(0, dp(54), 1f).apply {
                 setMargins(dp(1), 0, dp(1), 0)
@@ -1081,6 +1048,7 @@ private fun rebuildEmbeddedServerButtons() {
         }
         dialog.show()
         dialog.window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+        scheduleOverlayHide()
         scheduleServerRefreshWhilePlaying()
         dialog.window?.decorView?.systemUiVisibility = (
             View.SYSTEM_UI_FLAG_FULLSCREEN or
