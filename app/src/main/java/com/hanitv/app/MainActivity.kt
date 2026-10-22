@@ -670,28 +670,73 @@ private fun displayChannelName(name: String): String {
 private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
     if (options.isEmpty()) return
 
-    // Replace the active channel's complete source list before rebuilding the player.
+    // Replace the channel's server list without dismissing the fullscreen player.
+    // Dismissing/reopening the dialog can briefly expose the underlying channel list.
     currentOptions = options
     currentServerIndex = selectedIndex.coerceIn(0, options.lastIndex)
 
     if (embeddedDialog?.isShowing == true && embeddedPlayer != null) {
-        // Keep the original screen state, but rebuild ExoPlayer for the new channel.
-        // Each channel may need its own Referer/request headers; replacing only the
-        // media item can leave the previous channel's HTTP settings active.
-        val originalOrientation = orientationBeforePlayer
-        val originalSystemUi = systemUiBeforePlayer
-        val originalKeepScreenOn = keepScreenOnWasSet
+        val selectedChannel = options.first().channel
 
-        openEmbeddedPlayer()
+        // Update the selected channel card in the existing bottom strip.
+        embeddedChannelCards.forEach { (name, card) ->
+            card.setBackgroundColor(
+                if (name == selectedChannel) Color.rgb(28, 105, 165)
+                else Color.TRANSPARENT
+            )
+        }
 
-        // openEmbeddedPlayer captures the current (already-landscape) state.
-        // Restore the state from before the player was first opened so closing it
-        // returns the user to the original screen orientation and system UI.
-        orientationBeforePlayer = originalOrientation
-        systemUiBeforePlayer = originalSystemUi
-        keepScreenOnWasSet = originalKeepScreenOn
+        // Rebuild only the circular server choices for the newly selected channel.
+        rebuildEmbeddedServerButtons()
+
+        // Switch the media item in the existing player/dialog; do not reopen the Activity UI.
+        switchServerInsidePlayer(currentServerIndex)
     } else {
         openEmbeddedPlayer()
+    }
+}
+
+/** Rebuild the circular server buttons while keeping the current player and dialog alive. */
+private fun rebuildEmbeddedServerButtons() {
+    val serverContent = embeddedServerContent ?: return
+
+    // The first child is the persistent "السيرفرات" label; keep it unchanged.
+    if (serverContent.childCount > 1) {
+        serverContent.removeViews(1, serverContent.childCount - 1)
+    }
+    embeddedServerButtons.clear()
+
+    currentOptions.forEachIndexed { index, item ->
+        val label = item.displayName.ifBlank { item.serverName }
+            .replace("السيرفر الأساسي", "السيرفر")
+            .take(8)
+
+        val button = TextView(this).apply {
+            text = "${index + 1}\n$label"
+            textSize = 9f
+            gravity = Gravity.CENTER
+            setTextColor(Color.WHITE)
+            isClickable = true
+            isFocusable = true
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(Color.argb(45, 0, 0, 0))
+                setStroke(
+                    dp(2),
+                    if (index == currentServerIndex) Color.rgb(25, 155, 240)
+                    else Color.LTGRAY
+                )
+            }
+            setOnClickListener { switchServerInsidePlayer(index) }
+        }
+
+        embeddedServerButtons.add(button)
+        serverContent.addView(
+            button,
+            LinearLayout.LayoutParams(dp(50), dp(50)).apply {
+                setMargins(dp(3), 0, dp(3), 0)
+            }
+        )
     }
 }
 
