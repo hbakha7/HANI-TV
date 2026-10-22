@@ -68,6 +68,7 @@ class MainActivity : Activity() {
     private var adminActionPending = false
     private var showingServerManager = false
     private var embeddedPlayer: ExoPlayer? = null
+    private var embeddedHttpFactory: DefaultHttpDataSource.Factory? = null
     private var embeddedPlayerView: PlayerView? = null
     private var embeddedDialog: Dialog? = null
     private var embeddedChannelTitle: TextView? = null
@@ -98,7 +99,11 @@ class MainActivity : Activity() {
         val serverName: String,
         val url: String,
         val referer: String = "",
-        val displayName: String = serverName
+        val displayName: String = serverName,
+        val userAgent: String = "",
+        val cookie: String = "",
+        val authorization: String = "",
+        val extraHeaders: String = ""
     )
 
     private val channelGroups = linkedMapOf(
@@ -1108,9 +1113,9 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
         // Requires ACCESS_NETWORK_STATE in AndroidManifest.xml.
         val usingMobileData = isUsingMobileData()
 
-        val headers = mutableMapOf<String, String>()
-        if (source.referer.isNotBlank()) headers["Referer"] = source.referer
-        val userAgent = prefs.getString("add_user_agent", "")?.trim()?.takeIf { it.isNotEmpty() }
+        val headers = buildSourceHeaders(source)
+        val userAgent = source.userAgent.takeIf { it.isNotBlank() }
+            ?: prefs.getString("add_user_agent", "")?.trim()?.takeIf { it.isNotEmpty() }
             ?: "103IPTVPlayer/1.0"
 
         // Mobile networks can have higher latency and more variable throughput.
@@ -1120,6 +1125,7 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
             .setReadTimeoutMs(if (usingMobileData) 15000 else 12000)
             .setAllowCrossProtocolRedirects(true)
             .setDefaultRequestProperties(headers)
+        embeddedHttpFactory = httpFactory
 
         // On mobile data, cap adaptive video selection to a moderate bitrate to reduce
         // data consumption. This works when the stream provides multiple quality tracks.
@@ -1239,6 +1245,32 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
         playerHandler.post(updater)
     }
 
+    /**
+     * Build per-server HTTP headers used by the embedded player.
+     * Extra headers are entered one per line as "Name: Value".
+     */
+    private fun buildSourceHeaders(source: StreamSource): Map<String, String> {
+        val headers = linkedMapOf<String, String>()
+        if (source.referer.isNotBlank()) headers["Referer"] = source.referer
+        if (source.cookie.isNotBlank()) headers["Cookie"] = source.cookie
+        if (source.authorization.isNotBlank()) headers["Authorization"] = source.authorization
+
+        source.extraHeaders.lineSequence().forEach { line ->
+            val separator = line.indexOf(':')
+            if (separator > 0) {
+                val name = line.substring(0, separator).trim()
+                val value = line.substring(separator + 1).trim()
+                if (name.isNotBlank() && value.isNotBlank() &&
+                    !name.equals("Host", ignoreCase = true) &&
+                    !name.equals("Content-Length", ignoreCase = true)
+                ) {
+                    headers[name] = value
+                }
+            }
+        }
+        return headers
+    }
+
     private fun isUsingMobileData(): Boolean {
         return try {
             val connectivityManager =
@@ -1287,6 +1319,11 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
         failoverPending = false
         sameServerRetryUsed = false
         loadingIndicator?.visibility = View.VISIBLE
+        val selectedUserAgent = source.userAgent.takeIf { it.isNotBlank() }
+            ?: prefs.getString("add_user_agent", "")?.trim()?.takeIf { it.isNotEmpty() }
+            ?: "103IPTVPlayer/1.0"
+        embeddedHttpFactory?.setUserAgent(selectedUserAgent)
+        embeddedHttpFactory?.setDefaultRequestProperties(buildSourceHeaders(source))
         val mediaItemBuilder = MediaItem.Builder().setUri(source.url)
         // Apply the same format detection when switching servers.
         val normalizedPath = try {
@@ -1340,6 +1377,7 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
         embeddedPlayerView?.player = null
         embeddedPlayer?.release()
         embeddedPlayer = null
+        embeddedHttpFactory = null
         embeddedPlayerView = null
         loadingIndicator = null
         scheduleOverlayHideAction = null
@@ -1661,14 +1699,20 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(20), dp(8), dp(20), 0)
         }
-        fun field(hint: String, value: String = ""): EditText {
+        fun field(hint: String, value: String = "", multiline: Boolean = false): EditText {
             return EditText(this).apply {
                 this.hint = hint
                 setText(value)
                 setTextColor(white)
                 setHintTextColor(gray)
                 textSize = 15f
-                setSingleLine(true)
+                setSingleLine(!multiline)
+                if (multiline) {
+                    inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
+                    minLines = 2
+                    maxLines = 4
+                    gravity = Gravity.TOP or Gravity.START
+                }
             }.also { box.addView(it) }
         }
         val channelNames = channelGroups.values.flatten().map { it.first }.distinct()
@@ -1677,9 +1721,21 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
         val displayNameInput = field("الاسم الذي يظهر داخل المشغّل", existing?.displayName ?: existing?.serverName ?: "السيرفر الأساسي")
         val urlInput = field("رابط البث الكامل", existing?.url ?: "")
         val refererInput = field("Referer (اختياري)", existing?.referer ?: "")
+        val userAgentInput = field("User-Agent (اختياري)", existing?.userAgent ?: "")
+        val cookieInput = field("Cookie (اختياري)", existing?.cookie ?: "")
+        val authorizationInput = field("Authorization (اختياري)", existing?.authorization ?: "")
+        val extraHeadersInput = field(
+            "Headers إضافية: اسم: قيمة (كل سطر منفصل)",
+            existing?.extraHeaders ?: "",
+            multiline = true
+        )
+        val formScroll = ScrollView(this).apply {
+            isFillViewport = true
+            addView(box)
+        }
         AlertDialog.Builder(this)
             .setTitle(if (existing == null) "إضافة رابط" else "تعديل الرابط")
-            .setView(box)
+            .setView(formScroll)
             .setPositiveButton("حفظ", null)
             .setNegativeButton("إلغاء", null)
             .create().also { dialog ->
@@ -1690,12 +1746,26 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
                         val displayName = displayNameInput.text.toString().trim()
                         val url = urlInput.text.toString().trim()
                         val referer = refererInput.text.toString().trim()
+                        val userAgent = userAgentInput.text.toString().trim()
+                        val cookie = cookieInput.text.toString().trim()
+                        val authorization = authorizationInput.text.toString().trim()
+                        val extraHeaders = extraHeadersInput.text.toString().trim()
                         if (channel.isBlank() || server.isBlank() || url.isBlank() ||
                             !(url.startsWith("http://") || url.startsWith("https://"))) {
                             Toast.makeText(this, "أدخل اسم القناة والسيرفر ورابطًا يبدأ بـ http:// أو https://", Toast.LENGTH_LONG).show()
                             return@setOnClickListener
                         }
-                        val item = StreamSource(channel, server, url, referer, displayName.ifBlank { server })
+                        val item = StreamSource(
+                            channel = channel,
+                            serverName = server,
+                            url = url,
+                            referer = referer,
+                            displayName = displayName.ifBlank { server },
+                            userAgent = userAgent,
+                            cookie = cookie,
+                            authorization = authorization,
+                            extraHeaders = extraHeaders
+                        )
                         if (editIndex >= 0 && editIndex < sources.size) sources[editIndex] = item else sources.add(item)
                         saveSources()
                         saveSourcesToCloud()
@@ -1722,7 +1792,11 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
                 sources.add(StreamSource(
                     item.optString("channel"), item.optString("serverName"),
                     item.optString("url"), item.optString("referer"),
-                    item.optString("displayName", item.optString("serverName"))
+                    item.optString("displayName", item.optString("serverName")),
+                    item.optString("userAgent", ""),
+                    item.optString("cookie", ""),
+                    item.optString("authorization", ""),
+                    item.optString("extraHeaders", "")
                 ))
             }
         } catch (_: Exception) {
@@ -1739,6 +1813,10 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
                 put("url", source.url)
                 put("referer", source.referer)
                 put("displayName", source.displayName)
+                put("userAgent", source.userAgent)
+                put("cookie", source.cookie)
+                put("authorization", source.authorization)
+                put("extraHeaders", source.extraHeaders)
             })
         }
         prefs.edit().putString("sources_json", array.toString()).apply()
@@ -1865,7 +1943,11 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
                         downloaded.add(StreamSource(
                             channel, server, url,
                             item.optString("referer", ""),
-                            item.optString("displayName", server)
+                            item.optString("displayName", server),
+                            item.optString("userAgent", ""),
+                            item.optString("cookie", ""),
+                            item.optString("authorization", ""),
+                            item.optString("extraHeaders", "")
                         ))
                     }
                     // If a channel has sources but no separate channel_settings row yet, still show it.
@@ -1948,6 +2030,10 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
                 put("url", source.url)
                 put("referer", source.referer)
                 put("displayName", source.displayName)
+                put("userAgent", source.userAgent)
+                put("cookie", source.cookie)
+                put("authorization", source.authorization)
+                put("extraHeaders", source.extraHeaders)
             })
         }
         val payload = JSONObject().put("sources", list).toString()
