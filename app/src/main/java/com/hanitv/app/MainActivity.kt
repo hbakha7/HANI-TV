@@ -900,23 +900,51 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
             setPadding(dp(4), dp(4), dp(4), dp(4))
             setBackgroundColor(Color.argb(145, 0, 0, 0))
         }
-        fun playerControl(symbol: String, description: String, action: () -> Unit): TextView {
-            val control = TextView(this).apply {
-                text = symbol
-                contentDescription = description
-                textSize = if (symbol in setOf("HD", "FHD", "4K", "SD", "—", "…")) 16f else 24f
-                gravity = Gravity.CENTER
-                setTextColor(Color.WHITE)
-                setBackgroundColor(Color.TRANSPARENT)
-                isClickable = true
-                isFocusable = true
-                setOnClickListener { action(); scheduleOverlayHide() }
-            }
-            controls.addView(control, LinearLayout.LayoutParams(0, dp(54), 1f).apply {
-                setMargins(dp(1), 0, dp(1), 0)
-            })
-            return control
+        
+fun playerControl(symbol: String, description: String, action: () -> Unit): TextView {
+    val qualitySymbols = setOf("HD", "FHD", "4K", "SD", "—", "…")
+
+    val buttonBackground = GradientDrawable().apply {
+        shape = GradientDrawable.OVAL
+        setColor(Color.argb(45, 255, 255, 255))
+        setStroke(dp(1), Color.argb(85, 255, 255, 255))
+    }
+
+    val ripple = android.graphics.drawable.RippleDrawable(
+        android.content.res.ColorStateList.valueOf(
+            Color.argb(100, 105, 228, 255)
+        ),
+        buttonBackground,
+        null
+    )
+
+    val control = TextView(this).apply {
+        text = symbol
+        contentDescription = description
+        textSize = if (symbol in qualitySymbols) 15f else 21f
+        typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+        gravity = Gravity.CENTER
+        setTextColor(Color.WHITE)
+        background = ripple
+        includeFontPadding = false
+        isClickable = true
+        isFocusable = true
+        setOnClickListener {
+            action()
+            scheduleOverlayHide()
         }
+    }
+
+    controls.addView(
+        control,
+        LinearLayout.LayoutParams(dp(42), dp(42)).apply {
+            setMargins(dp(3), dp(2), dp(3), dp(2))
+        }
+    )
+
+    return control
+}
+
         playerControl("⏪₁₀", "الرجوع 10 ثوانٍ") {
             embeddedPlayer?.let { player ->
                 if (player.isCurrentMediaItemSeekable) {
