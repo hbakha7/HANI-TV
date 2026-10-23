@@ -2008,7 +2008,15 @@ private fun openFullscreen() {
     addControl(settings, 48)
     addControl(fullscreen, 48)
     addControl(display, 48)
-    bottomPanel.addView(actionBar)
+    // Keep the control buttons directly on the video frame, not inside a full-width strip.
+    frame.addView(
+        actionBar,
+        FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+            Gravity.CENTER
+        )
+    )
 
     val timeRow = LinearLayout(this).apply {
         orientation = LinearLayout.HORIZONTAL
@@ -2065,6 +2073,7 @@ private fun openFullscreen() {
         controlsVisible = true
         topBar.visibility = View.VISIBLE
         bottomPanel.visibility = View.VISIBLE
+        actionBar.visibility = View.VISIBLE
         serverButtonsContainer?.visibility = View.VISIBLE
         handler.removeCallbacks(hideControls)
         handler.postDelayed(hideControls, 4500)
@@ -2073,6 +2082,7 @@ private fun openFullscreen() {
         controlsVisible = false
         topBar.visibility = View.GONE
         bottomPanel.visibility = View.GONE
+        actionBar.visibility = View.GONE
         serverButtonsContainer?.visibility = View.GONE
     }
     val updateProgress = object : Runnable {
