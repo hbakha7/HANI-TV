@@ -38,6 +38,7 @@ import java.util.UUID
 import android.util.Base64
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.exoplayer.source.UnrecognizedInputFormatException
 import androidx.media3.common.C
 import androidx.media3.common.TrackSelectionParameters
 data class Channel(
@@ -83,6 +84,8 @@ private val serverFailoverHandler = Handler(Looper.getMainLooper())
 private var serverFailoverPending = false
 private var serverFailoverAttempts = 0
 private var serverStartupTimeout: Runnable? = null
+// Prevent endless format retries: each URL gets at most one automatic HLS fallback.
+private var hlsFallbackAttemptedUrl = ""
 private var fullscreenView: PlayerView? = null
 private var serverButtonsBar: LinearLayout? = null  
 private var savedParent: ViewGroup? = null  
@@ -1268,6 +1271,28 @@ if (referrer.isNotBlank()) {
                 override fun onPlayerError(
                     error: PlaybackException
                 ) {
+                    // Some providers serve HLS behind opaque/non-standard paths such as .css,
+                    // .php or index endpoints. First let Media3 try its normal detection; only
+                    // if its progressive extractor cannot recognize the response, retry once as HLS.
+                    val failedItem = exo.currentMediaItem
+                    val failedUrl = failedItem?.localConfiguration?.uri?.toString().orEmpty()
+                    val unrecognizedFormat = generateSequence<Throwable>(error) { it.cause }
+                        .any { it is UnrecognizedInputFormatException }
+                    if (unrecognizedFormat && failedItem != null && failedUrl.isNotBlank() &&
+                        failedUrl != hlsFallbackAttemptedUrl &&
+                        failedItem.localConfiguration?.mimeType != MimeTypes.APPLICATION_M3U8 &&
+                        shouldTryHlsFallback(failedUrl)) {
+                        hlsFallbackAttemptedUrl = failedUrl
+                        val hlsItem = failedItem.buildUpon()
+                            .setMimeType(MimeTypes.APPLICATION_M3U8)
+                            .build()
+                        exo.setMediaItem(hlsItem)
+                        exo.prepare()
+                        exo.playWhenReady = true
+                        setStatus("تجربة صيغة بث بديلة…")
+                        return
+                    }
+
                     val details = generateSequence(error.cause) {
                         it.cause
                     }.filterIsInstance<
@@ -1639,6 +1664,21 @@ private fun loadEpisodes(series: Channel) {
  * Recognize HLS playlists hidden behind proxy.php?stream=<Base64 path>.
  * The URL itself may not end in .m3u8, but the decoded stream path can.
  */
+private fun shouldTryHlsFallback(url: String): Boolean {
+    val path = try {
+        android.net.Uri.parse(url).path.orEmpty().lowercase(java.util.Locale.ROOT)
+    } catch (_: Exception) {
+        ""
+    }
+    // Do not reinterpret obvious progressive media files as HLS.
+    val knownProgressiveExtensions = listOf(
+        ".mp4", ".m4v", ".mkv", ".webm", ".mp3", ".aac", ".m4a", ".wav", ".flac", ".ogg"
+    )
+    if (knownProgressiveExtensions.any { path.endsWith(it) }) return false
+    // Unknown extensions and dynamic endpoints can still return an HLS playlist.
+    return true
+}
+
 private fun isHlsStreamUrl(url: String): Boolean {
     val uri = try {
         android.net.Uri.parse(url)
@@ -1669,6 +1709,8 @@ private fun isHlsStreamUrl(url: String): Boolean {
 
 private fun play(ch: Channel) {
 try {
+// Allow one fresh HLS fallback attempt for each new playback request.
+hlsFallbackAttemptedUrl = ""
 // إنشاء مشغّل جديد لضمان تطبيق رؤوس الطلبات الحالية
 playerView?.player = null
 player?.release()
