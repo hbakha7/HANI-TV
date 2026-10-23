@@ -1252,7 +1252,7 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
                 } else if (currentOptions.size > 1) {
                     playerHandler.postDelayed({ if (embeddedPlayer === exo) tryNextServer(exo) }, 3000L)
                 } else {
-                    Toast.makeText(this@MainActivity, "تعذر التشغيل: ${error.errorCodeName}", Toast.LENGTH_LONG).show()
+                    Toast.makeText(this@MainActivity, "تعذر تشغيل القناة حاليًا. يرجى المحاولة مجددًا.", Toast.LENGTH_LONG).show()
                 }
             }
         })
@@ -1616,8 +1616,8 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
                                         }
                                         val code = connection.responseCode
                                         connection.disconnect()
-                                        "HTTP $code"
-                                    } catch (e: Exception) { "تعذر الاتصال: ${e.message ?: "خطأ شبكة"}" }
+                                        if (code in 200..299) "السيرفر يستجيب." else "السيرفر غير متاح حاليًا."
+                                    } catch (_: Exception) { "تعذر الاتصال بهذا السيرفر حاليًا." }
                                     runOnUiThread {
                                         isEnabled = true; text = "فحص"
                                         Toast.makeText(this@MainActivity, "${source.serverName}: $result", Toast.LENGTH_LONG).show()
@@ -1893,8 +1893,8 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
                 connection.disconnect()
                 val result = JSONObject(response)
                 success = code in 200..299 && result.optBoolean("ok")
-                message = if (success) "تم حفظ صور القنوات على Hostinger." else result.optString("error", "HTTP $code")
-            } catch (e: Exception) { message = e.message ?: "network_error" }
+                message = if (success) "تم حفظ صور القنوات بنجاح." else "تعذر حفظ صور القنوات حاليًا. تحقق من الاتصال وحاول مجددًا."
+            } catch (_: Exception) { message = "تعذر الاتصال بالخدمة حاليًا. تحقق من الاتصال وحاول مجددًا." }
             runOnUiThread {
                 Toast.makeText(this, message, Toast.LENGTH_LONG).show()
                 onComplete?.invoke()
@@ -2238,7 +2238,7 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
                 errorMessage = e.message ?: "network_error"
                 runOnUiThread {
                     if (!silent) {
-                        Toast.makeText(this, "تعذر تحميل السيرفرات من Hostinger: $errorMessage", Toast.LENGTH_LONG).show()
+                        Toast.makeText(this, "تعذر تحميل القنوات حاليًا. تحقق من اتصالك بالإنترنت وحاول مجددًا.", Toast.LENGTH_LONG).show()
                     }
                     onComplete?.invoke()
                 }
@@ -2293,16 +2293,16 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
                 connection.disconnect()
                 val result = JSONObject(response)
                 success = code in 200..299 && result.optBoolean("ok")
-                if (!success) message = result.optString("error", "HTTP $code")
-            } catch (e: Exception) {
-                message = e.message ?: "network_error"
+                if (!success) message = "تعذر حفظ التعديلات حاليًا. تحقق من الاتصال وحاول مجددًا."
+            } catch (_: Exception) {
+                message = "تعذر حفظ التعديلات حاليًا. تحقق من الاتصال وحاول مجددًا."
             }
             runOnUiThread {
                 if (success) {
-                    Toast.makeText(this, "تم حفظ روابط القنوات على Hostinger.", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, "تم حفظ روابط القنوات بنجاح.", Toast.LENGTH_SHORT).show()
                     onComplete?.invoke()
                 } else {
-                    Toast.makeText(this, "فشل الحفظ المشترك: ${message ?: "خطأ غير معروف"}", Toast.LENGTH_LONG).show()
+                    Toast.makeText(this, "تعذر حفظ التعديلات حاليًا. تحقق من الاتصال وحاول مجددًا.", Toast.LENGTH_LONG).show()
                     onComplete?.invoke()
                 }
             }
