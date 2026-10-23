@@ -663,17 +663,25 @@ private fun displayChannelName(name: String): String {
 
 
     private fun openChannel(channelName: String) {
-        if (!initialSourceSyncFinished) {
-            // Queue the tap and launch automatically as soon as local/cloud source selection is settled.
-            pendingChannelToOpen = channelName
-            return
-        }
+        // Use cached Hostinger sources immediately; never wait for the cloud refresh
+        // when this channel already has locally saved server links.
         val options = sources.filter { it.channel == channelName }
-        if (options.isEmpty()) {
-            Toast.makeText(this, "لا تتوفر روابط لهذه القناة حاليًا.", Toast.LENGTH_SHORT).show()
+
+        if (options.isNotEmpty()) {
+            pendingChannelToOpen = null
+            launchPlayer(options, 0)
             return
         }
-        launchPlayer(options, 0)
+
+        // If this channel is missing locally, allow the initial Hostinger sync
+        // to finish and then retry opening the requested channel.
+        if (!initialSourceSyncFinished) {
+            pendingChannelToOpen = channelName
+            Toast.makeText(this, "جارٍ تحميل روابط القناة…", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        Toast.makeText(this, "لا تتوفر روابط لهذه القناة حاليًا.", Toast.LENGTH_SHORT).show()
     }
 
     
