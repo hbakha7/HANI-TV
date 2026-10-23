@@ -1046,7 +1046,7 @@ private fun loadM3u(link: String) {
             setStatus("تم تحميل ${parsed.size} رابطًا")  
         } catch (e: Exception) {  
             setStatus("فشل تحميل القائمة")  
-            message("تعذر تحميل القائمة:\n${e.message}")  
+            message("تعذر تحميل القائمة حاليًا. تحقق من اتصالك بالإنترنت والرابط ثم حاول مجددًا.")  
         }  
     }  
 }  
@@ -1187,10 +1187,7 @@ private fun loadXtream(type: String) {
             setStatus("تم تحميل ${parsed.size} عنصرًا")  
         } catch (e: Exception) {  
             setStatus("تعذر الاتصال")  
-            message(  
-                "فشل اتصال Xtream:\n" +  
-                (e.message ?: "تحقق من الخادم والبيانات")  
-            )  
+            message("تعذر الاتصال بالخادم حاليًا. تحقق من الرابط وبيانات الحساب ثم حاول مجددًا.")  
         }  
     }  
 }  
@@ -1293,33 +1290,8 @@ if (referrer.isNotBlank()) {
                         return
                     }
 
-                    val details = generateSequence(error.cause) {
-                        it.cause
-                    }.filterIsInstance<
-                        androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException
-                    >().firstOrNull()
-
-                    val status = details?.responseCode
-                    val causeDetails = generateSequence<Throwable>(error) { it.cause }
-                        .take(6)
-                        .joinToString("\n") { cause ->
-                            "${cause.javaClass.simpleName}: ${cause.message ?: "بدون تفاصيل"}"
-                        }
-                    val responseHeaders = details?.headerFields
-                        ?.entries
-                        ?.filter { it.key != null && it.key.equals("Content-Type", true) }
-                        ?.joinToString { "${it.key}: ${it.value?.joinToString()}" }
-                        .orEmpty()
-
-                    val diagnostic = buildString {
-                        append("تعذر التشغيل: ${error.errorCodeName}")
-                        if (status != null) append("\nHTTP: $status")
-                        if (responseHeaders.isNotBlank()) append("\n$responseHeaders")
-                        append("\n\nتفاصيل الخطأ:\n$causeDetails")
-                        if (error.errorCodeName.contains("PARSING_CONTAINER", true)) {
-                            append("\n\nهذا الخطأ لا يثبت أن Referer وحده هو السبب. قد تكون استجابة الخادم غير فيديو أو أن صيغة البث غير مدعومة.")
-                        }
-                    }
+                    // Keep technical playback diagnostics out of viewer-facing messages.
+                    val viewerMessage = "تعذر تشغيل هذا البث حاليًا. جرّب سيرفرًا آخر أو حاول لاحقًا."
                     // A failed server (including HTTP 401) should not be retried
                     // on the same URL: move directly to the next supplied server.
                     // The next player's request headers are selected from that server's
@@ -1327,7 +1299,7 @@ if (referrer.isNotBlank()) {
                     if (directLinkPlayback && incomingServerUrls.size > 1) {
                         scheduleNextServerAfterFailure(exo)
                     } else {
-                        message(diagnostic)
+                        message(viewerMessage)
                     }
                 }
 
@@ -1654,7 +1626,7 @@ private fun loadEpisodes(series: Channel) {
                 .setNegativeButton("إغلاق", null)  
                 .show()  
         } catch (e: Exception) {  
-            message("تعذر تحميل الحلقات:\n${e.message}")  
+            message("تعذر تحميل المحتوى حاليًا. تحقق من الاتصال وحاول مجددًا.")  
         }  
     }  
 }
@@ -1776,7 +1748,7 @@ if (playerView == null) {
         playerView?.post { openFullscreen() }
     }
 } catch (e: Exception) {  
-    message("تعذر بدء التشغيل:\n${e.message}")  
+    message("تعذر بدء التشغيل حاليًا. تحقق من الرابط وحاول مجددًا.")  
 }
 
 }
