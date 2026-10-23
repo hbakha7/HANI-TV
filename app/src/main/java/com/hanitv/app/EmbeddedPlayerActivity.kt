@@ -1910,16 +1910,27 @@ private fun openFullscreen() {
         }
     }
 
+    // Remove the middle control-strip background completely; keep every control.
     val bottomPanel = LinearLayout(this).apply {
-    orientation = LinearLayout.VERTICAL
-    setPadding(dp(12), dp(2), dp(12), dp(4))
-    setBackgroundColor(Color.TRANSPARENT)
+        orientation = LinearLayout.VERTICAL
+        setPadding(dp(12), dp(2), dp(12), dp(4))
+        background = null
+        foreground = null
+        isClickable = false
+        isFocusable = false
+        clipChildren = false
+        clipToPadding = false
     }
 
     val actionBar = LinearLayout(this).apply {
-    orientation = LinearLayout.HORIZONTAL
-    gravity = Gravity.CENTER
-    setBackgroundColor(Color.TRANSPARENT)
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER
+        background = null
+        foreground = null
+        isClickable = false
+        isFocusable = false
+        clipChildren = false
+        clipToPadding = false
     }
 
     fun addControl(view: View, width: Int = 42) {
