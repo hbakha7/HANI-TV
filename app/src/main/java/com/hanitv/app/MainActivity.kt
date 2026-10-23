@@ -898,7 +898,7 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
             setPadding(dp(4), dp(4), dp(4), dp(4))
-            setBackgroundColor(Color.argb(145, 0, 0, 0))
+            background = null
         }
         
 fun playerControl(symbol: String, description: String, action: () -> Unit): TextView {
