@@ -36,6 +36,7 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.VideoSize
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.DefaultLoadControl
@@ -68,6 +69,7 @@ class MainActivity : Activity() {
     private var adminActionPending = false
     private var showingServerManager = false
     private var embeddedPlayer: ExoPlayer? = null
+    private var embeddedQualityControl: TextView? = null
     private var embeddedHttpFactory: DefaultHttpDataSource.Factory? = null
     private var embeddedPlayerView: PlayerView? = null
     private var embeddedDialog: Dialog? = null
@@ -902,7 +904,7 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
             val control = TextView(this).apply {
                 text = symbol
                 contentDescription = description
-                textSize = if (symbol == "HD") 16f else 24f
+                textSize = if (symbol in setOf("HD", "FHD", "4K", "SD", "—", "…")) 16f else 24f
                 gravity = Gravity.CENTER
                 setTextColor(Color.WHITE)
                 setBackgroundColor(Color.TRANSPARENT)
@@ -925,7 +927,7 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
         val soundControl = playerControl("◖))", "كتم الصوت واستعادته") {
             embeddedPlayer?.let { player -> player.volume = if (player.volume > 0f) 0f else 1f }
         }
-        playerControl("HD", "اختيار جودة الفيديو") {
+        val qualityControl = playerControl("…", "جودة الفيديو غير محددة؛ اضغط لاختيار الجودة") {
             embeddedPlayer?.let { player ->
                 TrackSelectionDialogBuilder(this, "جودة الفيديو", player, C.TRACK_TYPE_VIDEO)
                     .setAllowAdaptiveSelections(true)
@@ -933,6 +935,7 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
                     .show()
             }
         }
+        embeddedQualityControl = qualityControl
         playerControl("⚙", "إعدادات سرعة التشغيل") {
             val speeds = arrayOf("0.5x", "0.75x", "1.0x", "1.25x", "1.5x", "2.0x")
             AlertDialog.Builder(this).setTitle("سرعة التشغيل")
@@ -1159,6 +1162,16 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
         embeddedPlayer = exo
         video.player = exo
         exo.addListener(object : Player.Listener {
+            override fun onVideoSizeChanged(videoSize: VideoSize) {
+                val label = classifyVideoQuality(videoSize.width, videoSize.height)
+                qualityControl.text = label
+                qualityControl.contentDescription = if (label == "—") {
+                    "جودة الفيديو غير محددة؛ اضغط لاختيار الجودة"
+                } else {
+                    "الجودة المكتشفة $label؛ اضغط لاختيار الجودة"
+                }
+            }
+
             override fun onPlaybackStateChanged(playbackState: Int) {
                 loadingIndicator?.visibility = when (playbackState) {
                     Player.STATE_BUFFERING, Player.STATE_IDLE -> View.VISIBLE
@@ -1291,6 +1304,18 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
         }
     }
 
+    private fun classifyVideoQuality(width: Int, height: Int): String {
+        if (width <= 0 || height <= 0) return "—"
+        val longSide = maxOf(width, height)
+        val shortSide = minOf(width, height)
+        return when {
+            longSide >= 3000 -> "4K"
+            longSide >= 1800 || (longSide >= 1400 && shortSide >= 1000) -> "FHD"
+            longSide >= 1200 && shortSide >= 600 -> "HD"
+            else -> "SD"
+        }
+    }
+
     private fun formatPlayerTime(positionMs: Long): String {
         val totalSeconds = positionMs.coerceAtLeast(0L) / 1000L
         val hours = totalSeconds / 3600L
@@ -1355,6 +1380,8 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
         startupTimeout = null
         failoverPending = false
         sameServerRetryUsed = false
+        embeddedQualityControl?.text = "…"
+        embeddedQualityControl?.contentDescription = "جارٍ اكتشاف جودة الفيديو"
         loadingIndicator?.visibility = View.VISIBLE
         val selectedUserAgent = source.userAgent.takeIf { it.isNotBlank() }
             ?: prefs.getString("add_user_agent", "")?.trim()?.takeIf { it.isNotEmpty() }
@@ -1414,6 +1441,7 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
         embeddedPlayerView?.player = null
         embeddedPlayer?.release()
         embeddedPlayer = null
+        embeddedQualityControl = null
         embeddedHttpFactory = null
         embeddedPlayerView = null
         loadingIndicator = null
