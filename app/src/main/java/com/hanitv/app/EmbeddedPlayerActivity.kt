@@ -1911,12 +1911,9 @@ private fun openFullscreen() {
     }
 
     val bottomPanel = LinearLayout(this).apply {
-        orientation = LinearLayout.VERTICAL
-        setPadding(dp(12), dp(2), dp(12), dp(4))
-        background = android.graphics.drawable.GradientDrawable(
-            android.graphics.drawable.GradientDrawable.Orientation.BOTTOM_TOP,
-            intArrayOf(Color.argb(190, 0, 0, 0), Color.TRANSPARENT)
-        )
+    orientation = LinearLayout.VERTICAL
+    setPadding(dp(12), dp(2), dp(12), dp(4))
+    setBackgroundColor(Color.TRANSPARENT)
     }
 
     val actionBar = LinearLayout(this).apply {
