@@ -1920,8 +1920,9 @@ private fun openFullscreen() {
     }
 
     val actionBar = LinearLayout(this).apply {
-        orientation = LinearLayout.HORIZONTAL
-        gravity = Gravity.CENTER
+    orientation = LinearLayout.HORIZONTAL
+    gravity = Gravity.CENTER
+    setBackgroundColor(Color.TRANSPARENT)
     }
 
     fun addControl(view: View, width: Int = 42) {
