@@ -144,6 +144,18 @@ class MainActivity : Activity() {
             "STARZPLAY 2" to "S2",
             "STARZPLAY 3" to "S3"
         ),
+        "ALWAN" to listOf(
+            "ALWAN 1" to "A1",
+            "ALWAN 2" to "A2",
+            "ALWAN 3" to "A3",
+            "ALWAN 4" to "A4",
+            "ALWAN 5" to "A5",
+            "ALWAN 6" to "A6",
+            "ALWAN 7" to "A7",
+            "ALWAN 8" to "A8",
+            "ALWAN 9" to "A9",
+            "ALWAN 10" to "A10"
+        ),
         "القنوات العربية" to listOf(
             "قناة عربية 1" to "AR",
             "قناة عربية 2" to "A2",
@@ -395,7 +407,8 @@ class MainActivity : Activity() {
         val brandItems = listOf(
             Triple("beIN\nSPORTS", "beIN SPORTS", Color.rgb(177, 105, 235)),
             Triple("ثمانية", "ثمانية", Color.rgb(245, 245, 250)),
-            Triple("STARZPLAY", "STARZPLAY", Color.rgb(90, 205, 225))
+            Triple("STARZPLAY", "STARZPLAY", Color.rgb(90, 205, 225)),
+            Triple("ALWAN", "ALWAN", Color.rgb(88, 220, 150))
         )
 
         brandItems.forEach { brand ->
@@ -415,6 +428,7 @@ class MainActivity : Activity() {
                         "beIN SPORTS" -> showChannels("القنوات الرياضية")
                         "ثمانية" -> showChannels("ثمانية")
                         "STARZPLAY" -> showChannels("STARZPLAY")
+                        "ALWAN" -> showChannels("ALWAN")
                     }
                 }
             }
@@ -635,7 +649,8 @@ class MainActivity : Activity() {
         val brands = listOf(
             Triple("beIN\nSPORTS", "beIN SPORTS", Color.rgb(177, 105, 235)),
             Triple("ثمانية", "ثمانية", Color.rgb(245, 245, 250)),
-            Triple("STARZPLAY", "STARZPLAY", Color.rgb(90, 205, 225))
+            Triple("STARZPLAY", "STARZPLAY", Color.rgb(90, 205, 225)),
+            Triple("ALWAN", "ALWAN", Color.rgb(88, 220, 150))
         )
         val grid = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -667,6 +682,7 @@ class MainActivity : Activity() {
                             "beIN SPORTS" -> showChannels("القنوات الرياضية")
                             "ثمانية" -> showChannels("ثمانية")
                             "STARZPLAY" -> showChannels("STARZPLAY")
+                            "ALWAN" -> showChannels("ALWAN")
                         }
                     }
                 }
@@ -1834,6 +1850,8 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
     private fun builtInBrandCategoryFor(channelName: String): String? = when (channelName) {
         "ثمانية 1", "ثمانية 2", "ثمانية 3" -> "ثمانية"
         "STARZPLAY 1", "STARZPLAY 2", "STARZPLAY 3" -> "STARZPLAY"
+        "ALWAN 1", "ALWAN 2", "ALWAN 3", "ALWAN 4", "ALWAN 5",
+        "ALWAN 6", "ALWAN 7", "ALWAN 8", "ALWAN 9", "ALWAN 10" -> "ALWAN"
         else -> null
     }
 
@@ -1848,6 +1866,18 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
                 "STARZPLAY 1" to "S1",
                 "STARZPLAY 2" to "S2",
                 "STARZPLAY 3" to "S3"
+            ),
+            "ALWAN" to listOf(
+                "ALWAN 1" to "A1",
+                "ALWAN 2" to "A2",
+                "ALWAN 3" to "A3",
+                "ALWAN 4" to "A4",
+                "ALWAN 5" to "A5",
+                "ALWAN 6" to "A6",
+                "ALWAN 7" to "A7",
+                "ALWAN 8" to "A8",
+                "ALWAN 9" to "A9",
+                "ALWAN 10" to "A10"
             )
         )
         builtIns.forEach { (category, defaults) ->
@@ -1958,6 +1988,8 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
                 "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?auto=format&fit=crop&w=900&q=80"
             brandName.contains("STARZPLAY", ignoreCase = true) ->
                 "https://images.unsplash.com/photo-1517466787929-bc90951d0974?auto=format&fit=crop&w=900&q=80"
+            brandName.contains("ALWAN", ignoreCase = true) ->
+                "https://images.unsplash.com/photo-1522778119026-d647f0596c20?auto=format&fit=crop&w=900&q=80"
             else -> return
         }
 
@@ -2049,12 +2081,14 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
             val logoText = when {
                 channelName.contains("ثمانية", ignoreCase = true) -> "ثمانية"
                 channelName.contains("STARZPLAY", ignoreCase = true) -> "STARZPLAY"
+                channelName.contains("ALWAN", ignoreCase = true) -> "ALWAN"
                 channelName.contains("bein", ignoreCase = true) -> "beIN\nSPORTS"
                 else -> fallback.ifBlank { channelName.take(3) }
             }
             val logoColor = when {
                 channelName.contains("ثمانية", ignoreCase = true) -> Color.WHITE
                 channelName.contains("STARZPLAY", ignoreCase = true) -> Color.rgb(90, 205, 225)
+                channelName.contains("ALWAN", ignoreCase = true) -> Color.rgb(88, 220, 150)
                 channelName.contains("bein", ignoreCase = true) -> Color.rgb(171, 105, 235)
                 else -> Color.rgb(177, 145, 255)
             }
@@ -2064,6 +2098,7 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
                 setTextColor(logoColor)
                 textSize = when {
                     channelName.contains("STARZPLAY", ignoreCase = true) -> 11f
+                    channelName.contains("ALWAN", ignoreCase = true) -> 15f
                     channelName.contains("ثمانية", ignoreCase = true) -> 16f
                     channelName.contains("bein", ignoreCase = true) -> 15f
                     else -> 18f
