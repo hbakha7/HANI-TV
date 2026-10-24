@@ -1419,7 +1419,7 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
         }
 
         val path = uri.path.orEmpty().lowercase(java.util.Locale.ROOT)
-        if (path.endsWith(".m3u8")) return true
+        if (path.endsWith(".m3u8") || path.endsWith(".css")) return true
 
         val encodedStream = uri.getQueryParameter("stream")?.trim().orEmpty()
         if (encodedStream.isBlank()) return false
