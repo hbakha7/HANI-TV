@@ -1558,7 +1558,21 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
         return decoded.substringBefore('?').substringBefore('#')
             .lowercase(java.util.Locale.ROOT).endsWith(".m3u8")
     }
+private fun isDashStreamUrl(url: String): Boolean {
+    return try {
+        val uri = android.net.Uri.parse(url)
+        val path = uri.path.orEmpty()
+            .lowercase(java.util.Locale.ROOT)
 
+        path.endsWith(".mpd") ||
+            uri.getQueryParameter("type")
+                ?.equals("mpd", ignoreCase = true) == true ||
+            uri.getQueryParameter("format")
+                ?.equals("mpd", ignoreCase = true) == true
+    } catch (_: Exception) {
+        false
+    }
+}
     private fun switchServerInsidePlayer(index: Int) {
         if (index !in currentOptions.indices) return
         currentServerIndex = index
