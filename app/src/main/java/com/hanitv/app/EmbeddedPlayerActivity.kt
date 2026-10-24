@@ -1748,7 +1748,26 @@ if (playerView == null) {
     val licenseUrl = prefs.getString("add_license", "").orEmpty().trim()
     if (drmName != "بدون drm" && drmName.isNotBlank()) {
         if (licenseUrl.isBlank()) {
-            message("اخترت DRM لكن خانة License فارغة. أدخل رابط خادم الترخيص.")
+            playerView?.player = null
+            player?.release()
+            player = null
+            message("اخترت DRM لكن خانة License فارغة. أدخل رابط خادم الترخيص الرسمي.")
+            return
+        }
+        // DRM license requests must target an HTTP(S) license endpoint.
+        // Raw content keys are intentionally not accepted as a substitute for a license server.
+        val licenseUri = try {
+            android.net.Uri.parse(licenseUrl)
+        } catch (_: Exception) {
+            null
+        }
+        if (licenseUri == null ||
+            (licenseUri.scheme != "https" && licenseUri.scheme != "http") ||
+            licenseUri.host.isNullOrBlank()) {
+            playerView?.player = null
+            player?.release()
+            player = null
+            message("رابط License غير صالح. أدخل رابط خادم الترخيص الرسمي بصيغة HTTP أو HTTPS.")
             return
         }
         val drmUuid: UUID = when (drmName) {
@@ -1763,7 +1782,7 @@ if (playerView == null) {
         val licenseHeaders = getPlaybackHeaders(ch.referer)
         itemBuilder.setDrmConfiguration(
             MediaItem.DrmConfiguration.Builder(drmUuid)
-                .setLicenseUri(android.net.Uri.parse(licenseUrl))
+                .setLicenseUri(licenseUri)
                 .setLicenseRequestHeaders(licenseHeaders)
                 .build()
         )
