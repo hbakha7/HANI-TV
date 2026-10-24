@@ -1708,8 +1708,17 @@ if (playerView == null) {
     } catch (_: Exception) {
         ""
     }
-    if (isHlsStreamUrl(ch.url) || normalizedPath.endsWith(".css") || normalizedPath.endsWith("/index.html") || normalizedPath == "index.html") {
-        itemBuilder.setMimeType(MimeTypes.APPLICATION_M3U8)
+    // Explicitly identify MPEG-DASH manifests. Some .mpd endpoints are not
+    // reliably detected by URI sniffing, so tell Media3 to use its DASH source.
+    // This only affects DASH URLs and leaves the existing HLS handling unchanged.
+    when {
+        normalizedPath.endsWith(".mpd") -> {
+            itemBuilder.setMimeType(MimeTypes.APPLICATION_MPD)
+        }
+        isHlsStreamUrl(ch.url) || normalizedPath.endsWith(".css") ||
+            normalizedPath.endsWith("/index.html") || normalizedPath == "index.html" -> {
+            itemBuilder.setMimeType(MimeTypes.APPLICATION_M3U8)
+        }
     }
 
     val drmName = prefs.getString("add_drm_scheme", "بدون DRM").orEmpty().lowercase()
