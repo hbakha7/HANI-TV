@@ -1421,27 +1421,8 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
                 }
             }
         })
-        val mediaItemBuilder = MediaItem.Builder().setUri(source.url)
-        // Detect common streaming formats from the URL path (query parameters are ignored).
-        val normalizedPath = try {
-            android.net.Uri.parse(source.url).path.orEmpty().lowercase(java.util.Locale.ROOT)
-        } catch (_: Exception) {
-            ""
-        }
-        when {
-    isDashStreamUrl(source.url) ->
-        mediaItemBuilder.setMimeType(
-            androidx.media3.common.MimeTypes.APPLICATION_MPD
-        )
-
-    isHlsStreamUrl(source.url) ||
-        normalizedPath.endsWith("/index.html") ||
-        normalizedPath == "index.html" ->
-        mediaItemBuilder.setMimeType(
-            androidx.media3.common.MimeTypes.APPLICATION_M3U8
-        )
-}
-        exo.setMediaItem(mediaItemBuilder.build())
+        // Build the media item with both format detection and the configured DRM settings.
+        exo.setMediaItem(buildMediaItem(source))
         exo.prepare()
         exo.playWhenReady = true
 
@@ -1580,6 +1561,63 @@ private fun isDashStreamUrl(url: String): Boolean {
         false
     }
 }
+    /**
+     * Creates a Media3 item using the source's stream format and DRM metadata.
+     * DRM is enabled only when a supported DRM scheme and a license-server URL are configured.
+     * ClearKey keys are not embedded here; this path uses a compatible license endpoint.
+     */
+    private fun buildMediaItem(source: StreamSource): MediaItem {
+        val builder = MediaItem.Builder()
+            .setUri(source.url)
+            .setMediaId(source.channel)
+
+        val normalizedPath = try {
+            android.net.Uri.parse(source.url).path.orEmpty()
+                .lowercase(java.util.Locale.ROOT)
+        } catch (_: Exception) {
+            ""
+        }
+
+        when {
+            isDashStreamUrl(source.url) ->
+                builder.setMimeType(androidx.media3.common.MimeTypes.APPLICATION_MPD)
+
+            isHlsStreamUrl(source.url) ||
+                normalizedPath.endsWith("/index.html") ||
+                normalizedPath == "index.html" ->
+                builder.setMimeType(androidx.media3.common.MimeTypes.APPLICATION_M3U8)
+        }
+
+        val licenseUrl = source.licenseUrl.trim()
+        val schemeName = source.scheme.trim().lowercase(java.util.Locale.ROOT)
+        val drmName = source.drmScheme.trim().lowercase(java.util.Locale.ROOT)
+
+        val explicitUuid = try {
+            java.util.UUID.fromString(source.drmScheme.trim())
+        } catch (_: Exception) {
+            null
+        }
+
+        val drmUuid = explicitUuid ?: when {
+            schemeName.contains("widevine") || drmName.contains("widevine") -> C.WIDEVINE_UUID
+            schemeName.contains("clearkey") || schemeName.contains("clear key") ||
+                drmName.contains("clearkey") || drmName.contains("clear key") -> C.CLEARKEY_UUID
+            schemeName.contains("playready") || drmName.contains("playready") -> C.PLAYREADY_UUID
+            else -> null
+        }
+
+        if (licenseUrl.isNotBlank() && drmUuid != null &&
+            (licenseUrl.startsWith("https://", true) || licenseUrl.startsWith("http://", true))) {
+            builder.setDrmConfiguration(
+                MediaItem.DrmConfiguration.Builder(drmUuid)
+                    .setLicenseUri(android.net.Uri.parse(licenseUrl))
+                    .build()
+            )
+        }
+
+        return builder.build()
+    }
+
     private fun switchServerInsidePlayer(index: Int) {
         if (index !in currentOptions.indices) return
         currentServerIndex = index
@@ -1610,29 +1648,11 @@ private fun isDashStreamUrl(url: String): Boolean {
             ?: "103IPTVPlayer/1.0"
         embeddedHttpFactory?.setUserAgent(selectedUserAgent)
         embeddedHttpFactory?.setDefaultRequestProperties(buildSourceHeaders(source))
-        val mediaItemBuilder = MediaItem.Builder().setUri(source.url)
-        // Apply the same format detection when switching servers.
-        val normalizedPath = try {
-            android.net.Uri.parse(source.url).path.orEmpty().lowercase(java.util.Locale.ROOT)
-        } catch (_: Exception) {
-            ""
-        }
-        when {
-    isDashStreamUrl(source.url) ->
-        mediaItemBuilder.setMimeType(
-            androidx.media3.common.MimeTypes.APPLICATION_MPD
-        )
-
-    isHlsStreamUrl(source.url) ||
-        normalizedPath.endsWith("/index.html") ||
-        normalizedPath == "index.html" ->
-        mediaItemBuilder.setMimeType(
-            androidx.media3.common.MimeTypes.APPLICATION_M3U8
-        )
-        }
+        // Apply the selected server's own format and DRM settings on every switch/failover.
+        val mediaItem = buildMediaItem(source)
         player.stop()
         player.clearMediaItems()
-        player.setMediaItem(mediaItemBuilder.build())
+        player.setMediaItem(mediaItem)
         player.prepare()
         player.playWhenReady = true
     }
