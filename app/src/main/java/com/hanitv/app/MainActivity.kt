@@ -422,7 +422,7 @@ class MainActivity : Activity() {
             applyBrandPhotoBackground(brandCard, brand.second)
 
             brandCard.addView(
-                channelLogoView(brand.second, brand.first, dp(100), dp(44)),
+                channelLogoView(brand.second, brand.first, dp(100), dp(44), plainBrandFallback = true),
                 LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44))
             )
 
@@ -673,7 +673,7 @@ class MainActivity : Activity() {
                 applyBrandPhotoBackground(card, brand.second)
 
                 card.addView(
-                    channelLogoView(brand.second, brand.first, dp(100), dp(52)),
+                    channelLogoView(brand.second, brand.first, dp(100), dp(52), plainBrandFallback = true),
                     LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(52))
                 )
                 card.addView(TextView(this).apply {
@@ -1981,10 +1981,10 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
                     }
                     val overlay = GradientDrawable(
                         GradientDrawable.Orientation.TOP_BOTTOM,
-                        intArrayOf(Color.argb(105, 5, 7, 16), Color.argb(205, 5, 7, 16))
+                        intArrayOf(Color.argb(75, 5, 7, 16), Color.argb(175, 5, 7, 16))
                     ).apply {
                         cornerRadius = dp(14).toFloat()
-                        setStroke(dp(1), Color.rgb(43, 58, 88))
+                        setStroke(dp(1), Color.rgb(75, 83, 120))
                     }
                     view.background = LayerDrawable(arrayOf(photo, overlay))
                     view.clipToOutline = true
@@ -2001,7 +2001,8 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
         channelName: String,
         fallback: String,
         width: Int,
-        height: Int
+        height: Int,
+        plainBrandFallback: Boolean = false
     ): View {
         val imageUrl = channelImageUrls[channelName].orEmpty().trim()
 
@@ -2070,10 +2071,16 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
                 setTypeface(null, Typeface.BOLD)
                 includeFontPadding = false
                 setPadding(dp(3), dp(3), dp(3), dp(3))
-                background = GradientDrawable().apply {
-                    setColor(Color.rgb(25, 24, 32))
-                    cornerRadius = dp(8).toFloat()
-                    setStroke(dp(1), Color.rgb(65, 65, 82))
+                if (plainBrandFallback) {
+                    // Brand tiles use one clean photo card: no second rectangle behind the wordmark.
+                    setBackgroundColor(Color.TRANSPARENT)
+                    setShadowLayer(dp(3).toFloat(), 0f, dp(1).toFloat(), Color.BLACK)
+                } else {
+                    background = GradientDrawable().apply {
+                        setColor(Color.rgb(25, 24, 32))
+                        cornerRadius = dp(8).toFloat()
+                        setStroke(dp(1), Color.rgb(65, 65, 82))
+                    }
                 }
                 contentDescription = "$channelName logo"
             }
