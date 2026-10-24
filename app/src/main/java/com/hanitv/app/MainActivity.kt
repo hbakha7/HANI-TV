@@ -325,7 +325,7 @@ class MainActivity : Activity() {
             }
             isClickable = true
             isFocusable = true
-            setOnClickListener { showChannels("القنوات الرياضية") }
+            setOnClickListener { showSportsSections() }
         }
 
         banner.addView(TextView(this).apply {
@@ -372,25 +372,24 @@ class MainActivity : Activity() {
         })
         content.addView(sportsHeading)
 
-        val sportsScroll = HorizontalScrollView(this).apply {
-            isHorizontalScrollBarEnabled = false
-            clipToPadding = false
-            layoutDirection = View.LAYOUT_DIRECTION_LTR
-        }
-        val sportsRow = LinearLayout(this).apply {
+        // Three sports brand tiles shown side-by-side.
+        val sportsBrands = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
             layoutDirection = View.LAYOUT_DIRECTION_LTR
         }
 
-        // beIN SPORTS channel strip: logos/cards only for beIN channels.
-        // Each card uses the configured channel image when available, with a built-in beIN wordmark fallback.
-        val sportsChannels = channelGroups["القنوات الرياضية"].orEmpty()
+        val brandItems = listOf(
+            Triple("beIN\nSPORTS", "beIN SPORTS", Color.rgb(177, 105, 235)),
+            Triple("ثمانية", "ثمانية", Color.rgb(245, 245, 250)),
+            Triple("STARZPLAY", "STARZPLAY", Color.rgb(90, 205, 225))
+        )
 
-        sportsChannels.forEach { channel ->
+        brandItems.forEach { brand ->
             val brandCard = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER
-                setPadding(dp(7), dp(8), dp(7), dp(8))
+                setPadding(dp(5), dp(10), dp(5), dp(10))
                 background = GradientDrawable().apply {
                     setColor(Color.rgb(22, 20, 31))
                     cornerRadius = dp(15).toFloat()
@@ -398,28 +397,42 @@ class MainActivity : Activity() {
                 }
                 isClickable = true
                 isFocusable = true
-                setOnClickListener { showChannels("القنوات الرياضية") }
+                setOnClickListener {
+                    when (brand.second) {
+                        "beIN SPORTS" -> showChannels("القنوات الرياضية")
+                        "ثمانية" -> showChannels("ثمانية")
+                        "STARZPLAY" -> showChannels("STARZPLAY")
+                    }
+                }
             }
 
-            brandCard.addView(
-                channelLogoView(channel.first, channel.second, dp(88), dp(43)),
-                LinearLayout.LayoutParams(dp(88), dp(43))
-            )
             brandCard.addView(TextView(this).apply {
-                text = displayChannelName(channel.first)
+                text = brand.first
+                textSize = when (brand.second) {
+                    "beIN SPORTS" -> 19f
+                    "ثمانية" -> 19f
+                    else -> 14f
+                }
+                gravity = Gravity.CENTER
+                setTextColor(brand.third)
+                setTypeface(null, Typeface.BOLD)
+                includeFontPadding = false
+            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44)))
+
+            brandCard.addView(TextView(this).apply {
+                text = brand.second
                 textSize = 10f
                 gravity = Gravity.CENTER
                 setTextColor(Color.WHITE)
                 maxLines = 1
                 setPadding(0, dp(5), 0, 0)
-            }, LinearLayout.LayoutParams(dp(100), dp(24)))
+            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(22)))
 
-            sportsRow.addView(brandCard, LinearLayout.LayoutParams(
-                dp(112), dp(91)
+            sportsBrands.addView(brandCard, LinearLayout.LayoutParams(
+                0, dp(91), 1f
             ).apply { setMargins(dp(4), dp(2), dp(4), dp(5)) })
         }
-        sportsScroll.addView(sportsRow)
-        content.addView(sportsScroll)
+        content.addView(sportsBrands)
 
         // Main categories
         content.addView(TextView(this).apply {
@@ -442,7 +455,9 @@ class MainActivity : Activity() {
                 }
                 isClickable = true
                 isFocusable = true
-                setOnClickListener { showChannels(category) }
+                setOnClickListener {
+                    if (category == "القنوات الرياضية") showSportsSections() else showChannels(category)
+                }
             }
 
             val iconText = when (category) {
@@ -603,13 +618,101 @@ class MainActivity : Activity() {
         )
     }
 
+    private fun showSportsSections() {
+        showingServerManager = false
+        content.removeAllViews()
+        content.setPadding(dp(14), dp(16), dp(14), dp(24))
+        addText("القنوات الرياضية ⚽", 23f, white, true)
+        addText("اختر القسم الذي تريد مشاهدته", 14f, gray, false, 12)
+
+        val brands = listOf(
+            Triple("beIN\nSPORTS", "beIN SPORTS", Color.rgb(177, 105, 235)),
+            Triple("ثمانية", "ثمانية", Color.rgb(245, 245, 250)),
+            Triple("STARZPLAY", "STARZPLAY", Color.rgb(90, 205, 225))
+        )
+        val grid = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+        }
+        var index = 0
+        while (index < brands.size) {
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                layoutDirection = View.LAYOUT_DIRECTION_LTR
+            }
+            for (offset in 0 until 3) {
+                val brandIndex = index + offset
+                if (brandIndex >= brands.size) break
+                val brand = brands[brandIndex]
+                val card = LinearLayout(this).apply {
+                    orientation = LinearLayout.VERTICAL
+                    gravity = Gravity.CENTER
+                    setPadding(dp(5), dp(12), dp(5), dp(12))
+                    background = GradientDrawable().apply {
+                        setColor(Color.rgb(25, 24, 30))
+                        cornerRadius = dp(12).toFloat()
+                        setStroke(dp(1), Color.rgb(43, 58, 88))
+                    }
+                    isClickable = true
+                    isFocusable = true
+                    setOnClickListener {
+                        when (brand.second) {
+                            "beIN SPORTS" -> showChannels("القنوات الرياضية")
+                            "ثمانية" -> showChannels("ثمانية")
+                            "STARZPLAY" -> showChannels("STARZPLAY")
+                        }
+                    }
+                }
+                card.addView(TextView(this).apply {
+                    text = brand.first
+                    textSize = when (brand.second) {
+                        "beIN SPORTS" -> 18f
+                        "ثمانية" -> 18f
+                        else -> 13f
+                    }
+                    gravity = Gravity.CENTER
+                    setTextColor(brand.third)
+                    setTypeface(null, Typeface.BOLD)
+                    includeFontPadding = false
+                }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(52)))
+                card.addView(TextView(this).apply {
+                    text = brand.second
+                    textSize = 10f
+                    gravity = Gravity.CENTER
+                    setTextColor(Color.WHITE)
+                    maxLines = 1
+                    setPadding(0, dp(8), 0, 0)
+                }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(24)))
+                row.addView(card, LinearLayout.LayoutParams(0, dp(112), 1f).apply {
+                    setMargins(dp(4), dp(3), dp(4), dp(7))
+                })
+            }
+            grid.addView(row, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ))
+            index += 3
+        }
+        content.addView(grid)
+        addBackButton()
+    }
+
     private fun showChannels(category: String) {
         showingServerManager = false
         content.removeAllViews()
         addText(category, 23f, white, true)
         addText("القنوات المتاحة في هذا القسم", 14f, gray, false)
 
-        val channels = channelGroups.values.flatten().distinctBy { it.first }
+        val predefinedChannels = channelGroups.values.flatten().distinctBy { it.first }
+        val configuredChannels = sources.map { it.channel.trim() }
+            .filter { it.isNotBlank() }
+            .distinct()
+            .map { name ->
+                val fallback = channelGroups.values.flatten().firstOrNull { it.first == name }?.second
+                    ?: name.take(3).ifBlank { "TV" }
+                name to fallback
+            }
+        val channels = (predefinedChannels + configuredChannels)
+            .distinctBy { it.first }
             .filter { (name, _) -> (channelCategories[name] ?: defaultCategoryFor(name)) == category }
 
         val grid = LinearLayout(this).apply {
@@ -643,10 +746,9 @@ class MainActivity : Activity() {
         }
 
         content.addView(grid)
-        addText(
-            "هذه بطاقات تجريبية. أضف مصادر القنوات المصرح بها لتفعيل التشغيل.",
-            13f, gray, false, 8
-        )
+        if (channels.isEmpty()) {
+            addText("لا توجد قنوات مضافة لهذا القسم بعد.", 13f, gray, false, 8)
+        }
         addBackButton()
     }
 
