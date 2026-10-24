@@ -9,6 +9,8 @@ import android.graphics.Color
 import android.graphics.BitmapFactory
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.BitmapDrawable
+import android.graphics.drawable.LayerDrawable
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -66,6 +68,7 @@ class MainActivity : Activity() {
     private val channelCategories = linkedMapOf<String, String>()
     private val apiUrl = "https://103service.store/api.php"
     private val networkExecutor = Executors.newSingleThreadExecutor()
+    private val brandImageExecutor = Executors.newFixedThreadPool(3)
     private var adminApiKey: String? = null
     private var updateBannerEnabled = false
     private var updateBannerText = "يتوفر إصدار جديد من HANI TV — اضغط للتحميل"
@@ -416,6 +419,8 @@ class MainActivity : Activity() {
                 }
             }
 
+            applyBrandPhotoBackground(brandCard, brand.second)
+
             brandCard.addView(
                 channelLogoView(brand.second, brand.first, dp(100), dp(44)),
                 LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44))
@@ -665,6 +670,8 @@ class MainActivity : Activity() {
                         }
                     }
                 }
+                applyBrandPhotoBackground(card, brand.second)
+
                 card.addView(
                     channelLogoView(brand.second, brand.first, dp(100), dp(52)),
                     LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(52))
@@ -1937,6 +1944,57 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
             }
         }
         dialog.show()
+    }
+
+    /**
+     * Design B: photo-backed brand tiles. Photos load off the UI thread; if a photo
+     * cannot be reached, the card keeps its existing dark gradient-style background.
+     */
+    private fun applyBrandPhotoBackground(view: View, brandName: String) {
+        val photoUrl = when {
+            brandName.contains("bein", ignoreCase = true) ->
+                "https://images.unsplash.com/photo-1522778119026-d647f0596c20?auto=format&fit=crop&w=900&q=80"
+            brandName.contains("ثمانية") ->
+                "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?auto=format&fit=crop&w=900&q=80"
+            brandName.contains("STARZPLAY", ignoreCase = true) ->
+                "https://images.unsplash.com/photo-1517466787929-bc90951d0974?auto=format&fit=crop&w=900&q=80"
+            else -> return
+        }
+
+        brandImageExecutor.execute {
+            var connection: HttpURLConnection? = null
+            try {
+                connection = (URL(photoUrl).openConnection() as HttpURLConnection).apply {
+                    connectTimeout = 4500
+                    readTimeout = 6000
+                    requestMethod = "GET"
+                    doInput = true
+                    setRequestProperty("User-Agent", "HANI-TV/1.0 Android")
+                }
+                connection.connect()
+                val bitmap = connection.inputStream.use { BitmapFactory.decodeStream(it) }
+                    ?: return@execute
+                runOnUiThread {
+                    if (isFinishing || isDestroyed) return@runOnUiThread
+                    val photo = BitmapDrawable(resources, bitmap).apply {
+                        gravity = Gravity.FILL
+                    }
+                    val overlay = GradientDrawable(
+                        GradientDrawable.Orientation.TOP_BOTTOM,
+                        intArrayOf(Color.argb(105, 5, 7, 16), Color.argb(205, 5, 7, 16))
+                    ).apply {
+                        cornerRadius = dp(14).toFloat()
+                        setStroke(dp(1), Color.rgb(43, 58, 88))
+                    }
+                    view.background = LayerDrawable(arrayOf(photo, overlay))
+                    view.clipToOutline = true
+                }
+            } catch (_: Exception) {
+                // Keep the existing local background if the image is unavailable.
+            } finally {
+                connection?.disconnect()
+            }
+        }
     }
 
     private fun channelLogoView(
