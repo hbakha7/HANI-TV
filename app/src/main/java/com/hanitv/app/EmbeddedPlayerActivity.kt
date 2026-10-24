@@ -1708,7 +1708,7 @@ if (playerView == null) {
     } catch (_: Exception) {
         ""
     }
-    if (isHlsStreamUrl(ch.url) || normalizedPath.endsWith("/index.html") || normalizedPath == "index.html") {
+    if (isHlsStreamUrl(ch.url) || normalizedPath.endsWith(".css") || normalizedPath.endsWith("/index.html") || normalizedPath == "index.html") {
         itemBuilder.setMimeType(MimeTypes.APPLICATION_M3U8)
     }
 
