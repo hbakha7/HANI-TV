@@ -25,6 +25,7 @@ import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.ui.PlayerView
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -1228,8 +1229,19 @@ private fun getPlaybackHeaders(refererOverride: String? = null): Map<String, Str
 
 
 
-private fun createPlaybackPlayer(refererOverride: String? = null): ExoPlayer {
+private fun createPlaybackPlayer(
+    refererOverride: String? = null,
+    streamUrl: String? = null
+): ExoPlayer {
     val headers = getPlaybackHeaders(refererOverride).toMutableMap()
+    // Increase buffering only for the Starzplay-origin stream being troubleshot.
+    // All other providers retain Media3's default buffering behavior.
+    val isStarzplayStream = try {
+        android.net.Uri.parse(streamUrl.orEmpty()).host.orEmpty()
+            .lowercase(java.util.Locale.ROOT).endsWith("starzplayarabia.com")
+    } catch (_: Exception) {
+        false
+    }
 
     val userAgent = headers["User-Agent"]
         ?.takeIf { it.isNotBlank() }
@@ -1250,19 +1262,29 @@ if (referrer.isNotBlank()) {
     val httpFactory = DefaultHttpDataSource.Factory()
         .setDefaultRequestProperties(headers)
         .setAllowCrossProtocolRedirects(true)
-        .setConnectTimeoutMs(6000)
-        .setReadTimeoutMs(12000)
+        .setConnectTimeoutMs(if (isStarzplayStream) 8000 else 6000)
+        .setReadTimeoutMs(if (isStarzplayStream) 20000 else 12000)
 
     if (userAgent != null) {
         httpFactory.setUserAgent(userAgent)
     }
 
-    return ExoPlayer.Builder(this)
+    val playerBuilder = ExoPlayer.Builder(this)
         .setMediaSourceFactory(
             DefaultMediaSourceFactory(this)
                 .setDataSourceFactory(httpFactory)
         )
-        .build()
+
+    if (isStarzplayStream) {
+        // Keep a larger segment reserve to reduce rebuffering on this source only.
+        playerBuilder.setLoadControl(
+            DefaultLoadControl.Builder()
+                .setBufferDurationsMs(15000, 60000, 2500, 5000)
+                .build()
+        )
+    }
+
+    return playerBuilder.build()
         .also { exo ->
             exo.addListener(object : Player.Listener {
                 override fun onPlayerError(
@@ -1317,7 +1339,8 @@ if (referrer.isNotBlank()) {
                             }
                         }
                         serverStartupTimeout = timeout
-                        serverFailoverHandler.postDelayed(timeout, 8000L)
+                        val failoverWaitMs = if (isStarzplayStream) 18000L else 8000L
+                        serverFailoverHandler.postDelayed(timeout, failoverWaitMs)
                     }
                 }
             })
@@ -1686,7 +1709,7 @@ hlsFallbackAttemptedUrl = ""
 // إنشاء مشغّل جديد لضمان تطبيق رؤوس الطلبات الحالية
 playerView?.player = null
 player?.release()
-player = createPlaybackPlayer(ch.referer)
+player = createPlaybackPlayer(ch.referer, ch.url)
 
 if (playerView == null) {  
         showLibrary()  
