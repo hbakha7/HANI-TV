@@ -131,6 +131,16 @@ class MainActivity : Activity() {
             "beIN SPORTS 10" to "B10",
             "beIN SPORTS NEWS" to "BN"
         ),
+        "ثمانية" to listOf(
+            "ثمانية 1" to "T1",
+            "ثمانية 2" to "T2",
+            "ثمانية 3" to "T3"
+        ),
+        "STARZPLAY" to listOf(
+            "STARZPLAY 1" to "S1",
+            "STARZPLAY 2" to "S2",
+            "STARZPLAY 3" to "S3"
+        ),
         "القنوات العربية" to listOf(
             "قناة عربية 1" to "AR",
             "قناة عربية 2" to "A2",
@@ -406,18 +416,10 @@ class MainActivity : Activity() {
                 }
             }
 
-            brandCard.addView(TextView(this).apply {
-                text = brand.first
-                textSize = when (brand.second) {
-                    "beIN SPORTS" -> 19f
-                    "ثمانية" -> 19f
-                    else -> 14f
-                }
-                gravity = Gravity.CENTER
-                setTextColor(brand.third)
-                setTypeface(null, Typeface.BOLD)
-                includeFontPadding = false
-            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44)))
+            brandCard.addView(
+                channelLogoView(brand.second, brand.first, dp(100), dp(44)),
+                LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44))
+            )
 
             brandCard.addView(TextView(this).apply {
                 text = brand.second
@@ -663,18 +665,10 @@ class MainActivity : Activity() {
                         }
                     }
                 }
-                card.addView(TextView(this).apply {
-                    text = brand.first
-                    textSize = when (brand.second) {
-                        "beIN SPORTS" -> 18f
-                        "ثمانية" -> 18f
-                        else -> 13f
-                    }
-                    gravity = Gravity.CENTER
-                    setTextColor(brand.third)
-                    setTypeface(null, Typeface.BOLD)
-                    includeFontPadding = false
-                }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(52)))
+                card.addView(
+                    channelLogoView(brand.second, brand.first, dp(100), dp(52)),
+                    LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(52))
+                )
                 card.addView(TextView(this).apply {
                     text = brand.second
                     textSize = 10f
@@ -697,6 +691,7 @@ class MainActivity : Activity() {
     }
 
     private fun showChannels(category: String) {
+        ensureBuiltInBrandChannels()
         showingServerManager = false
         content.removeAllViews()
         addText(category, 23f, white, true)
@@ -713,7 +708,7 @@ class MainActivity : Activity() {
             }
         val channels = (predefinedChannels + configuredChannels)
             .distinctBy { it.first }
-            .filter { (name, _) -> (channelCategories[name] ?: defaultCategoryFor(name)) == category }
+            .filter { (name, _) -> (builtInBrandCategoryFor(name) ?: channelCategories[name] ?: defaultCategoryFor(name)) == category }
 
         val grid = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -1829,8 +1824,37 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
         return (remote + defaults).distinct()
     }
 
+    private fun builtInBrandCategoryFor(channelName: String): String? = when (channelName) {
+        "ثمانية 1", "ثمانية 2", "ثمانية 3" -> "ثمانية"
+        "STARZPLAY 1", "STARZPLAY 2", "STARZPLAY 3" -> "STARZPLAY"
+        else -> null
+    }
+
+    private fun ensureBuiltInBrandChannels() {
+        val builtIns = linkedMapOf(
+            "ثمانية" to listOf(
+                "ثمانية 1" to "T1",
+                "ثمانية 2" to "T2",
+                "ثمانية 3" to "T3"
+            ),
+            "STARZPLAY" to listOf(
+                "STARZPLAY 1" to "S1",
+                "STARZPLAY 2" to "S2",
+                "STARZPLAY 3" to "S3"
+            )
+        )
+        builtIns.forEach { (category, defaults) ->
+            val merged = channelGroups[category].orEmpty().toMutableList()
+            defaults.forEach { item ->
+                if (merged.none { existing -> existing.first == item.first }) merged.add(item)
+            }
+            channelGroups[category] = merged
+        }
+    }
+
     private fun defaultCategoryFor(channelName: String): String =
-        channelGroups.entries.firstOrNull { entry -> entry.value.any { it.first == channelName } }?.key
+        builtInBrandCategoryFor(channelName)
+            ?: channelGroups.entries.firstOrNull { entry -> entry.value.any { it.first == channelName } }?.key
             ?: "القنوات العربية"
 
     private fun showChannelImageManager() {
@@ -1961,18 +1985,41 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
                 return logo
             }
 
-            imageView.setImageDrawable(null)
-            imageView.setBackground(
-                GradientDrawable().apply {
-                    setColor(Color.rgb(25, 25, 30))
-                    cornerRadius = dp(8).toFloat()
-                    setStroke(dp(1), Color.rgb(65, 65, 75))
-                }
-            )
-            imageView.setOnClickListener {
-                Toast.makeText(this, channelName, Toast.LENGTH_SHORT).show()
+            // Built-in wordmark fallbacks keep every channel card branded even before
+            // an administrator supplies an official image URL from the image manager.
+            val logoText = when {
+                channelName.contains("ثمانية", ignoreCase = true) -> "ثمانية"
+                channelName.contains("STARZPLAY", ignoreCase = true) -> "STARZPLAY"
+                channelName.contains("bein", ignoreCase = true) -> "beIN\nSPORTS"
+                else -> fallback.ifBlank { channelName.take(3) }
             }
-            return imageView
+            val logoColor = when {
+                channelName.contains("ثمانية", ignoreCase = true) -> Color.WHITE
+                channelName.contains("STARZPLAY", ignoreCase = true) -> Color.rgb(90, 205, 225)
+                channelName.contains("bein", ignoreCase = true) -> Color.rgb(171, 105, 235)
+                else -> Color.rgb(177, 145, 255)
+            }
+            val logo = TextView(this).apply {
+                text = logoText
+                gravity = Gravity.CENTER
+                setTextColor(logoColor)
+                textSize = when {
+                    channelName.contains("STARZPLAY", ignoreCase = true) -> 11f
+                    channelName.contains("ثمانية", ignoreCase = true) -> 16f
+                    channelName.contains("bein", ignoreCase = true) -> 15f
+                    else -> 18f
+                }
+                setTypeface(null, Typeface.BOLD)
+                includeFontPadding = false
+                setPadding(dp(3), dp(3), dp(3), dp(3))
+                background = GradientDrawable().apply {
+                    setColor(Color.rgb(25, 24, 32))
+                    cornerRadius = dp(8).toFloat()
+                    setStroke(dp(1), Color.rgb(65, 65, 82))
+                }
+                contentDescription = "$channelName logo"
+            }
+            return logo
         }
 
         networkExecutor.execute {
@@ -2376,6 +2423,7 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
                                     }
                                 channelGroups.clear()
                                 grouped.forEach { (category, channels) -> channelGroups[category] = channels }
+                                ensureBuiltInBrandChannels()
                             }
                         }
                         // Keep the last local list if the API returns no sources; otherwise
