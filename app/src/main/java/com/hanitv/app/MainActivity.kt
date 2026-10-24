@@ -117,7 +117,9 @@ class MainActivity : Activity() {
         val licenseUrl: String = "",
         val scheme: String = "",
         val drmScheme: String = "",
-        val playerType: String = "Exo Player"
+        val playerType: String = "Exo Player",
+        val keyId: String = "",
+        val key: String = ""
     )
 
     private val channelGroups = linkedMapOf(
@@ -2264,7 +2266,8 @@ private fun isDashStreamUrl(url: String): Boolean {
         )
         val licenseUrlInput = field("License URL (اختياري)", existing?.licenseUrl ?: "")
         val schemeInput = field("Scheme (مثال: widevine / clearkey)", existing?.scheme ?: "")
-        val drmSchemeInput = field("DRM Scheme / UUID (اختياري)", existing?.drmScheme ?: "")
+        val keyIdInput = field("Key ID (اختياري)", existing?.keyId ?: "")
+        val keyInput = field("Key (اختياري)", existing?.key ?: "")
         val playerTypeInput = field("نوع المشغّل: Exo Player أو Web Player", existing?.playerType ?: "Exo Player")
         val formScroll = ScrollView(this).apply {
             isFillViewport = true
@@ -2289,7 +2292,8 @@ private fun isDashStreamUrl(url: String): Boolean {
                         val extraHeaders = extraHeadersInput.text.toString().trim()
                         val licenseUrl = licenseUrlInput.text.toString().trim()
                         val scheme = schemeInput.text.toString().trim()
-                        val drmScheme = drmSchemeInput.text.toString().trim()
+                        val keyId = keyIdInput.text.toString().trim()
+                        val key = keyInput.text.toString().trim()
                         val playerType = playerTypeInput.text.toString().trim().ifBlank { "Exo Player" }
                         if (channel.isBlank() || server.isBlank() || url.isBlank() ||
                             !(url.startsWith("http://") || url.startsWith("https://"))) {
@@ -2308,8 +2312,10 @@ private fun isDashStreamUrl(url: String): Boolean {
                             extraHeaders = extraHeaders,
                             licenseUrl = licenseUrl,
                             scheme = scheme,
-                            drmScheme = drmScheme,
-                            playerType = playerType
+                            drmScheme = existing?.drmScheme ?: "",
+                            playerType = playerType,
+                            keyId = keyId,
+                            key = key
                         )
                         if (editIndex >= 0 && editIndex < sources.size) sources[editIndex] = item else sources.add(item)
                         saveSources()
@@ -2345,7 +2351,9 @@ private fun isDashStreamUrl(url: String): Boolean {
                     item.optString("licenseUrl", ""),
                     item.optString("scheme", ""),
                     item.optString("drmScheme", ""),
-                    item.optString("playerType", "Exo Player")
+                    item.optString("playerType", "Exo Player"),
+                    item.optString("keyId", ""),
+                    item.optString("key", "")
                 ))
             }
         } catch (_: Exception) {
@@ -2370,6 +2378,8 @@ private fun isDashStreamUrl(url: String): Boolean {
                 put("scheme", source.scheme)
                 put("drmScheme", source.drmScheme)
                 put("playerType", source.playerType)
+                put("keyId", source.keyId)
+                put("key", source.key)
             })
         }
         prefs.edit().putString("sources_json", array.toString()).apply()
@@ -2509,7 +2519,9 @@ private fun isDashStreamUrl(url: String): Boolean {
                             item.optString("licenseUrl", ""),
                             item.optString("scheme", ""),
                             item.optString("drmScheme", ""),
-                            item.optString("playerType", "Exo Player")
+                            item.optString("playerType", "Exo Player"),
+                            item.optString("keyId", ""),
+                            item.optString("key", "")
                         ))
                     }
                     // If a channel has sources but no separate channel_settings row yet, still show it.
@@ -2703,6 +2715,8 @@ private fun isDashStreamUrl(url: String): Boolean {
                 put("scheme", source.scheme)
                 put("drmScheme", source.drmScheme)
                 put("playerType", source.playerType)
+                put("keyId", source.keyId)
+                put("key", source.key)
             })
         }
         val payload = JSONObject().put("sources", list).toString()
