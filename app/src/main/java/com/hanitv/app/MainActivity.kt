@@ -1618,10 +1618,17 @@ private fun isDashStreamUrl(url: String): Boolean {
             ""
         }
         when {
-            isHlsStreamUrl(source.url) || normalizedPath.endsWith("/index.html") || normalizedPath == "index.html" ->
-                mediaItemBuilder.setMimeType(androidx.media3.common.MimeTypes.APPLICATION_M3U8)
-            normalizedPath.endsWith(".mpd") ->
-                mediaItemBuilder.setMimeType("application/dash+xml")
+    isDashStreamUrl(source.url) ->
+        mediaItemBuilder.setMimeType(
+            androidx.media3.common.MimeTypes.APPLICATION_MPD
+        )
+
+    isHlsStreamUrl(source.url) ||
+        normalizedPath.endsWith("/index.html") ||
+        normalizedPath == "index.html" ->
+        mediaItemBuilder.setMimeType(
+            androidx.media3.common.MimeTypes.APPLICATION_M3U8
+        )
         }
         player.stop()
         player.clearMediaItems()
