@@ -19,6 +19,7 @@ import android.widget.TextView
 import android.widget.Toast
 import android.widget.EditText
 import android.widget.Button
+import android.widget.CheckBox
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.ProgressBar
@@ -66,6 +67,10 @@ class MainActivity : Activity() {
     private val apiUrl = "https://103service.store/api.php"
     private val networkExecutor = Executors.newSingleThreadExecutor()
     private var adminApiKey: String? = null
+    private var updateBannerEnabled = false
+    private var updateBannerText = "يتوفر إصدار جديد من HANI TV — اضغط للتحميل"
+    private var updateVersion = ""
+    private var updateApkUrl = ""
     private var adminActionPending = false
     private var showingServerManager = false
     private var embeddedPlayer: ExoPlayer? = null
@@ -242,6 +247,46 @@ class MainActivity : Activity() {
         showingServerManager = false
         content.removeAllViews()
         content.setPadding(dp(14), dp(16), dp(14), dp(28))
+
+        // Remote update ticker: hidden by default and controlled from the admin panel.
+        if (updateBannerEnabled) {
+            val tickerText = buildString {
+                append("  📢  ")
+                append(updateBannerText.ifBlank { "يتوفر تحديث جديد من HANI TV" })
+                if (updateVersion.isNotBlank()) append("   •   الإصدار ").append(updateVersion)
+                if (updateApkUrl.isNotBlank()) append("   •   اضغط للتحميل  ")
+            }
+            val updateTicker = TextView(this).apply {
+                text = tickerText
+                textSize = 13f
+                setTextColor(Color.WHITE)
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(12), dp(8), dp(12), dp(8))
+                setSingleLine(true)
+                ellipsize = android.text.TextUtils.TruncateAt.MARQUEE
+                marqueeRepeatLimit = -1
+                isSelected = true
+                background = GradientDrawable(
+                    GradientDrawable.Orientation.LEFT_RIGHT,
+                    intArrayOf(Color.rgb(55, 18, 100), Color.rgb(17, 28, 62))
+                ).apply {
+                    cornerRadius = dp(10).toFloat()
+                    setStroke(dp(1), Color.rgb(112, 70, 220))
+                }
+                if (updateApkUrl.isNotBlank()) {
+                    setOnClickListener {
+                        try {
+                            startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(updateApkUrl)))
+                        } catch (_: Exception) {
+                            Toast.makeText(this@MainActivity, "تعذر فتح رابط التحميل.", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }
+            }
+            content.addView(updateTicker, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(42)
+            ).apply { bottomMargin = dp(14) })
+        }
 
         val purple = Color.rgb(123, 65, 255)
         val deepPurple = Color.rgb(66, 18, 133)
@@ -1532,6 +1577,10 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
         actions.addView(manageImages, LinearLayout.LayoutParams(0, -2, 1f).apply { setMargins(dp(4), 0, 0, 0) })
         content.addView(actions, fullWidthParams().apply { bottomMargin = dp(10) })
 
+        val updateBannerAdmin = makeButton("إدارة شريط التحديثات والإصدار")
+        updateBannerAdmin.setOnClickListener { requireAdmin { showUpdateBannerManager() } }
+        content.addView(updateBannerAdmin, fullWidthParams().apply { bottomMargin = dp(10) })
+
         val categoryRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         val categoryScroll = HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false; addView(categoryRow) }
         content.addView(categoryScroll, fullWidthParams().apply { bottomMargin = dp(10) })
@@ -2143,6 +2192,11 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
                 if (code !in 200..299) throw IllegalStateException("HTTP $code: $response")
                 val json = JSONObject(response)
                 if (json.optBoolean("ok")) {
+                    val remoteSettings = json.optJSONObject("settings") ?: JSONObject()
+                    val remoteUpdateBannerEnabled = remoteSettings.optString("updateBannerEnabled", "0") == "1"
+                    val remoteUpdateBannerText = remoteSettings.optString("updateBannerText", "يتوفر إصدار جديد من HANI TV — اضغط للتحميل")
+                    val remoteUpdateVersion = remoteSettings.optString("updateVersion", "")
+                    val remoteUpdateApkUrl = remoteSettings.optString("updateApkUrl", "")
                     val array = json.optJSONArray("sources") ?: JSONArray()
                     val downloaded = mutableListOf<StreamSource>()
                     val channelArray = json.optJSONArray("channels") ?: JSONArray()
@@ -2194,6 +2248,10 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
                     }
 
                     runOnUiThread {
+                        updateBannerEnabled = remoteUpdateBannerEnabled
+                        updateBannerText = remoteUpdateBannerText
+                        updateVersion = remoteUpdateVersion
+                        updateApkUrl = remoteUpdateApkUrl
                         if (channelArray.length() > 0 || remoteChannelNames.isNotEmpty()) {
                             channelImageUrls.clear()
                             channelImageUrls.putAll(downloadedImages)
@@ -2241,6 +2299,104 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
                         Toast.makeText(this, "تعذر تحميل القنوات حاليًا. تحقق من اتصالك بالإنترنت وحاول مجددًا.", Toast.LENGTH_LONG).show()
                     }
                     onComplete?.invoke()
+                }
+            }
+        }
+    }
+
+    /** Admin-only editor for the shared update ticker and APK download link. */
+    private fun showUpdateBannerManager() {
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(8), dp(20), 0)
+        }
+        val enabled = CheckBox(this).apply {
+            text = "إظهار شريط التحديثات لجميع المستخدمين"
+            setTextColor(white)
+            isChecked = updateBannerEnabled
+        }
+        fun field(hintText: String, value: String, singleLine: Boolean = true): EditText = EditText(this).apply {
+            hint = hintText
+            setText(value)
+            setTextColor(white)
+            setHintTextColor(gray)
+            setSingleLine(singleLine)
+            if (!singleLine) minLines = 2
+        }
+        val messageInput = field("نص الإعلان المتحرك", updateBannerText, false)
+        val versionInput = field("رقم الإصدار مثل 2.1.0", updateVersion)
+        val urlInput = field("رابط تنزيل APK يبدأ بـ https://", updateApkUrl)
+        box.addView(enabled)
+        box.addView(messageInput, fullWidthParams())
+        box.addView(versionInput, fullWidthParams())
+        box.addView(urlInput, fullWidthParams())
+        AlertDialog.Builder(this)
+            .setTitle("إدارة شريط التحديثات")
+            .setMessage("التغييرات تُحفظ على Hostinger وتظهر للمستخدمين عند مزامنة التطبيق.")
+            .setView(box)
+            .setPositiveButton("حفظ") { _, _ ->
+                val message = messageInput.text.toString().trim()
+                val version = versionInput.text.toString().trim()
+                val apkUrl = urlInput.text.toString().trim()
+                if (apkUrl.isNotBlank() && !apkUrl.startsWith("https://", true) && !apkUrl.startsWith("http://", true)) {
+                    Toast.makeText(this, "رابط التحميل يجب أن يبدأ بـ https:// أو http://", Toast.LENGTH_LONG).show()
+                    return@setPositiveButton
+                }
+                saveUpdateBannerSettingsToCloud(enabled.isChecked, message, version, apkUrl)
+            }
+            .setNegativeButton("إلغاء", null)
+            .show()
+    }
+
+    private fun saveUpdateBannerSettingsToCloud(
+        enabled: Boolean,
+        message: String,
+        version: String,
+        apkUrl: String
+    ) {
+        val key = adminApiKey
+        if (key.isNullOrBlank()) {
+            Toast.makeText(this, "سجّل دخول الإدارة أولاً.", Toast.LENGTH_LONG).show()
+            return
+        }
+        val settings = JSONObject().apply {
+            put("updateBannerEnabled", if (enabled) "1" else "0")
+            put("updateBannerText", message)
+            put("updateVersion", version)
+            put("updateApkUrl", apkUrl)
+        }
+        val payload = JSONObject().put("settings", settings).toString()
+        networkExecutor.execute {
+            var success = false
+            try {
+                val connection = (URL(apiUrl).openConnection() as HttpURLConnection).apply {
+                    requestMethod = "POST"
+                    connectTimeout = 10000
+                    readTimeout = 15000
+                    doOutput = true
+                    setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                    setRequestProperty("Accept", "application/json")
+                    setRequestProperty("X-ADMIN-KEY", key)
+                }
+                OutputStreamWriter(connection.outputStream, Charsets.UTF_8).use { it.write(payload) }
+                val code = connection.responseCode
+                val stream = if (code in 200..299) connection.inputStream else connection.errorStream
+                val response = BufferedReader(InputStreamReader(stream, Charsets.UTF_8)).use { it.readText() }
+                connection.disconnect()
+                success = code in 200..299 && JSONObject(response).optBoolean("ok")
+            } catch (_: Exception) {
+                success = false
+            }
+            runOnUiThread {
+                if (success) {
+                    updateBannerEnabled = enabled
+                    updateBannerText = message
+                    updateVersion = version
+                    updateApkUrl = apkUrl
+                    Toast.makeText(this, "تم حفظ إعدادات شريط التحديثات.", Toast.LENGTH_SHORT).show()
+                    showHome()
+                } else {
+                    Toast.makeText(this, "تعذر حفظ الإعدادات. تحقق من الاتصال ومفتاح الإدارة.", Toast.LENGTH_LONG).show()
                 }
             }
         }
