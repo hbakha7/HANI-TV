@@ -407,8 +407,8 @@ class MainActivity : Activity() {
         val brandItems = listOf(
             Triple("beIN\nSPORTS", "beIN SPORTS", Color.rgb(177, 105, 235)),
             Triple("ثمانية", "ثمانية", Color.rgb(245, 245, 250)),
-            Triple("STARZPLAY", "STARZPLAY", Color.rgb(90, 205, 225)),
-            Triple("ALWAN", "ALWAN", Color.rgb(88, 220, 150))
+            Triple("ALWAN", "ALWAN", Color.rgb(88, 220, 150)),
+            Triple("STARZPLAY\nSPORTS ③", "STARZPLAY", Color.rgb(90, 205, 225))
         )
 
         brandItems.forEach { brand ->
@@ -649,8 +649,8 @@ class MainActivity : Activity() {
         val brands = listOf(
             Triple("beIN\nSPORTS", "beIN SPORTS", Color.rgb(177, 105, 235)),
             Triple("ثمانية", "ثمانية", Color.rgb(245, 245, 250)),
-            Triple("STARZPLAY", "STARZPLAY", Color.rgb(90, 205, 225)),
-            Triple("ALWAN", "ALWAN", Color.rgb(88, 220, 150))
+            Triple("ALWAN", "ALWAN", Color.rgb(88, 220, 150)),
+            Triple("STARZPLAY\nSPORTS ③", "STARZPLAY", Color.rgb(90, 205, 225))
         )
         val grid = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -1977,56 +1977,34 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
     }
 
     /**
-     * Design B: photo-backed brand tiles. Photos load off the UI thread; if a photo
-     * cannot be reached, the card keeps its existing dark gradient-style background.
+     * Premium glass-style brand cards matching the approved sports-channel reference.
+     * Uses local gradients and borders, so logos/cards appear immediately without
+     * downloading stadium photos or exposing network errors in the UI.
      */
     private fun applyBrandPhotoBackground(view: View, brandName: String) {
-        val photoUrl = when {
-            brandName.contains("bein", ignoreCase = true) ->
-                "https://images.unsplash.com/photo-1522778119026-d647f0596c20?auto=format&fit=crop&w=900&q=80"
-            brandName.contains("ثمانية") ->
-                "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?auto=format&fit=crop&w=900&q=80"
-            brandName.contains("STARZPLAY", ignoreCase = true) ->
-                "https://images.unsplash.com/photo-1517466787929-bc90951d0974?auto=format&fit=crop&w=900&q=80"
-            brandName.contains("ALWAN", ignoreCase = true) ->
-                "https://images.unsplash.com/photo-1522778119026-d647f0596c20?auto=format&fit=crop&w=900&q=80"
-            else -> return
+        val glow = when {
+            brandName.contains("bein", ignoreCase = true) -> Color.rgb(185, 58, 255)
+            brandName.contains("ثمانية") -> Color.rgb(54, 238, 177)
+            brandName.contains("ALWAN", ignoreCase = true) -> Color.rgb(55, 190, 255)
+            brandName.contains("STARZPLAY", ignoreCase = true) -> Color.rgb(40, 215, 255)
+            else -> Color.rgb(100, 130, 255)
         }
-
-        brandImageExecutor.execute {
-            var connection: HttpURLConnection? = null
-            try {
-                connection = (URL(photoUrl).openConnection() as HttpURLConnection).apply {
-                    connectTimeout = 4500
-                    readTimeout = 6000
-                    requestMethod = "GET"
-                    doInput = true
-                    setRequestProperty("User-Agent", "HANI-TV/1.0 Android")
-                }
-                connection.connect()
-                val bitmap = connection.inputStream.use { BitmapFactory.decodeStream(it) }
-                    ?: return@execute
-                runOnUiThread {
-                    if (isFinishing || isDestroyed) return@runOnUiThread
-                    val photo = BitmapDrawable(resources, bitmap).apply {
-                        gravity = Gravity.FILL
-                    }
-                    val overlay = GradientDrawable(
-                        GradientDrawable.Orientation.TOP_BOTTOM,
-                        intArrayOf(Color.argb(75, 5, 7, 16), Color.argb(175, 5, 7, 16))
-                    ).apply {
-                        cornerRadius = dp(14).toFloat()
-                        setStroke(dp(1), Color.rgb(75, 83, 120))
-                    }
-                    view.background = LayerDrawable(arrayOf(photo, overlay))
-                    view.clipToOutline = true
-                }
-            } catch (_: Exception) {
-                // Keep the existing local background if the image is unavailable.
-            } finally {
-                connection?.disconnect()
-            }
+        val deep = when {
+            brandName.contains("bein", ignoreCase = true) -> Color.rgb(35, 4, 65)
+            brandName.contains("ثمانية") -> Color.rgb(0, 42, 30)
+            brandName.contains("ALWAN", ignoreCase = true) -> Color.rgb(0, 28, 48)
+            brandName.contains("STARZPLAY", ignoreCase = true) -> Color.rgb(0, 32, 52)
+            else -> Color.rgb(16, 20, 38)
         }
+        view.background = GradientDrawable(
+            GradientDrawable.Orientation.TL_BR,
+            intArrayOf(glow, deep, deep)
+        ).apply {
+            cornerRadius = dp(15).toFloat()
+            setStroke(dp(2), glow)
+        }
+        view.clipToOutline = true
+        view.elevation = dp(3).toFloat()
     }
 
     private fun channelLogoView(
@@ -2080,6 +2058,7 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
             // an administrator supplies an official image URL from the image manager.
             val logoText = when {
                 channelName.contains("ثمانية", ignoreCase = true) -> "ثمانية"
+                channelName.contains("STARZPLAY", ignoreCase = true) && plainBrandFallback -> "STARZPLAY\nSPORTS ③"
                 channelName.contains("STARZPLAY", ignoreCase = true) -> "STARZPLAY"
                 channelName.contains("ALWAN", ignoreCase = true) -> "ALWAN"
                 channelName.contains("bein", ignoreCase = true) -> "beIN\nSPORTS"
