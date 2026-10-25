@@ -447,7 +447,7 @@ class MainActivity : Activity() {
     brand.second,
     brand.first,
     dp(100),
-    if (brand.second == "ثمانية") dp(56) else dp(44),
+    if (brand.second == "ثمانية") dp(56) else dp(44)
     plainBrandFallback = true
 )
                 LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44))
