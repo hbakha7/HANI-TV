@@ -417,7 +417,12 @@ class MainActivity : Activity() {
             val brandCard = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER
-                setPadding(dp(5), dp(10), dp(5), dp(10))
+                setPadding(
+    dp(5),
+    if (brand.second == "ثمانية") dp(4) else dp(10),
+    dp(5),
+    if (brand.second == "ثمانية") dp(4) else dp(10)
+)
                 background = GradientDrawable().apply {
                     setColor(Color.rgb(22, 20, 31))
                     cornerRadius = dp(15).toFloat()
@@ -438,7 +443,13 @@ class MainActivity : Activity() {
             applyBrandPhotoBackground(brandCard, brand.second)
 
             brandCard.addView(
-                channelLogoView(brand.second, brand.first, dp(100), dp(44), plainBrandFallback = true),
+                channelLogoView(
+    brand.second,
+    brand.first,
+    dp(100),
+    if (brand.second == "ثمانية") dp(56) else dp(44),
+    plainBrandFallback = true
+)
                 LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44))
             )
 
