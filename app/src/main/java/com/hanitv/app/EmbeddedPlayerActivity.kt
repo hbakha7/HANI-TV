@@ -54,9 +54,9 @@ data class Channel(
 
 class EmbeddedPlayerActivity : AppCompatActivity() {
 
-private val bg = Color.rgb(7, 13, 24)  
-private val panel = Color.rgb(17, 29, 46)  
-private val accent = Color.rgb(25, 190, 165)  
+private val bg = Color.rgb(5, 11, 23)
+private val panel = Color.rgb(12, 27, 48)
+private val accent = Color.rgb(48, 198, 255)  
 private val white = Color.WHITE  
 private val muted = Color.rgb(177, 190, 207)  
 
@@ -249,10 +249,10 @@ private fun renderSavedHomeLinks(content: FrameLayout, empty: TextView) {
             setPadding(dp(12), dp(9), dp(12), dp(9))
             background = GradientDrawable(
                 GradientDrawable.Orientation.TL_BR,
-                intArrayOf(Color.rgb(24, 39, 59), Color.rgb(13, 24, 40))
+                intArrayOf(Color.rgb(23, 36, 67), Color.rgb(7, 19, 37))
             ).apply {
-                cornerRadius = dp(14).toFloat()
-                setStroke(dp(1), Color.rgb(42, 63, 88))
+                cornerRadius = dp(16).toFloat()
+                setStroke(dp(1), Color.rgb(48, 126, 190))
             }
             isClickable = true
             isFocusable = true
@@ -354,8 +354,8 @@ val header = LinearLayout(this).apply {
     setPadding(dp(12), dp(8), dp(12), dp(8))  
     background = GradientDrawable(
         GradientDrawable.Orientation.LEFT_RIGHT,
-        intArrayOf(Color.rgb(11, 29, 48), Color.rgb(16, 43, 64))
-    ).apply { setStroke(dp(1), Color.rgb(35, 67, 89)) }  
+        intArrayOf(Color.rgb(35, 17, 77), Color.rgb(8, 43, 76), Color.rgb(7, 17, 34))
+    ).apply { setStroke(dp(1), Color.rgb(52, 154, 226)) }  
 }  
 
 val menu = TextView(this).apply {  
@@ -1409,12 +1409,12 @@ private fun updateServerButtonSelection() {
         (bar.getChildAt(buttonIndex) as? TextView)?.background = GradientDrawable().apply {
             shape = GradientDrawable.OVAL
             setColor(
-                if (buttonIndex == incomingSelectedServer) Color.rgb(25, 190, 165)
-                else Color.argb(135, 35, 35, 35)
+                if (buttonIndex == incomingSelectedServer) Color.rgb(116, 54, 255)
+                else Color.argb(155, 8, 20, 38)
             )
             setStroke(
                 dp(1),
-                if (buttonIndex == incomingSelectedServer) Color.WHITE else Color.LTGRAY
+                if (buttonIndex == incomingSelectedServer) Color.rgb(70, 207, 255) else Color.rgb(104, 130, 164)
             )
         }
     }
@@ -1856,8 +1856,8 @@ private fun openFullscreen() {
         setShadowLayer(3f, 1f, 1f, Color.BLACK)
         background = GradientDrawable().apply {
             shape = GradientDrawable.OVAL
-            setColor(Color.argb(150, 10, 23, 38))
-            setStroke(dp(1), Color.argb(170, 75, 111, 139))
+            setColor(Color.argb(175, 8, 18, 39))
+            setStroke(dp(1), Color.argb(210, 80, 164, 235))
         }
         isClickable = true
         isFocusable = true
@@ -1899,8 +1899,8 @@ private fun openFullscreen() {
                 setTextColor(Color.WHITE)
                 background = GradientDrawable().apply {
                     shape = GradientDrawable.OVAL
-                    setColor(if (index == incomingSelectedServer) Color.rgb(25, 190, 165) else Color.argb(135, 35, 35, 35))
-                    setStroke(dp(1), if (index == incomingSelectedServer) Color.WHITE else Color.LTGRAY)
+                    setColor(if (index == incomingSelectedServer) Color.rgb(116, 54, 255) else Color.argb(155, 8, 20, 38))
+                    setStroke(dp(1), if (index == incomingSelectedServer) Color.rgb(70, 207, 255) else Color.rgb(104, 130, 164))
                 }
                 setOnClickListener {
                     if (index == incomingSelectedServer) return@setOnClickListener
