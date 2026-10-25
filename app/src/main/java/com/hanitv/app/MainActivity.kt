@@ -55,11 +55,11 @@ import org.json.JSONObject
 
 class MainActivity : Activity() {
 
-    private val bg = Color.rgb(12, 12, 15)
-    private val panel = Color.rgb(25, 25, 30)
+    private val bg = Color.rgb(7, 12, 22)
+    private val panel = Color.rgb(16, 26, 42)
     private val red = Color.rgb(210, 20, 35)
     private val white = Color.WHITE
-    private val gray = Color.rgb(175, 175, 185)
+    private val gray = Color.rgb(157, 174, 196)
 
     private lateinit var content: LinearLayout
     private val prefs by lazy { getSharedPreferences("hani_tv_sources", MODE_PRIVATE) }
@@ -196,7 +196,7 @@ class MainActivity : Activity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(18), dp(15), dp(18), dp(15))
-            setBackgroundColor(Color.rgb(18, 18, 22))
+            background = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, intArrayOf(Color.rgb(10, 20, 35), Color.rgb(14, 28, 47))).apply { setStroke(dp(1), Color.rgb(35, 55, 78)) }
         }
 
         header.addView(TextView(this).apply {
@@ -345,7 +345,7 @@ class MainActivity : Activity() {
             setPadding(dp(18), dp(20), dp(18), dp(20))
             background = GradientDrawable(
                 GradientDrawable.Orientation.TL_BR,
-                intArrayOf(deepPurple, Color.rgb(23, 34, 82), Color.rgb(7, 16, 34))
+                intArrayOf(Color.rgb(39, 30, 92), Color.rgb(18, 42, 72), Color.rgb(7, 16, 30))
             ).apply {
                 cornerRadius = dp(20).toFloat()
                 setStroke(dp(1), Color.rgb(112, 70, 220))
@@ -472,7 +472,7 @@ class MainActivity : Activity() {
                 gravity = Gravity.CENTER_VERTICAL
                 setPadding(dp(14), dp(13), dp(14), dp(13))
                 background = GradientDrawable().apply {
-                    setColor(navy)
+                    colors = intArrayOf(Color.rgb(20, 34, 54), Color.rgb(12, 23, 40))
                     cornerRadius = dp(15).toFloat()
                     setStroke(dp(1), cardStroke)
                 }
@@ -779,8 +779,14 @@ class MainActivity : Activity() {
         val card = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
-            setPadding(dp(8), dp(16), dp(8), dp(16))
-            setBackgroundColor(panel)
+            setPadding(dp(8), dp(13), dp(8), dp(13))
+            background = GradientDrawable(
+                GradientDrawable.Orientation.TL_BR,
+                intArrayOf(Color.rgb(22, 35, 55), Color.rgb(13, 23, 39))
+            ).apply {
+                cornerRadius = dp(16).toFloat()
+                setStroke(dp(1), Color.rgb(42, 61, 86))
+            }
             isClickable = true
             isFocusable = true
             setOnClickListener { openChannel(channel.first) }
@@ -793,10 +799,11 @@ class MainActivity : Activity() {
 
         card.addView(TextView(this).apply {
             text = displayChannelName(channel.first)
-            textSize = 14f
+            textSize = 13f
             gravity = Gravity.CENTER
-            setTextColor(white)
-            setPadding(0, dp(10), 0, 0)
+            setTextColor(Color.rgb(232, 239, 249))
+            maxLines = 2
+            setPadding(0, dp(8), 0, 0)
         })
 
         row.addView(
