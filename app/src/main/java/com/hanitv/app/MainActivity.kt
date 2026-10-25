@@ -361,6 +361,32 @@ class MainActivity : Activity() {
             elevation = dp(5).toFloat()
         }
 
+        // Real cinematic stadium photo behind the hero content (loads asynchronously).
+        // If the image host is unavailable, the existing neon gradient remains visible.
+        val heroPhoto = ImageView(this).apply {
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            alpha = 0.78f
+            contentDescription = "ملعب كرة قدم"
+        }
+        banner.addView(heroPhoto, FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
+        ))
+        loadPhotoInto(
+            heroPhoto,
+            "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?auto=format&fit=crop&w=1200&q=82"
+        )
+
+        // Dark tint keeps Arabic text readable over the photograph.
+        val heroShade = View(this).apply {
+            background = GradientDrawable(
+                GradientDrawable.Orientation.LEFT_RIGHT,
+                intArrayOf(Color.argb(35, 5, 10, 28), Color.argb(185, 5, 10, 28))
+            ).apply { cornerRadius = dp(26).toFloat() }
+        }
+        banner.addView(heroShade, FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
+        ))
+
         val heroGlow = TextView(this).apply {
             text = "⚽"
             textSize = 78f
@@ -547,6 +573,16 @@ class MainActivity : Activity() {
                     if (category == "القنوات الرياضية") showSportsSections() else showChannels(category)
                 }
             }
+
+            val categoryPhotoUrl = when (category) {
+                "القنوات الرياضية" -> "https://images.unsplash.com/photo-1522778119026-d647f0596c20?auto=format&fit=crop&w=900&q=78"
+                "القنوات العربية" -> "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?auto=format&fit=crop&w=900&q=78"
+                "القنوات الإخبارية" -> "https://images.unsplash.com/photo-1504711434969-e33886168f5c?auto=format&fit=crop&w=900&q=78"
+                "قنوات الأطفال" -> "https://images.unsplash.com/photo-1503454537195-1dcabb73ffb9?auto=format&fit=crop&w=900&q=78"
+                "قنوات الترفيه" -> "https://images.unsplash.com/photo-1440404653325-ab127d49abc1?auto=format&fit=crop&w=900&q=78"
+                else -> "https://images.unsplash.com/photo-1493711662062-fa541adb8151?auto=format&fit=crop&w=900&q=78"
+            }
+            loadPhotoBackground(categoryCard, categoryPhotoUrl, cardStroke)
 
             val iconText = when (category) {
                 "القنوات الرياضية" -> "⚽"
@@ -2119,6 +2155,64 @@ private fun isDashStreamUrl(url: String): Boolean {
         dialog.show()
     }
 
+    /** Loads a remote photograph into an ImageView without blocking the UI thread. */
+    private fun loadPhotoInto(imageView: ImageView, imageUrl: String) {
+        brandImageExecutor.execute {
+            var bitmap: android.graphics.Bitmap? = null
+            try {
+                val connection = (URL(imageUrl).openConnection() as HttpURLConnection).apply {
+                    connectTimeout = 5000
+                    readTimeout = 7000
+                    instanceFollowRedirects = true
+                }
+                try {
+                    connection.inputStream.use { stream -> bitmap = BitmapFactory.decodeStream(stream) }
+                } finally {
+                    connection.disconnect()
+                }
+            } catch (_: Exception) { }
+            val loaded = bitmap ?: return@execute
+            runOnUiThread {
+                if (!isFinishing && !isDestroyed) imageView.setImageBitmap(loaded)
+            }
+        }
+    }
+
+    /** Photo-backed category cards with a dark glass overlay; gradient remains if loading fails. */
+    private fun loadPhotoBackground(view: View, imageUrl: String, strokeColor: Int) {
+        brandImageExecutor.execute {
+            var bitmap: android.graphics.Bitmap? = null
+            try {
+                val connection = (URL(imageUrl).openConnection() as HttpURLConnection).apply {
+                    connectTimeout = 5000
+                    readTimeout = 7000
+                    instanceFollowRedirects = true
+                }
+                try {
+                    connection.inputStream.use { stream -> bitmap = BitmapFactory.decodeStream(stream) }
+                } finally {
+                    connection.disconnect()
+                }
+            } catch (_: Exception) { }
+            val loaded = bitmap ?: return@execute
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                val photo = BitmapDrawable(resources, loaded).apply {
+                    gravity = android.view.Gravity.FILL
+                }
+                val shade = GradientDrawable(
+                    GradientDrawable.Orientation.LEFT_RIGHT,
+                    intArrayOf(Color.argb(85, 5, 12, 30), Color.argb(205, 5, 12, 30))
+                ).apply {
+                    cornerRadius = dp(17).toFloat()
+                    setStroke(dp(1), strokeColor)
+                }
+                view.background = LayerDrawable(arrayOf(photo, shade))
+                view.clipToOutline = true
+            }
+        }
+    }
+
     /**
      * Premium glass-style brand cards matching the approved sports-channel reference.
      * Uses local gradients and borders, so logos/cards appear immediately without
@@ -2150,6 +2244,22 @@ private fun isDashStreamUrl(url: String): Boolean {
         view.elevation = dp(3).toFloat()
     }
 
+    private fun defaultBrandLogoUrl(channelName: String): String {
+        // PNG assets from Wikimedia Commons so Android BitmapFactory can decode them
+        // without adding SVG libraries. These are used only when no admin URL is set.
+        return when {
+            channelName.contains("bein", ignoreCase = true) || channelName == "القنوات الرياضية" ->
+                "https://thumb.wikimedia.org/wikipedia/commons/thumb/d/d4/BeIN_Sports_logo_%28horizontal_version%29.svg/330px-BeIN_Sports_logo_%28horizontal_version%29.svg.png"
+            channelName.contains("ثمانية", ignoreCase = true) ->
+                "https://thumb.wikimedia.org/wikipedia/commons/thumb/e/e9/Thmanyah_Logo.svg/500px-Thmanyah_Logo.svg.png"
+            channelName.contains("STARZPLAY", ignoreCase = true) ->
+                "https://upload.wikimedia.org/wikipedia/commons/6/6a/STARZPLAY_png.png"
+            // ALWAN is kept as the app's own section wordmark because the supplied
+            // project does not identify which specific ALWAN broadcaster logo is intended.
+            else -> ""
+        }
+    }
+
     private fun channelLogoView(
         channelName: String,
         fallback: String,
@@ -2157,14 +2267,22 @@ private fun isDashStreamUrl(url: String): Boolean {
         height: Int,
         plainBrandFallback: Boolean = false
     ): View {
-        val imageUrl = channelImageUrls[channelName].orEmpty().trim()
+        val configuredImageUrl = channelImageUrls[channelName].orEmpty().trim()
+        val useBuiltInLogo = configuredImageUrl.isBlank()
+        val imageUrl = configuredImageUrl.ifBlank { defaultBrandLogoUrl(channelName) }
 
-        // Use a lightweight ImageView and keep a readable fallback when no logo URL exists.
+        // Actual brand artwork is loaded into an ImageView. Built-in URLs mean the
+        // administrator does not need to configure logo links manually.
         val imageView = ImageView(this).apply {
             layoutParams = LinearLayout.LayoutParams(width, height)
             scaleType = ImageView.ScaleType.FIT_CENTER
-            contentDescription = channelName
+            contentDescription = "$channelName logo"
             setBackgroundColor(Color.TRANSPARENT)
+            // The published Thmanyah and STARZPLAY wordmarks are dark; render them
+            // white on HANI TV's dark glass cards. Do not tint administrator images.
+            if (useBuiltInLogo && (channelName.contains("ثمانية", true) || channelName.contains("STARZPLAY", true))) {
+                setColorFilter(Color.WHITE, android.graphics.PorterDuff.Mode.SRC_IN)
+            }
         }
 
         if (imageUrl.isBlank()) {
@@ -2244,13 +2362,14 @@ private fun isDashStreamUrl(url: String): Boolean {
             return logo
         }
 
-        networkExecutor.execute {
+        brandImageExecutor.execute {
             var bitmap: android.graphics.Bitmap? = null
             try {
                 val connection = (URL(imageUrl).openConnection() as HttpURLConnection).apply {
                     connectTimeout = 8000
                     readTimeout = 10000
                     instanceFollowRedirects = true
+                    setRequestProperty("User-Agent", "HANI-TV/1.0 (Android; logo loader)")
                 }
                 connection.inputStream.use { stream ->
                     bitmap = BitmapFactory.decodeStream(stream)
