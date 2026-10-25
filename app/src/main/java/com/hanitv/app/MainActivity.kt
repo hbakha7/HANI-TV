@@ -134,7 +134,19 @@ class MainActivity : Activity() {
             "beIN SPORTS 8" to "B8",
             "beIN SPORTS 9" to "B9",
             "beIN SPORTS 10" to "B10",
-            "beIN SPORTS NEWS" to "BN"
+            "beIN SPORTS NEWS" to "BN",
+            "قنوات الكأس 1" to "KAS1",
+            "قنوات الكأس 2" to "KAS2",
+            "قنوات الكأس 3" to "KAS3",
+            "قنوات الكأس 4" to "KAS4",
+            "قنوات الكأس 5" to "KAS5",
+            "قنوات الكأس 6" to "KAS6",
+            "قنوات الكأس 7" to "KAS7",
+            "قنوات الكأس 8" to "KAS8",
+            "أبو ظبي الرياضية 1" to "AD1",
+            "أبو ظبي الرياضية 2" to "AD2",
+            "أبو ظبي الرياضية بريميوم 1" to "ADP1",
+            "أبو ظبي الرياضية بريميوم 2" to "ADP2"
         ),
         "ثمانية" to listOf(
             "ثمانية 1" to "T1",
@@ -667,7 +679,10 @@ class MainActivity : Activity() {
             Triple("beIN\nSPORTS", "beIN SPORTS", Color.rgb(177, 105, 235)),
             Triple("ثمانية", "ثمانية", Color.rgb(245, 245, 250)),
             Triple("ALWAN", "ALWAN", Color.rgb(88, 220, 150)),
-            Triple("STARZPLAY\nSPORTS ③", "STARZPLAY", Color.rgb(90, 205, 225))
+            Triple("STARZPLAY\nSPORTS ③", "STARZPLAY", Color.rgb(90, 205, 225)),
+            Triple("قنوات الكأس", "قنوات الكأس", Color.rgb(242, 190, 62)),
+            Triple("أبو ظبي الرياضية", "أبو ظبي الرياضية", Color.rgb(230, 45, 65)),
+            Triple("أبو ظبي الرياضية\nPREMIUM", "أبو ظبي الرياضية بريميوم", Color.rgb(242, 190, 62))
         )
         val grid = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -696,7 +711,8 @@ class MainActivity : Activity() {
                     isFocusable = true
                     setOnClickListener {
                         when (brand.second) {
-                            "beIN SPORTS" -> showChannels("القنوات الرياضية")
+                            "beIN SPORTS", "قنوات الكأس", "أبو ظبي الرياضية", "أبو ظبي الرياضية بريميوم" ->
+                                showSportsBrandChannels(brand.second)
                             "ثمانية" -> showChannels("ثمانية")
                             "STARZPLAY" -> showChannels("STARZPLAY")
                             "ALWAN" -> showChannels("ALWAN")
@@ -727,6 +743,53 @@ class MainActivity : Activity() {
             index += 3
         }
         content.addView(grid)
+        addBackButton()
+    }
+
+    private fun showSportsBrandChannels(brand: String) {
+        ensureBuiltInBrandChannels()
+        showingServerManager = false
+        content.removeAllViews()
+        content.setPadding(dp(14), dp(16), dp(14), dp(24))
+        addText(brand, 23f, white, true)
+        addText("القنوات المتاحة في هذا القسم", 14f, gray, false)
+
+        val allChannels = (channelGroups["القنوات الرياضية"].orEmpty() + sources
+            .map { it.channel.trim() }
+            .filter { it.isNotBlank() }
+            .distinct()
+            .map { name -> name to name.take(3).ifBlank { "TV" } })
+            .distinctBy { it.first }
+
+        val channels = allChannels.filter { (name, _) ->
+            when (brand) {
+                "beIN SPORTS" -> name.startsWith("beIN SPORTS", ignoreCase = true)
+                "قنوات الكأس" -> name.startsWith("قنوات الكأس") || name.startsWith("الكأس")
+                "أبو ظبي الرياضية" -> name.startsWith("أبو ظبي الرياضية") &&
+                    !name.contains("بريميوم") && !name.contains("premium", ignoreCase = true)
+                "أبو ظبي الرياضية بريميوم" -> name.startsWith("أبو ظبي الرياضية بريميوم") ||
+                    name.startsWith("أبو ظبي الرياضية Premium", ignoreCase = true)
+                else -> false
+            }
+        }
+
+        val grid = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        var index = 0
+        while (index < channels.size) {
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+            }
+            addChannelCard(row, channels[index])
+            if (index + 1 < channels.size) addChannelCard(row, channels[index + 1])
+            grid.addView(row, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { bottomMargin = dp(10) })
+            index += 2
+        }
+        content.addView(grid)
+        if (channels.isEmpty()) addText("لا توجد قنوات مضافة لهذا القسم بعد.", 13f, gray, false, 8)
         addBackButton()
     }
 
@@ -1938,6 +2001,7 @@ private fun isDashStreamUrl(url: String): Boolean {
         "STARZPLAY 1", "STARZPLAY 2", "STARZPLAY 3" -> "STARZPLAY"
         "ALWAN 1", "ALWAN 2", "ALWAN 3", "ALWAN 4", "ALWAN 5",
         "ALWAN 6", "ALWAN 7", "ALWAN 8", "ALWAN 9", "ALWAN 10" -> "ALWAN"
+        in listOf("قنوات الكأس 1", "قنوات الكأس 2", "قنوات الكأس 3", "قنوات الكأس 4", "قنوات الكأس 5", "قنوات الكأس 6", "قنوات الكأس 7", "قنوات الكأس 8", "أبو ظبي الرياضية 1", "أبو ظبي الرياضية 2", "أبو ظبي الرياضية بريميوم 1", "أبو ظبي الرياضية بريميوم 2") -> "القنوات الرياضية"
         else -> null
     }
 
@@ -1964,6 +2028,20 @@ private fun isDashStreamUrl(url: String): Boolean {
                 "ALWAN 8" to "A8",
                 "ALWAN 9" to "A9",
                 "ALWAN 10" to "A10"
+            ),
+            "القنوات الرياضية" to listOf(
+                "قنوات الكأس 1" to "KAS1",
+                "قنوات الكأس 2" to "KAS2",
+                "قنوات الكأس 3" to "KAS3",
+                "قنوات الكأس 4" to "KAS4",
+                "قنوات الكأس 5" to "KAS5",
+                "قنوات الكأس 6" to "KAS6",
+                "قنوات الكأس 7" to "KAS7",
+                "قنوات الكأس 8" to "KAS8",
+                "أبو ظبي الرياضية 1" to "AD1",
+                "أبو ظبي الرياضية 2" to "AD2",
+                "أبو ظبي الرياضية بريميوم 1" to "ADP1",
+                "أبو ظبي الرياضية بريميوم 2" to "ADP2"
             )
         )
         builtIns.forEach { (category, defaults) ->
@@ -2110,6 +2188,12 @@ private fun isDashStreamUrl(url: String): Boolean {
                 channelName.contains("ألوان", ignoreCase = true) -> R.drawable.logo_alwan
             channelName.contains("bein", ignoreCase = true) ||
                 channelName.contains("beIN", ignoreCase = true) -> R.drawable.bein_sports
+            channelName.contains("قنوات الكأس") || channelName.contains("الكأس") -> R.drawable.al_kass_sports
+            channelName.contains("بريميوم") || channelName.contains("premium", ignoreCase = true) -> when {
+                channelName.endsWith("2") -> R.drawable.abu_dhabi_premium_2
+                else -> R.drawable.abu_dhabi_premium_1
+            }
+            channelName.contains("أبو ظبي الرياضية") || channelName.contains("abu dhabi", ignoreCase = true) -> R.drawable.abu_dhabi_sports_logo
             else -> 0
         }
 
