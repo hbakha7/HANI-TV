@@ -315,12 +315,13 @@ class MainActivity : Activity() {
             ).apply { bottomMargin = dp(14) })
         }
 
-        val purple = Color.rgb(123, 65, 255)
-        val deepPurple = Color.rgb(66, 18, 133)
-        val navy = Color.rgb(14, 27, 49)
-        val cardStroke = Color.rgb(43, 58, 88)
-        val softWhite = Color.rgb(224, 231, 245)
-        val mint = Color.rgb(72, 220, 164)
+        // A + B visual identity: cinematic violet with electric-blue glass accents.
+        val purple = Color.rgb(145, 70, 255)
+        val deepPurple = Color.rgb(54, 17, 112)
+        val navy = Color.rgb(8, 22, 43)
+        val cardStroke = Color.rgb(43, 112, 166)
+        val softWhite = Color.rgb(229, 241, 255)
+        val mint = Color.rgb(55, 207, 255)
 
         // Welcome text: no second HANI TV logo here because the app header already has it.
         content.addView(TextView(this).apply {
@@ -345,10 +346,10 @@ class MainActivity : Activity() {
             setPadding(dp(18), dp(20), dp(18), dp(20))
             background = GradientDrawable(
                 GradientDrawable.Orientation.TL_BR,
-                intArrayOf(Color.rgb(39, 30, 92), Color.rgb(18, 42, 72), Color.rgb(7, 16, 30))
+                intArrayOf(Color.rgb(70, 20, 135), Color.rgb(17, 66, 119), Color.rgb(5, 16, 32))
             ).apply {
-                cornerRadius = dp(20).toFloat()
-                setStroke(dp(1), Color.rgb(112, 70, 220))
+                cornerRadius = dp(22).toFloat()
+                setStroke(dp(1), Color.rgb(73, 174, 255))
             }
             isClickable = true
             isFocusable = true
@@ -419,9 +420,14 @@ class MainActivity : Activity() {
                 gravity = Gravity.CENTER
                 setPadding(dp(5), dp(10), dp(5), dp(10))
                 background = GradientDrawable().apply {
-                    setColor(Color.rgb(22, 20, 31))
-                    cornerRadius = dp(15).toFloat()
-                    setStroke(dp(1), cardStroke)
+                    setColor(Color.rgb(10, 23, 42))
+                    cornerRadius = dp(17).toFloat()
+                    setStroke(dp(1), when (brand.second) {
+                        "beIN SPORTS" -> Color.rgb(174, 70, 255)
+                        "ثمانية" -> Color.rgb(49, 220, 177)
+                        "ALWAN" -> Color.rgb(49, 174, 255)
+                        else -> Color.rgb(35, 210, 245)
+                    })
                 }
                 isClickable = true
                 isFocusable = true
@@ -472,8 +478,8 @@ class MainActivity : Activity() {
                 gravity = Gravity.CENTER_VERTICAL
                 setPadding(dp(14), dp(13), dp(14), dp(13))
                 background = GradientDrawable().apply {
-                    colors = intArrayOf(Color.rgb(20, 34, 54), Color.rgb(12, 23, 40))
-                    cornerRadius = dp(15).toFloat()
+                    colors = intArrayOf(Color.rgb(19, 42, 69), Color.rgb(8, 18, 35))
+                    cornerRadius = dp(17).toFloat()
                     setStroke(dp(1), cardStroke)
                 }
                 isClickable = true
