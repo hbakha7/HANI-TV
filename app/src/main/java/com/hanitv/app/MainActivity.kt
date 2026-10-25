@@ -55,11 +55,11 @@ import org.json.JSONObject
 
 class MainActivity : Activity() {
 
-    private val bg = Color.rgb(7, 12, 22)
-    private val panel = Color.rgb(16, 26, 42)
+    private val bg = Color.rgb(12, 12, 15)
+    private val panel = Color.rgb(25, 25, 30)
     private val red = Color.rgb(210, 20, 35)
     private val white = Color.WHITE
-    private val gray = Color.rgb(157, 174, 196)
+    private val gray = Color.rgb(175, 175, 185)
 
     private lateinit var content: LinearLayout
     private val prefs by lazy { getSharedPreferences("hani_tv_sources", MODE_PRIVATE) }
@@ -195,19 +195,13 @@ class MainActivity : Activity() {
         val header = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(18), dp(17), dp(18), dp(17))
-            background = GradientDrawable(
-                GradientDrawable.Orientation.LEFT_RIGHT,
-                intArrayOf(Color.rgb(25, 10, 55), Color.rgb(8, 30, 57), Color.rgb(5, 13, 27))
-            ).apply {
-                setStroke(dp(1), Color.rgb(48, 130, 205))
-            }
+            setPadding(dp(18), dp(15), dp(18), dp(15))
+            setBackgroundColor(Color.rgb(18, 18, 22))
         }
 
         header.addView(TextView(this).apply {
             text = "HANI "
-            textSize = 28f
-            setShadowLayer(10f, 0f, 0f, Color.rgb(60, 160, 255))
+            textSize = 26f
             setTextColor(white)
             setTypeface(null, Typeface.BOLD)
             setOnLongClickListener(View.OnLongClickListener {
@@ -222,8 +216,7 @@ class MainActivity : Activity() {
         }
         header.addView(TextView(this).apply {
             text = "TV"
-            textSize = 28f
-            setShadowLayer(12f, 0f, 0f, Color.rgb(255, 30, 75))
+            textSize = 26f
             setTextColor(red)
             setTypeface(null, Typeface.BOLD)
             setOnLongClickListener(hiddenAdminGesture)
@@ -322,13 +315,12 @@ class MainActivity : Activity() {
             ).apply { bottomMargin = dp(14) })
         }
 
-        // A + B visual identity: cinematic violet with electric-blue glass accents.
-        val purple = Color.rgb(145, 70, 255)
-        val deepPurple = Color.rgb(54, 17, 112)
-        val navy = Color.rgb(8, 22, 43)
-        val cardStroke = Color.rgb(43, 112, 166)
-        val softWhite = Color.rgb(229, 241, 255)
-        val mint = Color.rgb(55, 207, 255)
+        val purple = Color.rgb(123, 65, 255)
+        val deepPurple = Color.rgb(66, 18, 133)
+        val navy = Color.rgb(14, 27, 49)
+        val cardStroke = Color.rgb(43, 58, 88)
+        val softWhite = Color.rgb(224, 231, 245)
+        val mint = Color.rgb(72, 220, 164)
 
         // Welcome text: no second HANI TV logo here because the app header already has it.
         content.addView(TextView(this).apply {
@@ -346,124 +338,46 @@ class MainActivity : Activity() {
             setPadding(0, dp(4), 0, dp(16))
         })
 
-        // Cinematic A+B hero: layered neon background, live badge, oversized ball and CTA.
-        val banner = FrameLayout(this).apply {
+        // Main sports banner
+        val banner = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(18), dp(20), dp(18), dp(20))
             background = GradientDrawable(
                 GradientDrawable.Orientation.TL_BR,
-                intArrayOf(Color.rgb(80, 18, 150), Color.rgb(15, 65, 125), Color.rgb(4, 13, 28))
+                intArrayOf(deepPurple, Color.rgb(23, 34, 82), Color.rgb(7, 16, 34))
             ).apply {
-                cornerRadius = dp(26).toFloat()
-                setStroke(dp(1), Color.rgb(72, 190, 255))
+                cornerRadius = dp(20).toFloat()
+                setStroke(dp(1), Color.rgb(112, 70, 220))
             }
             isClickable = true
             isFocusable = true
             setOnClickListener { showSportsSections() }
-            elevation = dp(5).toFloat()
         }
 
-        // Real cinematic stadium photo behind the hero content (loads asynchronously).
-        // If the image host is unavailable, the existing neon gradient remains visible.
-        val heroPhoto = ImageView(this).apply {
-            scaleType = ImageView.ScaleType.CENTER_CROP
-            alpha = 0.78f
-            contentDescription = "ملعب كرة قدم"
-        }
-        banner.addView(heroPhoto, FrameLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
-        ))
-        loadPhotoInto(
-            heroPhoto,
-            "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?auto=format&fit=crop&w=1200&q=82"
-        )
-
-        // Dark tint keeps Arabic text readable over the photograph.
-        val heroShade = View(this).apply {
-            background = GradientDrawable(
-                GradientDrawable.Orientation.LEFT_RIGHT,
-                intArrayOf(Color.argb(35, 5, 10, 28), Color.argb(185, 5, 10, 28))
-            ).apply { cornerRadius = dp(26).toFloat() }
-        }
-        banner.addView(heroShade, FrameLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
-        ))
-
-        val heroGlow = TextView(this).apply {
-            text = "⚽"
-            textSize = 78f
-            gravity = Gravity.CENTER
-            setTextColor(Color.WHITE)
-            setShadowLayer(24f, 0f, 0f, Color.rgb(42, 168, 255))
-        }
-        val glowParams = FrameLayout.LayoutParams(dp(130), dp(150), Gravity.START or Gravity.CENTER_VERTICAL)
-        glowParams.marginStart = dp(4)
-        banner.addView(heroGlow, glowParams)
-
-        val heroContent = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(18), dp(17), dp(18), dp(17))
-            layoutDirection = View.LAYOUT_DIRECTION_RTL
-            background = GradientDrawable(
-                GradientDrawable.Orientation.LEFT_RIGHT,
-                intArrayOf(Color.TRANSPARENT, Color.argb(125, 7, 14, 31), Color.argb(210, 7, 14, 31))
-            ).apply { cornerRadius = dp(26).toFloat() }
-        }
-        val livePill = TextView(this).apply {
-            text = "●  بث مباشر"
-            textSize = 11f
-            setTextColor(Color.WHITE)
-            gravity = Gravity.CENTER
-            setPadding(dp(10), dp(5), dp(10), dp(5))
-            background = GradientDrawable(
-                GradientDrawable.Orientation.LEFT_RIGHT,
-                intArrayOf(Color.rgb(225, 20, 60), Color.rgb(140, 20, 90))
-            ).apply { cornerRadius = dp(20).toFloat() }
-        }
-        heroContent.addView(livePill, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(27)))
-        heroContent.addView(TextView(this).apply {
-            text = "HANI TV SPORTS"
-            textSize = 12f
-            setTextColor(Color.rgb(126, 213, 255))
+        banner.addView(TextView(this).apply {
+            text = "⚽  HANI TV SPORTS"
+            textSize = 14f
+            setTextColor(Color.rgb(218, 203, 255))
             setTypeface(null, Typeface.BOLD)
-            setPadding(0, dp(10), 0, 0)
         })
-        heroContent.addView(TextView(this).apply {
+        banner.addView(TextView(this).apply {
             text = "عِش أجواء المباريات"
-            textSize = 24f
+            textSize = 25f
             setTextColor(Color.WHITE)
             setTypeface(null, Typeface.BOLD)
             gravity = Gravity.START
-            setShadowLayer(8f, 0f, 2f, Color.BLACK)
-            setPadding(0, dp(4), 0, dp(4))
+            setPadding(0, dp(14), 0, dp(5))
         })
-        heroContent.addView(TextView(this).apply {
-            text = "أقوى القنوات الرياضية في مكان واحد"
-            textSize = 12f
+        banner.addView(TextView(this).apply {
+            text = "قنواتك الرياضية في مكان واحد"
+            textSize = 14f
             setTextColor(softWhite)
             gravity = Gravity.START
         })
-        val heroAction = TextView(this).apply {
-            text = "شاهد القنوات الآن   ›"
-            textSize = 12f
-            setTextColor(Color.WHITE)
-            setTypeface(null, Typeface.BOLD)
-            gravity = Gravity.CENTER
-            setPadding(dp(13), dp(8), dp(13), dp(8))
-            background = GradientDrawable(
-                GradientDrawable.Orientation.LEFT_RIGHT,
-                intArrayOf(Color.rgb(143, 45, 255), Color.rgb(18, 133, 255))
-            ).apply {
-                cornerRadius = dp(18).toFloat()
-                setStroke(dp(1), Color.rgb(132, 211, 255))
-            }
-        }
-        heroContent.addView(heroAction, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(36)).apply {
-            topMargin = dp(12)
-        })
-        heroAction.setOnClickListener { showSportsSections() }
-        banner.addView(heroContent, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(202)))
         content.addView(banner, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, dp(202)
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT
         ).apply { bottomMargin = dp(22) })
 
         // Sports brands section
@@ -505,14 +419,9 @@ class MainActivity : Activity() {
                 gravity = Gravity.CENTER
                 setPadding(dp(5), dp(10), dp(5), dp(10))
                 background = GradientDrawable().apply {
-                    setColor(Color.rgb(10, 23, 42))
-                    cornerRadius = dp(17).toFloat()
-                    setStroke(dp(1), when (brand.second) {
-                        "beIN SPORTS" -> Color.rgb(174, 70, 255)
-                        "ثمانية" -> Color.rgb(49, 220, 177)
-                        "ALWAN" -> Color.rgb(49, 174, 255)
-                        else -> Color.rgb(35, 210, 245)
-                    })
+                    setColor(Color.rgb(22, 20, 31))
+                    cornerRadius = dp(15).toFloat()
+                    setStroke(dp(1), cardStroke)
                 }
                 isClickable = true
                 isFocusable = true
@@ -563,8 +472,8 @@ class MainActivity : Activity() {
                 gravity = Gravity.CENTER_VERTICAL
                 setPadding(dp(14), dp(13), dp(14), dp(13))
                 background = GradientDrawable().apply {
-                    colors = intArrayOf(Color.rgb(19, 42, 69), Color.rgb(8, 18, 35))
-                    cornerRadius = dp(17).toFloat()
+                    setColor(navy)
+                    cornerRadius = dp(15).toFloat()
                     setStroke(dp(1), cardStroke)
                 }
                 isClickable = true
@@ -573,16 +482,6 @@ class MainActivity : Activity() {
                     if (category == "القنوات الرياضية") showSportsSections() else showChannels(category)
                 }
             }
-
-            val categoryPhotoUrl = when (category) {
-                "القنوات الرياضية" -> "https://images.unsplash.com/photo-1522778119026-d647f0596c20?auto=format&fit=crop&w=900&q=78"
-                "القنوات العربية" -> "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?auto=format&fit=crop&w=900&q=78"
-                "القنوات الإخبارية" -> "https://images.unsplash.com/photo-1504711434969-e33886168f5c?auto=format&fit=crop&w=900&q=78"
-                "قنوات الأطفال" -> "https://images.unsplash.com/photo-1503454537195-1dcabb73ffb9?auto=format&fit=crop&w=900&q=78"
-                "قنوات الترفيه" -> "https://images.unsplash.com/photo-1440404653325-ab127d49abc1?auto=format&fit=crop&w=900&q=78"
-                else -> "https://images.unsplash.com/photo-1493711662062-fa541adb8151?auto=format&fit=crop&w=900&q=78"
-            }
-            loadPhotoBackground(categoryCard, categoryPhotoUrl, cardStroke)
 
             val iconText = when (category) {
                 "القنوات الرياضية" -> "⚽"
@@ -880,14 +779,8 @@ class MainActivity : Activity() {
         val card = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
-            setPadding(dp(8), dp(13), dp(8), dp(13))
-            background = GradientDrawable(
-                GradientDrawable.Orientation.TL_BR,
-                intArrayOf(Color.rgb(22, 35, 55), Color.rgb(13, 23, 39))
-            ).apply {
-                cornerRadius = dp(16).toFloat()
-                setStroke(dp(1), Color.rgb(42, 61, 86))
-            }
+            setPadding(dp(8), dp(16), dp(8), dp(16))
+            setBackgroundColor(panel)
             isClickable = true
             isFocusable = true
             setOnClickListener { openChannel(channel.first) }
@@ -900,11 +793,10 @@ class MainActivity : Activity() {
 
         card.addView(TextView(this).apply {
             text = displayChannelName(channel.first)
-            textSize = 13f
+            textSize = 14f
             gravity = Gravity.CENTER
-            setTextColor(Color.rgb(232, 239, 249))
-            maxLines = 2
-            setPadding(0, dp(8), 0, 0)
+            setTextColor(white)
+            setPadding(0, dp(10), 0, 0)
         })
 
         row.addView(
@@ -2155,64 +2047,6 @@ private fun isDashStreamUrl(url: String): Boolean {
         dialog.show()
     }
 
-    /** Loads a remote photograph into an ImageView without blocking the UI thread. */
-    private fun loadPhotoInto(imageView: ImageView, imageUrl: String) {
-        brandImageExecutor.execute {
-            var bitmap: android.graphics.Bitmap? = null
-            try {
-                val connection = (URL(imageUrl).openConnection() as HttpURLConnection).apply {
-                    connectTimeout = 5000
-                    readTimeout = 7000
-                    instanceFollowRedirects = true
-                }
-                try {
-                    connection.inputStream.use { stream -> bitmap = BitmapFactory.decodeStream(stream) }
-                } finally {
-                    connection.disconnect()
-                }
-            } catch (_: Exception) { }
-            val loaded = bitmap ?: return@execute
-            runOnUiThread {
-                if (!isFinishing && !isDestroyed) imageView.setImageBitmap(loaded)
-            }
-        }
-    }
-
-    /** Photo-backed category cards with a dark glass overlay; gradient remains if loading fails. */
-    private fun loadPhotoBackground(view: View, imageUrl: String, strokeColor: Int) {
-        brandImageExecutor.execute {
-            var bitmap: android.graphics.Bitmap? = null
-            try {
-                val connection = (URL(imageUrl).openConnection() as HttpURLConnection).apply {
-                    connectTimeout = 5000
-                    readTimeout = 7000
-                    instanceFollowRedirects = true
-                }
-                try {
-                    connection.inputStream.use { stream -> bitmap = BitmapFactory.decodeStream(stream) }
-                } finally {
-                    connection.disconnect()
-                }
-            } catch (_: Exception) { }
-            val loaded = bitmap ?: return@execute
-            runOnUiThread {
-                if (isFinishing || isDestroyed) return@runOnUiThread
-                val photo = BitmapDrawable(resources, loaded).apply {
-                    gravity = android.view.Gravity.FILL
-                }
-                val shade = GradientDrawable(
-                    GradientDrawable.Orientation.LEFT_RIGHT,
-                    intArrayOf(Color.argb(85, 5, 12, 30), Color.argb(205, 5, 12, 30))
-                ).apply {
-                    cornerRadius = dp(17).toFloat()
-                    setStroke(dp(1), strokeColor)
-                }
-                view.background = LayerDrawable(arrayOf(photo, shade))
-                view.clipToOutline = true
-            }
-        }
-    }
-
     /**
      * Premium glass-style brand cards matching the approved sports-channel reference.
      * Uses local gradients and borders, so logos/cards appear immediately without
@@ -2244,22 +2078,6 @@ private fun isDashStreamUrl(url: String): Boolean {
         view.elevation = dp(3).toFloat()
     }
 
-    private fun defaultBrandLogoUrl(channelName: String): String {
-        // PNG assets from Wikimedia Commons so Android BitmapFactory can decode them
-        // without adding SVG libraries. These are used only when no admin URL is set.
-        return when {
-            channelName.contains("bein", ignoreCase = true) || channelName == "القنوات الرياضية" ->
-                "https://thumb.wikimedia.org/wikipedia/commons/thumb/d/d4/BeIN_Sports_logo_%28horizontal_version%29.svg/330px-BeIN_Sports_logo_%28horizontal_version%29.svg.png"
-            channelName.contains("ثمانية", ignoreCase = true) ->
-                "https://thumb.wikimedia.org/wikipedia/commons/thumb/e/e9/Thmanyah_Logo.svg/500px-Thmanyah_Logo.svg.png"
-            channelName.contains("STARZPLAY", ignoreCase = true) ->
-                "https://upload.wikimedia.org/wikipedia/commons/6/6a/STARZPLAY_png.png"
-            // ALWAN is kept as the app's own section wordmark because the supplied
-            // project does not identify which specific ALWAN broadcaster logo is intended.
-            else -> ""
-        }
-    }
-
     private fun channelLogoView(
         channelName: String,
         fallback: String,
@@ -2267,22 +2085,38 @@ private fun isDashStreamUrl(url: String): Boolean {
         height: Int,
         plainBrandFallback: Boolean = false
     ): View {
-        val configuredImageUrl = channelImageUrls[channelName].orEmpty().trim()
-        val useBuiltInLogo = configuredImageUrl.isBlank()
-        val imageUrl = configuredImageUrl.ifBlank { defaultBrandLogoUrl(channelName) }
+        // Official sports-brand logos are bundled in res/drawable-nodpi.
+        // Resolve them locally first so they appear immediately, without any network request.
+        val localLogoRes = when {
+            channelName.contains("ثمانية", ignoreCase = true) ||
+                channelName.contains("thmanyah", ignoreCase = true) -> R.drawable.thmanyah
+            channelName.contains("STARZPLAY", ignoreCase = true) -> R.drawable.logo_starzplay
+            channelName.contains("ALWAN", ignoreCase = true) ||
+                channelName.contains("ألوان", ignoreCase = true) -> R.drawable.logo_alwan
+            channelName.contains("bein", ignoreCase = true) ||
+                channelName.contains("beIN", ignoreCase = true) -> R.drawable.bein_sports
+            else -> 0
+        }
 
-        // Actual brand artwork is loaded into an ImageView. Built-in URLs mean the
-        // administrator does not need to configure logo links manually.
+        if (localLogoRes != 0) {
+            return ImageView(this).apply {
+                layoutParams = LinearLayout.LayoutParams(width, height)
+                scaleType = ImageView.ScaleType.FIT_CENTER
+                contentDescription = "$channelName logo"
+                setBackgroundColor(Color.TRANSPARENT)
+                setImageResource(localLogoRes)
+                adjustViewBounds = true
+            }
+        }
+
+        val imageUrl = channelImageUrls[channelName].orEmpty().trim()
+
+        // Non-brand channel logos may still use the existing remote image manager.
         val imageView = ImageView(this).apply {
             layoutParams = LinearLayout.LayoutParams(width, height)
             scaleType = ImageView.ScaleType.FIT_CENTER
-            contentDescription = "$channelName logo"
+            contentDescription = channelName
             setBackgroundColor(Color.TRANSPARENT)
-            // The published Thmanyah and STARZPLAY wordmarks are dark; render them
-            // white on HANI TV's dark glass cards. Do not tint administrator images.
-            if (useBuiltInLogo && (channelName.contains("ثمانية", true) || channelName.contains("STARZPLAY", true))) {
-                setColorFilter(Color.WHITE, android.graphics.PorterDuff.Mode.SRC_IN)
-            }
         }
 
         if (imageUrl.isBlank()) {
@@ -2362,14 +2196,13 @@ private fun isDashStreamUrl(url: String): Boolean {
             return logo
         }
 
-        brandImageExecutor.execute {
+        networkExecutor.execute {
             var bitmap: android.graphics.Bitmap? = null
             try {
                 val connection = (URL(imageUrl).openConnection() as HttpURLConnection).apply {
                     connectTimeout = 8000
                     readTimeout = 10000
                     instanceFollowRedirects = true
-                    setRequestProperty("User-Agent", "HANI-TV/1.0 (Android; logo loader)")
                 }
                 connection.inputStream.use { stream ->
                     bitmap = BitmapFactory.decodeStream(stream)
