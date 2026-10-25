@@ -54,8 +54,8 @@ data class Channel(
 
 class EmbeddedPlayerActivity : AppCompatActivity() {
 
-private val bg = Color.rgb(10, 17, 29)  
-private val panel = Color.rgb(22, 32, 49)  
+private val bg = Color.rgb(7, 13, 24)  
+private val panel = Color.rgb(17, 29, 46)  
 private val accent = Color.rgb(25, 190, 165)  
 private val white = Color.WHITE  
 private val muted = Color.rgb(177, 190, 207)  
@@ -246,8 +246,14 @@ private fun renderSavedHomeLinks(content: FrameLayout, empty: TextView) {
         val card = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(10), dp(8), dp(10), dp(8))
-            background = rounded(Color.WHITE, 10)
+            setPadding(dp(12), dp(9), dp(12), dp(9))
+            background = GradientDrawable(
+                GradientDrawable.Orientation.TL_BR,
+                intArrayOf(Color.rgb(24, 39, 59), Color.rgb(13, 24, 40))
+            ).apply {
+                cornerRadius = dp(14).toFloat()
+                setStroke(dp(1), Color.rgb(42, 63, 88))
+            }
             isClickable = true
             isFocusable = true
             setOnClickListener {
@@ -278,7 +284,8 @@ private fun renderSavedHomeLinks(content: FrameLayout, empty: TextView) {
             text = "▶"
             textSize = 27f
             gravity = Gravity.CENTER
-            setTextColor(Color.rgb(85, 55, 15))
+            setTextColor(accent)
+            background = rounded(Color.rgb(12, 36, 52), 12)
         }
         card.addView(playIcon, LinearLayout.LayoutParams(dp(48), dp(64)))
 
@@ -289,14 +296,15 @@ private fun renderSavedHomeLinks(content: FrameLayout, empty: TextView) {
         details.addView(TextView(this@EmbeddedPlayerActivity).apply {
             text = name
             textSize = 16f
-            setTextColor(Color.BLACK)
+            setTextColor(Color.WHITE)
+            setTypeface(null, Typeface.BOLD)
             maxLines = 1
             ellipsize = android.text.TextUtils.TruncateAt.END
         })
         details.addView(TextView(this@EmbeddedPlayerActivity).apply {
             text = url
             textSize = 11f
-            setTextColor(Color.GRAY)
+            setTextColor(muted)
             maxLines = 1
             ellipsize = android.text.TextUtils.TruncateAt.MIDDLE
         })
@@ -304,10 +312,10 @@ private fun renderSavedHomeLinks(content: FrameLayout, empty: TextView) {
         card.addView(TextView(this).apply {
             text = if (isM3u) "M3U" else url.substringAfterLast('.', "").uppercase().take(4).ifBlank { "TS" }
             textSize = 11f
-            setTextColor(Color.WHITE)
+            setTextColor(accent)
             gravity = Gravity.CENTER
-            setPadding(dp(7), dp(5), dp(7), dp(5))
-            background = rounded(Color.BLACK, 5)
+            setPadding(dp(8), dp(5), dp(8), dp(5))
+            background = rounded(Color.rgb(9, 29, 43), 7)
         })
         list.addView(card, LinearLayout.LayoutParams(-1, dp(82)).apply {
             setMargins(0, 0, 0, dp(10))
@@ -337,14 +345,17 @@ private fun renderSavedHomeLinks(content: FrameLayout, empty: TextView) {
 private fun buildHome() {
 val root = LinearLayout(this).apply {
 orientation = LinearLayout.VERTICAL
-setBackgroundColor(Color.rgb(8, 20, 35))
+setBackgroundColor(Color.rgb(7, 13, 24))
 }
 
 val header = LinearLayout(this).apply {  
     orientation = LinearLayout.HORIZONTAL  
     gravity = Gravity.CENTER_VERTICAL  
     setPadding(dp(12), dp(8), dp(12), dp(8))  
-    setBackgroundColor(Color.rgb(15, 42, 67))  
+    background = GradientDrawable(
+        GradientDrawable.Orientation.LEFT_RIGHT,
+        intArrayOf(Color.rgb(11, 29, 48), Color.rgb(16, 43, 64))
+    ).apply { setStroke(dp(1), Color.rgb(35, 67, 89)) }  
 }  
 
 val menu = TextView(this).apply {  
@@ -359,6 +370,7 @@ val title = TextView(this).apply {
     text = "HTV PLAYER"  
     textSize = 20f  
     gravity = Gravity.CENTER  
+    setTypeface(null, Typeface.BOLD)
     setTextColor(Color.WHITE)  
 }  
 
@@ -379,7 +391,7 @@ header.addView(search)
 root.addView(header)  
 
 val content = FrameLayout(this).apply {  
-    setBackgroundColor(Color.rgb(8, 25, 42))  
+    setBackgroundColor(Color.rgb(8, 18, 32))  
 }  
 
 val empty = TextView(this).apply {  
@@ -399,7 +411,10 @@ root.addView(
 val navigation = LinearLayout(this).apply {  
     orientation = LinearLayout.HORIZONTAL  
     gravity = Gravity.CENTER  
-    setBackgroundColor(Color.rgb(12, 35, 55))  
+    background = GradientDrawable(
+        GradientDrawable.Orientation.LEFT_RIGHT,
+        intArrayOf(Color.rgb(10, 24, 40), Color.rgb(13, 33, 49))
+    ).apply { setStroke(dp(1), Color.rgb(32, 58, 78)) }  
 }  
 
 fun navItem(symbol: String, caption: String, action: () -> Unit) {  
@@ -543,7 +558,7 @@ fun inputField(hintText: String, uri: Boolean = false): EditText {
             InputType.TYPE_CLASS_TEXT  
         }  
         setPadding(dp(14), dp(12), dp(14), dp(12))  
-        background = rounded(Color.rgb(12, 30, 47), 5)  
+        background = GradientDrawable().apply { setColor(Color.rgb(12, 27, 44)); cornerRadius = dp(10).toFloat(); setStroke(dp(1), Color.rgb(42, 64, 86)) }  
     }  
 }  
 
@@ -592,7 +607,7 @@ val scheme = Spinner(this).apply {
         android.R.layout.simple_spinner_dropdown_item,  
         listOf("الرابط كما هو", "HTTP", "HTTPS")  
     )  
-    background = rounded(Color.rgb(12, 30, 47), 5)  
+    background = GradientDrawable().apply { setColor(Color.rgb(12, 27, 44)); cornerRadius = dp(10).toFloat(); setStroke(dp(1), Color.rgb(42, 64, 86)) }  
 }  
 
 form.addView(  
@@ -610,7 +625,7 @@ val drmScheme = Spinner(this).apply {
         android.R.layout.simple_spinner_dropdown_item,
         drmChoices
     )
-    background = rounded(Color.rgb(12, 30, 47), 5)
+    background = GradientDrawable().apply { setColor(Color.rgb(12, 27, 44)); cornerRadius = dp(10).toFloat(); setStroke(dp(1), Color.rgb(42, 64, 86)) }
     setSelection(drmChoices.indexOf(prefs.getString("add_drm_scheme", "بدون DRM")).let { if (it >= 0) it else 0 })
 }
 form.addView(
@@ -1839,6 +1854,11 @@ private fun openFullscreen() {
         gravity = Gravity.CENTER
         setPadding(dp(4), dp(2), dp(4), dp(2))
         setShadowLayer(3f, 1f, 1f, Color.BLACK)
+        background = GradientDrawable().apply {
+            shape = GradientDrawable.OVAL
+            setColor(Color.argb(150, 10, 23, 38))
+            setStroke(dp(1), Color.argb(170, 75, 111, 139))
+        }
         isClickable = true
         isFocusable = true
     }
@@ -1847,6 +1867,10 @@ private fun openFullscreen() {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
         setPadding(dp(8), dp(2), dp(8), dp(2))
+        background = GradientDrawable(
+            GradientDrawable.Orientation.TOP_BOTTOM,
+            intArrayOf(Color.argb(145, 5, 12, 22), Color.TRANSPARENT)
+        )
     }
     val back = textButton("‹", 36f).apply {
         contentDescription = "رجوع"
