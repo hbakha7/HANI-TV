@@ -146,7 +146,14 @@ class MainActivity : Activity() {
             "أبو ظبي الرياضية 1" to "AD1",
             "أبو ظبي الرياضية 2" to "AD2",
             "أبو ظبي الرياضية بريميوم 1" to "ADP1",
-            "أبو ظبي الرياضية بريميوم 2" to "ADP2"
+            "أبو ظبي الرياضية بريميوم 2" to "ADP2",
+            "شاهد Sports 1" to "SH1",
+            "شاهد Sports 2" to "SH2",
+            "شاهد Sports 3" to "SH3",
+            "شاهد Sports 4" to "SH4",
+            "شاهد Sports 5" to "SH5",
+            "دبي الرياضية 1" to "DUB1",
+            "دبي الرياضية 2" to "DUB2"
         ),
         "ثمانية" to listOf(
             "ثمانية 1" to "T1",
@@ -431,7 +438,9 @@ class MainActivity : Activity() {
             Triple("STARZPLAY", "STARZPLAY", Color.rgb(90, 205, 225)),
             Triple("قنوات الكأس", "قنوات الكأس", Color.rgb(242, 190, 62)),
             Triple("أبو ظبي الرياضية", "أبو ظبي الرياضية", Color.rgb(70, 175, 245)),
-            Triple("أبو ظبي بريميوم", "أبو ظبي الرياضية بريميوم", Color.rgb(242, 190, 62))
+            Triple("أبو ظبي بريميوم", "أبو ظبي الرياضية بريميوم", Color.rgb(242, 190, 62)),
+            Triple("شاهد VIP\nSPORTS", "شاهد Sports", Color.rgb(0, 190, 160)),
+            Triple("DUBAI\nSPORTS", "دبي الرياضية", Color.rgb(220, 30, 50))
         )
 
         // Duplicate the same sequence so the slider can wrap without a visible pause.
@@ -453,8 +462,8 @@ class MainActivity : Activity() {
                         "ثمانية" -> showChannels("ثمانية")
                         "STARZPLAY" -> showChannels("STARZPLAY")
                         "ALWAN" -> showChannels("ALWAN")
-                        "قنوات الكأس", "أبو ظبي الرياضية", "أبو ظبي الرياضية بريميوم" ->
-                            showSportsBrandChannels(brand.second)
+                        "قنوات الكأس", "أبو ظبي الرياضية", "أبو ظبي الرياضية بريميوم",
+                        "شاهد Sports", "دبي الرياضية" -> showSportsBrandChannels(brand.second)
                     }
                 }
             }
@@ -710,7 +719,9 @@ class MainActivity : Activity() {
             Triple("STARZPLAY\nSPORTS ③", "STARZPLAY", Color.rgb(90, 205, 225)),
             Triple("قنوات الكأس", "قنوات الكأس", Color.rgb(242, 190, 62)),
             Triple("أبو ظبي الرياضية", "أبو ظبي الرياضية", Color.rgb(230, 45, 65)),
-            Triple("أبو ظبي الرياضية\nPREMIUM", "أبو ظبي الرياضية بريميوم", Color.rgb(242, 190, 62))
+            Triple("أبو ظبي الرياضية\nPREMIUM", "أبو ظبي الرياضية بريميوم", Color.rgb(242, 190, 62)),
+            Triple("شاهد VIP\nSPORTS", "شاهد Sports", Color.rgb(0, 190, 160)),
+            Triple("DUBAI\nSPORTS", "دبي الرياضية", Color.rgb(220, 30, 50))
         )
         val grid = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -739,8 +750,8 @@ class MainActivity : Activity() {
                     isFocusable = true
                     setOnClickListener {
                         when (brand.second) {
-                            "beIN SPORTS", "قنوات الكأس", "أبو ظبي الرياضية", "أبو ظبي الرياضية بريميوم" ->
-                                showSportsBrandChannels(brand.second)
+                            "beIN SPORTS", "قنوات الكأس", "أبو ظبي الرياضية", "أبو ظبي الرياضية بريميوم",
+                            "شاهد Sports", "دبي الرياضية" -> showSportsBrandChannels(brand.second)
                             "ثمانية" -> showChannels("ثمانية")
                             "STARZPLAY" -> showChannels("STARZPLAY")
                             "ALWAN" -> showChannels("ALWAN")
@@ -797,6 +808,10 @@ class MainActivity : Activity() {
                     !name.contains("بريميوم") && !name.contains("premium", ignoreCase = true)
                 "أبو ظبي الرياضية بريميوم" -> name.startsWith("أبو ظبي الرياضية بريميوم") ||
                     name.startsWith("أبو ظبي الرياضية Premium", ignoreCase = true)
+                "شاهد Sports" -> name.startsWith("شاهد Sports", ignoreCase = true) ||
+                    name.startsWith("Shahid Sports", ignoreCase = true)
+                "دبي الرياضية" -> name.startsWith("دبي الرياضية") ||
+                    name.startsWith("Dubai Sports", ignoreCase = true)
                 else -> false
             }
         }
@@ -2029,7 +2044,14 @@ private fun isDashStreamUrl(url: String): Boolean {
         "STARZPLAY 1", "STARZPLAY 2", "STARZPLAY 3" -> "STARZPLAY"
         "ALWAN 1", "ALWAN 2", "ALWAN 3", "ALWAN 4", "ALWAN 5",
         "ALWAN 6", "ALWAN 7", "ALWAN 8", "ALWAN 9", "ALWAN 10" -> "ALWAN"
-        in listOf("قنوات الكأس 1", "قنوات الكأس 2", "قنوات الكأس 3", "قنوات الكأس 4", "قنوات الكأس 5", "قنوات الكأس 6", "قنوات الكأس 7", "قنوات الكأس 8", "أبو ظبي الرياضية 1", "أبو ظبي الرياضية 2", "أبو ظبي الرياضية بريميوم 1", "أبو ظبي الرياضية بريميوم 2") -> "القنوات الرياضية"
+        in listOf(
+            "قنوات الكأس 1", "قنوات الكأس 2", "قنوات الكأس 3", "قنوات الكأس 4",
+            "قنوات الكأس 5", "قنوات الكأس 6", "قنوات الكأس 7", "قنوات الكأس 8",
+            "أبو ظبي الرياضية 1", "أبو ظبي الرياضية 2",
+            "أبو ظبي الرياضية بريميوم 1", "أبو ظبي الرياضية بريميوم 2",
+            "شاهد Sports 1", "شاهد Sports 2", "شاهد Sports 3", "شاهد Sports 4", "شاهد Sports 5",
+            "دبي الرياضية 1", "دبي الرياضية 2"
+        ) -> "القنوات الرياضية"
         else -> null
     }
 
@@ -2069,7 +2091,14 @@ private fun isDashStreamUrl(url: String): Boolean {
                 "أبو ظبي الرياضية 1" to "AD1",
                 "أبو ظبي الرياضية 2" to "AD2",
                 "أبو ظبي الرياضية بريميوم 1" to "ADP1",
-                "أبو ظبي الرياضية بريميوم 2" to "ADP2"
+                "أبو ظبي الرياضية بريميوم 2" to "ADP2",
+                "شاهد Sports 1" to "SH1",
+                "شاهد Sports 2" to "SH2",
+                "شاهد Sports 3" to "SH3",
+                "شاهد Sports 4" to "SH4",
+                "شاهد Sports 5" to "SH5",
+                "دبي الرياضية 1" to "DUB1",
+                "دبي الرياضية 2" to "DUB2"
             )
         )
         builtIns.forEach { (category, defaults) ->
@@ -2179,6 +2208,8 @@ private fun isDashStreamUrl(url: String): Boolean {
             brandName.contains("ثمانية") -> Color.rgb(54, 238, 177)
             brandName.contains("ALWAN", ignoreCase = true) -> Color.rgb(55, 190, 255)
             brandName.contains("STARZPLAY", ignoreCase = true) -> Color.rgb(40, 215, 255)
+            brandName.contains("شاهد", ignoreCase = true) || brandName.contains("shahid", ignoreCase = true) -> Color.rgb(0, 190, 160)
+            brandName.contains("دبي", ignoreCase = true) || brandName.contains("dubai", ignoreCase = true) -> Color.rgb(220, 30, 50)
             else -> Color.rgb(100, 130, 255)
         }
         val deep = when {
@@ -2186,6 +2217,8 @@ private fun isDashStreamUrl(url: String): Boolean {
             brandName.contains("ثمانية") -> Color.rgb(0, 42, 30)
             brandName.contains("ALWAN", ignoreCase = true) -> Color.rgb(0, 28, 48)
             brandName.contains("STARZPLAY", ignoreCase = true) -> Color.rgb(0, 32, 52)
+            brandName.contains("شاهد", ignoreCase = true) || brandName.contains("shahid", ignoreCase = true) -> Color.rgb(0, 42, 38)
+            brandName.contains("دبي", ignoreCase = true) || brandName.contains("dubai", ignoreCase = true) -> Color.rgb(48, 8, 18)
             else -> Color.rgb(16, 20, 38)
         }
         view.background = GradientDrawable(
@@ -2217,6 +2250,9 @@ private fun isDashStreamUrl(url: String): Boolean {
             channelName.contains("bein", ignoreCase = true) ||
                 channelName.contains("beIN", ignoreCase = true) -> R.drawable.bein_sports
             channelName.contains("قنوات الكأس") || channelName.contains("الكأس") -> R.drawable.al_kass_sports
+            (channelName.contains("شاهد", ignoreCase = true) || channelName.contains("shahid", ignoreCase = true)) &&
+                channelName.contains("sports", ignoreCase = true) -> R.drawable.shahid_sports_vip
+            channelName.contains("دبي الرياضية") || channelName.contains("dubai sports", ignoreCase = true) -> R.drawable.dubai_sports
             channelName.contains("بريميوم") || channelName.contains("premium", ignoreCase = true) -> when {
                 channelName.endsWith("2") -> R.drawable.abu_dhabi_premium_2
                 else -> R.drawable.abu_dhabi_premium_1
