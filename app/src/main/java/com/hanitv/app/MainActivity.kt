@@ -411,10 +411,16 @@ class MainActivity : Activity() {
         })
         content.addView(sportsHeading)
 
-        // Three sports brand tiles shown side-by-side.
+        // Continuous, seamless sports-brand carousel. All logos are bundled locally.
+        val sportsSlider = HorizontalScrollView(this).apply {
+            isHorizontalScrollBarEnabled = false
+            overScrollMode = View.OVER_SCROLL_NEVER
+            layoutDirection = View.LAYOUT_DIRECTION_LTR
+            clipToPadding = false
+            setPadding(0, 0, 0, 0)
+        }
         val sportsBrands = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
             layoutDirection = View.LAYOUT_DIRECTION_LTR
         }
 
@@ -422,19 +428,18 @@ class MainActivity : Activity() {
             Triple("beIN\nSPORTS", "beIN SPORTS", Color.rgb(177, 105, 235)),
             Triple("ثمانية", "ثمانية", Color.rgb(245, 245, 250)),
             Triple("ALWAN", "ALWAN", Color.rgb(88, 220, 150)),
-            Triple("STARZPLAY\nSPORTS ③", "STARZPLAY", Color.rgb(90, 205, 225))
+            Triple("STARZPLAY", "STARZPLAY", Color.rgb(90, 205, 225)),
+            Triple("قنوات الكأس", "قنوات الكأس", Color.rgb(242, 190, 62)),
+            Triple("أبو ظبي الرياضية", "أبو ظبي الرياضية", Color.rgb(70, 175, 245)),
+            Triple("أبو ظبي بريميوم", "أبو ظبي الرياضية بريميوم", Color.rgb(242, 190, 62))
         )
 
-        brandItems.forEach { brand ->
+        // Duplicate the same sequence so the slider can wrap without a visible pause.
+        (brandItems + brandItems).forEach { brand ->
             val brandCard = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER
-                setPadding(
-    dp(5),
-    if (brand.second == "ثمانية") dp(4) else dp(10),
-    dp(5),
-    if (brand.second == "ثمانية") dp(4) else dp(10)
-)
+                setPadding(dp(5), dp(8), dp(5), dp(8))
                 background = GradientDrawable().apply {
                     setColor(Color.rgb(22, 20, 31))
                     cornerRadius = dp(15).toFloat()
@@ -444,45 +449,68 @@ class MainActivity : Activity() {
                 isFocusable = true
                 setOnClickListener {
                     when (brand.second) {
-                        "beIN SPORTS" -> showChannels("القنوات الرياضية")
+                        "beIN SPORTS" -> showSportsBrandChannels("beIN SPORTS")
                         "ثمانية" -> showChannels("ثمانية")
                         "STARZPLAY" -> showChannels("STARZPLAY")
                         "ALWAN" -> showChannels("ALWAN")
+                        "قنوات الكأس", "أبو ظبي الرياضية", "أبو ظبي الرياضية بريميوم" ->
+                            showSportsBrandChannels(brand.second)
                     }
                 }
             }
 
             applyBrandPhotoBackground(brandCard, brand.second)
-
-            val brandLogoHeight = if (brand.second == "ثمانية") dp(56) else dp(44)
+            val brandLogoHeight = if (brand.second == "ثمانية") dp(56) else dp(48)
             brandCard.addView(
                 channelLogoView(
                     brand.second,
                     brand.first,
-                    dp(100),
+                    dp(92),
                     brandLogoHeight,
                     plainBrandFallback = true
                 ),
-                LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    brandLogoHeight
-                )
+                LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, brandLogoHeight)
             )
-
             brandCard.addView(TextView(this).apply {
-                text = brand.second
-                textSize = 10f
+                text = when (brand.second) {
+                    "أبو ظبي الرياضية بريميوم" -> "أبو ظبي بريميوم"
+                    else -> brand.second
+                }
+                textSize = 9f
                 gravity = Gravity.CENTER
                 setTextColor(Color.WHITE)
                 maxLines = 1
-                setPadding(0, dp(5), 0, 0)
-            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(22)))
+                setPadding(0, dp(4), 0, 0)
+            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(20)))
 
             sportsBrands.addView(brandCard, LinearLayout.LayoutParams(
-                0, dp(91), 1f
+                dp(104), dp(91)
             ).apply { setMargins(dp(4), dp(2), dp(4), dp(5)) })
         }
-        content.addView(sportsBrands)
+        sportsSlider.addView(sportsBrands, ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ))
+        content.addView(sportsSlider, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ))
+
+        // Smooth endless movement; reset by exactly one set's width after the duplicate passes.
+        val sliderHandler = Handler(Looper.getMainLooper())
+        val sliderStep = object : Runnable {
+            override fun run() {
+                if (!sportsSlider.isAttachedToWindow) return
+                val oneSetWidth = sportsBrands.width / 2
+                if (oneSetWidth > 0) {
+                    if (sportsSlider.scrollX >= oneSetWidth) {
+                        sportsSlider.scrollTo(sportsSlider.scrollX - oneSetWidth, 0)
+                    } else {
+                        sportsSlider.scrollBy(dp(1), 0)
+                    }
+                }
+                sliderHandler.postDelayed(this, 24L)
+            }
+        }
+        sportsSlider.post { sliderHandler.post(sliderStep) }
 
         // Main categories
         content.addView(TextView(this).apply {
