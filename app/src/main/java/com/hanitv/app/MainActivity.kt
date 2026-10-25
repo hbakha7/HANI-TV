@@ -195,13 +195,19 @@ class MainActivity : Activity() {
         val header = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(18), dp(15), dp(18), dp(15))
-            background = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, intArrayOf(Color.rgb(10, 20, 35), Color.rgb(14, 28, 47))).apply { setStroke(dp(1), Color.rgb(35, 55, 78)) }
+            setPadding(dp(18), dp(17), dp(18), dp(17))
+            background = GradientDrawable(
+                GradientDrawable.Orientation.LEFT_RIGHT,
+                intArrayOf(Color.rgb(25, 10, 55), Color.rgb(8, 30, 57), Color.rgb(5, 13, 27))
+            ).apply {
+                setStroke(dp(1), Color.rgb(48, 130, 205))
+            }
         }
 
         header.addView(TextView(this).apply {
             text = "HANI "
-            textSize = 26f
+            textSize = 28f
+            setShadowLayer(10f, 0f, 0f, Color.rgb(60, 160, 255))
             setTextColor(white)
             setTypeface(null, Typeface.BOLD)
             setOnLongClickListener(View.OnLongClickListener {
@@ -216,7 +222,8 @@ class MainActivity : Activity() {
         }
         header.addView(TextView(this).apply {
             text = "TV"
-            textSize = 26f
+            textSize = 28f
+            setShadowLayer(12f, 0f, 0f, Color.rgb(255, 30, 75))
             setTextColor(red)
             setTypeface(null, Typeface.BOLD)
             setOnLongClickListener(hiddenAdminGesture)
@@ -339,46 +346,98 @@ class MainActivity : Activity() {
             setPadding(0, dp(4), 0, dp(16))
         })
 
-        // Main sports banner
-        val banner = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(18), dp(20), dp(18), dp(20))
+        // Cinematic A+B hero: layered neon background, live badge, oversized ball and CTA.
+        val banner = FrameLayout(this).apply {
             background = GradientDrawable(
                 GradientDrawable.Orientation.TL_BR,
-                intArrayOf(Color.rgb(70, 20, 135), Color.rgb(17, 66, 119), Color.rgb(5, 16, 32))
+                intArrayOf(Color.rgb(80, 18, 150), Color.rgb(15, 65, 125), Color.rgb(4, 13, 28))
             ).apply {
-                cornerRadius = dp(22).toFloat()
-                setStroke(dp(1), Color.rgb(73, 174, 255))
+                cornerRadius = dp(26).toFloat()
+                setStroke(dp(1), Color.rgb(72, 190, 255))
             }
             isClickable = true
             isFocusable = true
             setOnClickListener { showSportsSections() }
+            elevation = dp(5).toFloat()
         }
 
-        banner.addView(TextView(this).apply {
-            text = "⚽  HANI TV SPORTS"
-            textSize = 14f
-            setTextColor(Color.rgb(218, 203, 255))
+        val heroGlow = TextView(this).apply {
+            text = "⚽"
+            textSize = 78f
+            gravity = Gravity.CENTER
+            setTextColor(Color.WHITE)
+            setShadowLayer(24f, 0f, 0f, Color.rgb(42, 168, 255))
+        }
+        val glowParams = FrameLayout.LayoutParams(dp(130), dp(150), Gravity.START or Gravity.CENTER_VERTICAL)
+        glowParams.marginStart = dp(4)
+        banner.addView(heroGlow, glowParams)
+
+        val heroContent = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(18), dp(17), dp(18), dp(17))
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
+            background = GradientDrawable(
+                GradientDrawable.Orientation.LEFT_RIGHT,
+                intArrayOf(Color.TRANSPARENT, Color.argb(125, 7, 14, 31), Color.argb(210, 7, 14, 31))
+            ).apply { cornerRadius = dp(26).toFloat() }
+        }
+        val livePill = TextView(this).apply {
+            text = "●  بث مباشر"
+            textSize = 11f
+            setTextColor(Color.WHITE)
+            gravity = Gravity.CENTER
+            setPadding(dp(10), dp(5), dp(10), dp(5))
+            background = GradientDrawable(
+                GradientDrawable.Orientation.LEFT_RIGHT,
+                intArrayOf(Color.rgb(225, 20, 60), Color.rgb(140, 20, 90))
+            ).apply { cornerRadius = dp(20).toFloat() }
+        }
+        heroContent.addView(livePill, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(27)))
+        heroContent.addView(TextView(this).apply {
+            text = "HANI TV SPORTS"
+            textSize = 12f
+            setTextColor(Color.rgb(126, 213, 255))
             setTypeface(null, Typeface.BOLD)
+            setPadding(0, dp(10), 0, 0)
         })
-        banner.addView(TextView(this).apply {
+        heroContent.addView(TextView(this).apply {
             text = "عِش أجواء المباريات"
-            textSize = 25f
+            textSize = 24f
             setTextColor(Color.WHITE)
             setTypeface(null, Typeface.BOLD)
             gravity = Gravity.START
-            setPadding(0, dp(14), 0, dp(5))
+            setShadowLayer(8f, 0f, 2f, Color.BLACK)
+            setPadding(0, dp(4), 0, dp(4))
         })
-        banner.addView(TextView(this).apply {
-            text = "قنواتك الرياضية في مكان واحد"
-            textSize = 14f
+        heroContent.addView(TextView(this).apply {
+            text = "أقوى القنوات الرياضية في مكان واحد"
+            textSize = 12f
             setTextColor(softWhite)
             gravity = Gravity.START
         })
+        val heroAction = TextView(this).apply {
+            text = "شاهد القنوات الآن   ›"
+            textSize = 12f
+            setTextColor(Color.WHITE)
+            setTypeface(null, Typeface.BOLD)
+            gravity = Gravity.CENTER
+            setPadding(dp(13), dp(8), dp(13), dp(8))
+            background = GradientDrawable(
+                GradientDrawable.Orientation.LEFT_RIGHT,
+                intArrayOf(Color.rgb(143, 45, 255), Color.rgb(18, 133, 255))
+            ).apply {
+                cornerRadius = dp(18).toFloat()
+                setStroke(dp(1), Color.rgb(132, 211, 255))
+            }
+        }
+        heroContent.addView(heroAction, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(36)).apply {
+            topMargin = dp(12)
+        })
+        heroAction.setOnClickListener { showSportsSections() }
+        banner.addView(heroContent, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(202)))
         content.addView(banner, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            ViewGroup.LayoutParams.WRAP_CONTENT
+            ViewGroup.LayoutParams.MATCH_PARENT, dp(202)
         ).apply { bottomMargin = dp(22) })
 
         // Sports brands section
