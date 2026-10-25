@@ -2116,11 +2116,35 @@ private fun isDashStreamUrl(url: String): Boolean {
         if (localLogoRes != 0) {
             return ImageView(this).apply {
                 layoutParams = LinearLayout.LayoutParams(width, height)
-                scaleType = ImageView.ScaleType.FIT_CENTER
+                val isThmanyah = channelName.contains("ثمانية", ignoreCase = true) ||
+                    channelName.contains("thmanyah", ignoreCase = true)
+                scaleType = if (isThmanyah) ImageView.ScaleType.MATRIX else ImageView.ScaleType.FIT_CENTER
                 contentDescription = "$channelName logo"
                 setBackgroundColor(Color.TRANSPARENT)
                 setImageResource(localLogoRes)
                 adjustViewBounds = true
+
+                // The Thmanyah PNG has substantial empty/transparent margins around its mark.
+                // Zoom the bundled drawable inside the existing logo slot so its visible mark
+                // is comparable in size to the other sports logos, without changing card layout.
+                if (isThmanyah) {
+                    post {
+                        val d = drawable
+                        if (d != null && d.intrinsicWidth > 0 && d.intrinsicHeight > 0 && width > 0 && height > 0) {
+                            val fit = minOf(
+                                width.toFloat() / d.intrinsicWidth.toFloat(),
+                                height.toFloat() / d.intrinsicHeight.toFloat()
+                            )
+                            val dx = (width - d.intrinsicWidth * fit) / 2f
+                            val dy = (height - d.intrinsicHeight * fit) / 2f
+                            imageMatrix = android.graphics.Matrix().apply {
+                                setScale(fit, fit)
+                                postTranslate(dx, dy)
+                                postScale(2.35f, 2.35f, width / 2f, height / 2f)
+                            }
+                        }
+                    }
+                }
             }
         }
 
