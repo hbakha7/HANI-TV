@@ -176,7 +176,14 @@ private fun button(
     isAllCaps = false  
     textSize = 14f  
     setTextColor(white)  
-    background = rounded(accent)  
+    background = GradientDrawable(
+        GradientDrawable.Orientation.LEFT_RIGHT,
+        intArrayOf(Color.rgb(139, 42, 255), Color.rgb(24, 150, 255))
+    ).apply {
+        cornerRadius = dp(14).toFloat()
+        setStroke(dp(1), Color.rgb(100, 207, 255))
+    }
+    elevation = dp(2).toFloat()
     setOnClickListener { action() }  
     layoutParams = LinearLayout.LayoutParams(  
         ViewGroup.LayoutParams.MATCH_PARENT, dp(48)  
@@ -345,7 +352,7 @@ private fun renderSavedHomeLinks(content: FrameLayout, empty: TextView) {
 private fun buildHome() {
 val root = LinearLayout(this).apply {
 orientation = LinearLayout.VERTICAL
-setBackgroundColor(Color.rgb(7, 13, 24))
+setBackgroundColor(Color.rgb(5, 10, 23))
 }
 
 val header = LinearLayout(this).apply {  
@@ -354,8 +361,8 @@ val header = LinearLayout(this).apply {
     setPadding(dp(12), dp(8), dp(12), dp(8))  
     background = GradientDrawable(
         GradientDrawable.Orientation.LEFT_RIGHT,
-        intArrayOf(Color.rgb(35, 17, 77), Color.rgb(8, 43, 76), Color.rgb(7, 17, 34))
-    ).apply { setStroke(dp(1), Color.rgb(52, 154, 226)) }  
+        intArrayOf(Color.rgb(73, 20, 145), Color.rgb(11, 68, 125), Color.rgb(5, 14, 30))
+    ).apply { setStroke(dp(1), Color.rgb(62, 183, 255)) }  
 }  
 
 val menu = TextView(this).apply {  
