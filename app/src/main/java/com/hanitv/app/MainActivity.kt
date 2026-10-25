@@ -442,15 +442,19 @@ class MainActivity : Activity() {
 
             applyBrandPhotoBackground(brandCard, brand.second)
 
+            val brandLogoHeight = if (brand.second == "ثمانية") dp(56) else dp(44)
             brandCard.addView(
                 channelLogoView(
-    brand.second,
-    brand.first,
-    dp(100),
-    if (brand.second == "ثمانية") dp(56) else dp(44)
-    plainBrandFallback = true
-)
-                LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44))
+                    brand.second,
+                    brand.first,
+                    dp(100),
+                    brandLogoHeight,
+                    plainBrandFallback = true
+                ),
+                LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    brandLogoHeight
+                )
             )
 
             brandCard.addView(TextView(this).apply {
