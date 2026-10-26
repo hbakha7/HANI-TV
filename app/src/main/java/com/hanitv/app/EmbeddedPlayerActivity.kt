@@ -40,6 +40,12 @@ import android.util.Base64
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.UnrecognizedInputFormatException
+import androidx.media3.exoplayer.drm.MediaDrmCallback
+import androidx.media3.exoplayer.drm.ExoMediaDrm
+import androidx.media3.exoplayer.drm.DefaultDrmSessionManager
+import androidx.media3.exoplayer.drm.DefaultDrmSessionManagerProvider
+import androidx.media3.exoplayer.drm.DrmSessionManagerProvider
+import androidx.media3.exoplayer.drm.FrameworkMediaDrm
 import androidx.media3.common.C
 import androidx.media3.common.TrackSelectionParameters
 data class Channel(
@@ -51,6 +57,48 @@ data class Channel(
     val id: String = "",
     val referer: String? = null
 )
+
+/**
+ * Local ClearKey callback for content whose KID and key were provided by its owner.
+ * The License field accepts a single hexadecimal KID:KEY pair.
+ */
+private class InlineClearKeyCallback(private val kidHex: String, private val keyHex: String) : MediaDrmCallback {
+    override fun executeProvisionRequest(uuid: UUID, request: ExoMediaDrm.ProvisionRequest): ByteArray {
+        throw UnsupportedOperationException("ClearKey does not require provisioning")
+    }
+
+    override fun executeKeyRequest(uuid: UUID, request: ExoMediaDrm.KeyRequest): ByteArray {
+        fun hexBytes(value: String): ByteArray = ByteArray(value.length / 2) { index ->
+            value.substring(index * 2, index * 2 + 2).toInt(16).toByte()
+        }
+        fun base64Url(bytes: ByteArray): String =
+            Base64.encodeToString(bytes, Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP)
+
+        val response = JSONObject()
+            .put("keys", JSONArray().put(
+                JSONObject()
+                    .put("kty", "oct")
+                    .put("kid", base64Url(hexBytes(kidHex)))
+                    .put("k", base64Url(hexBytes(keyHex)))
+            ))
+            .put("type", "temporary")
+        return response.toString().toByteArray(Charsets.UTF_8)
+    }
+}
+
+private fun parseInlineClearKey(value: String): Pair<String, String>? {
+    val parts = value.trim().split(":", limit = 2)
+    if (parts.size != 2) return null
+    fun normalize(hex: String): String {
+        return hex.trim().removePrefix("0x").removePrefix("0X")
+            .replace(Regex("\\s+"), "")
+    }
+    val kid = normalize(parts[0])
+    val key = normalize(parts[1])
+    val hexPattern = Regex("^[0-9a-fA-F]{32}$")
+    if (!hexPattern.matches(kid) || !hexPattern.matches(key)) return null
+    return kid.lowercase(java.util.Locale.ROOT) to key.lowercase(java.util.Locale.ROOT)
+}
 
 class EmbeddedPlayerActivity : AppCompatActivity() {
 
@@ -1291,10 +1339,29 @@ if (referrer.isNotBlank()) {
         httpFactory.setUserAgent(userAgent)
     }
 
+    val defaultDrmProvider = DefaultDrmSessionManagerProvider().apply {
+        setDrmHttpDataSourceFactory(httpFactory)
+    }
+    val drmProvider = DrmSessionManagerProvider { mediaItem ->
+        val drmConfig = mediaItem.localConfiguration?.drmConfiguration
+        val inlineKeys = if (drmConfig?.scheme == C.CLEARKEY_UUID) {
+            parseInlineClearKey(prefs.getString("add_license", "").orEmpty())
+        } else null
+
+        if (inlineKeys != null) {
+            DefaultDrmSessionManager.Builder()
+                .setUuidAndExoMediaDrmProvider(C.CLEARKEY_UUID, FrameworkMediaDrm.DEFAULT_PROVIDER)
+                .build(InlineClearKeyCallback(inlineKeys.first, inlineKeys.second))
+        } else {
+            defaultDrmProvider.get(mediaItem)
+        }
+    }
+
     val playerBuilder = ExoPlayer.Builder(this)
         .setMediaSourceFactory(
             DefaultMediaSourceFactory(this)
                 .setDataSourceFactory(httpFactory)
+                .setDrmSessionManagerProvider(drmProvider)
         )
 
     if (isStarzplayStream) {
@@ -1766,32 +1833,9 @@ if (playerView == null) {
         }
     }
 
-    val drmName = prefs.getString("add_drm_scheme", "بدون DRM").orEmpty().lowercase()
-    val licenseUrl = prefs.getString("add_license", "").orEmpty().trim()
+    val drmName = prefs.getString("add_drm_scheme", "بدون DRM").orEmpty().trim().lowercase()
+    val licenseValue = prefs.getString("add_license", "").orEmpty().trim()
     if (drmName != "بدون drm" && drmName.isNotBlank()) {
-        if (licenseUrl.isBlank()) {
-            playerView?.player = null
-            player?.release()
-            player = null
-            message("اخترت DRM لكن خانة License فارغة. أدخل رابط خادم الترخيص الرسمي.")
-            return
-        }
-        // DRM license requests must target an HTTP(S) license endpoint.
-        // Raw content keys are intentionally not accepted as a substitute for a license server.
-        val licenseUri = try {
-            android.net.Uri.parse(licenseUrl)
-        } catch (_: Exception) {
-            null
-        }
-        if (licenseUri == null ||
-            (licenseUri.scheme != "https" && licenseUri.scheme != "http") ||
-            licenseUri.host.isNullOrBlank()) {
-            playerView?.player = null
-            player?.release()
-            player = null
-            message("رابط License غير صالح. أدخل رابط خادم الترخيص الرسمي بصيغة HTTP أو HTTPS.")
-            return
-        }
         val drmUuid: UUID = when (drmName) {
             "clearkey" -> C.CLEARKEY_UUID
             "widevine" -> C.WIDEVINE_UUID
@@ -1801,13 +1845,43 @@ if (playerView == null) {
                 return
             }
         }
-        val licenseHeaders = getPlaybackHeaders(ch.referer)
-        itemBuilder.setDrmConfiguration(
-            MediaItem.DrmConfiguration.Builder(drmUuid)
-                .setLicenseUri(licenseUri)
-                .setLicenseRequestHeaders(licenseHeaders)
-                .build()
-        )
+
+        // For ClearKey, accept either the provider's KID:KEY hex pair or a normal license URL.
+        val inlineKeys = if (drmName == "clearkey") parseInlineClearKey(licenseValue) else null
+        if (inlineKeys != null) {
+            itemBuilder.setDrmConfiguration(
+                MediaItem.DrmConfiguration.Builder(C.CLEARKEY_UUID).build()
+            )
+        } else {
+            if (licenseValue.isBlank()) {
+                playerView?.player = null
+                player?.release()
+                player = null
+                message("أدخل KID:KEY لخيار ClearKey أو رابط خادم الترخيص الرسمي.")
+                return
+            }
+            val licenseUri = try {
+                android.net.Uri.parse(licenseValue)
+            } catch (_: Exception) {
+                null
+            }
+            if (licenseUri == null ||
+                (licenseUri.scheme != "https" && licenseUri.scheme != "http") ||
+                licenseUri.host.isNullOrBlank()) {
+                playerView?.player = null
+                player?.release()
+                player = null
+                message("قيمة License غير صالحة. لخيار ClearKey استخدم KID:KEY، أو أدخل رابط ترخيص HTTP/HTTPS.")
+                return
+            }
+            val licenseHeaders = getPlaybackHeaders(ch.referer)
+            itemBuilder.setDrmConfiguration(
+                MediaItem.DrmConfiguration.Builder(drmUuid)
+                    .setLicenseUri(licenseUri)
+                    .setLicenseRequestHeaders(licenseHeaders)
+                    .build()
+            )
+        }
     }
     val item = itemBuilder.build()
 
