@@ -45,10 +45,6 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
-import androidx.media3.exoplayer.drm.DefaultDrmSessionManager
-import androidx.media3.exoplayer.drm.DefaultDrmSessionManagerProvider
-import androidx.media3.exoplayer.drm.FrameworkMediaDrm
-import androidx.media3.exoplayer.drm.LocalMediaDrmCallback
 import androidx.media3.ui.PlayerView
 import androidx.media3.ui.TrackSelectionDialogBuilder
 import android.text.InputType
@@ -1482,27 +1478,10 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
             )
             .build()
 
-        // Keep the normal provider-license flow, but also support ClearKey keys supplied
-        // locally as KID:KEY in the License field for authorized test/content sources.
-        val defaultDrmProvider = DefaultDrmSessionManagerProvider()
-        val mediaSourceFactory = DefaultMediaSourceFactory(this)
-            .setDataSourceFactory(httpFactory)
-            .setDrmSessionManagerProvider { mediaItem ->
-                val source = mediaItem.localConfiguration?.tag as? StreamSource
-                val clearKeyResponse = source?.let { buildClearKeyResponse(it) }
-                if (clearKeyResponse != null) {
-                    DefaultDrmSessionManager.Builder()
-                        .setUuidAndExoMediaDrmProvider(C.CLEARKEY_UUID, FrameworkMediaDrm.DEFAULT_PROVIDER)
-                        .build(LocalMediaDrmCallback(clearKeyResponse))
-                } else {
-                    defaultDrmProvider.get(mediaItem)
-                }
-            }
-
         val exo = ExoPlayer.Builder(this)
             .setTrackSelector(trackSelector)
             .setLoadControl(loadControl)
-            .setMediaSourceFactory(mediaSourceFactory)
+            .setMediaSourceFactory(DefaultMediaSourceFactory(this).setDataSourceFactory(httpFactory))
             .build()
         embeddedPlayer = exo
         video.player = exo
@@ -1710,14 +1689,13 @@ private fun isDashStreamUrl(url: String): Boolean {
     }
 }
     /**
-     * Creates a Media3 item using either a provider license URL or local ClearKey material.
-     * The source is attached as a tag so the DRM-session provider can choose the right callback.
+     * Creates a Media3 item using this source's stream format and official DRM license settings.
+     * Key ID/Key fields are metadata only here; they do not replace a provider license endpoint.
      */
     private fun buildMediaItem(source: StreamSource): MediaItem? {
         val builder = MediaItem.Builder()
             .setUri(source.url)
             .setMediaId(source.channel)
-            .setTag(source)
 
         val normalizedPath = try {
             android.net.Uri.parse(source.url).path.orEmpty()
@@ -1736,16 +1714,21 @@ private fun isDashStreamUrl(url: String): Boolean {
         val licenseUrl = source.licenseUrl.trim()
         val schemeName = source.scheme.trim().lowercase(java.util.Locale.ROOT)
         val drmName = source.drmScheme.trim().lowercase(java.util.Locale.ROOT)
-        val localClearKeyResponse = buildClearKeyResponse(source)
+        val hasLocalKeyValues = source.keyId.isNotBlank() || source.key.isNotBlank()
         val drmRequested = licenseUrl.isNotBlank() || schemeName.isNotBlank() ||
-            drmName.isNotBlank() || source.keyId.isNotBlank() || source.key.isNotBlank()
+            drmName.isNotBlank() || hasLocalKeyValues
 
-        if (localClearKeyResponse != null) {
-            // No HTTP license URL is needed when the authorized ClearKey response is local.
-            builder.setDrmConfiguration(
-                MediaItem.DrmConfiguration.Builder(C.CLEARKEY_UUID).build()
-            )
-        } else if (drmRequested) {
+        if (drmRequested) {
+            if (licenseUrl.isBlank() ||
+                !(licenseUrl.startsWith("https://", true) || licenseUrl.startsWith("http://", true))) {
+                Toast.makeText(
+                    this,
+                    "إعدادات DRM تحتاج License URL رسميًا؛ Key ID وKey وحدهما لا يكفيان هنا.",
+                    Toast.LENGTH_LONG
+                ).show()
+                return null
+            }
+
             val explicitUuid = try {
                 java.util.UUID.fromString(source.drmScheme.trim())
             } catch (_: Exception) {
@@ -1768,16 +1751,6 @@ private fun isDashStreamUrl(url: String): Boolean {
                 return null
             }
 
-            if (licenseUrl.isBlank() ||
-                !(licenseUrl.startsWith("https://", true) || licenseUrl.startsWith("http://", true))) {
-                Toast.makeText(
-                    this,
-                    "أدخل رابط License رسميًا، أو أدخل KID:KEY صالحًا مع اختيار clearkey.",
-                    Toast.LENGTH_LONG
-                ).show()
-                return null
-            }
-
             builder.setDrmConfiguration(
                 MediaItem.DrmConfiguration.Builder(drmUuid)
                     .setLicenseUri(android.net.Uri.parse(licenseUrl))
@@ -1787,66 +1760,6 @@ private fun isDashStreamUrl(url: String): Boolean {
         }
 
         return builder.build()
-    }
-
-    /**
-     * Builds the ClearKey JSON response expected by Media3 from either separate Key ID/Key
-     * fields or a License field written as KID:KEY. Returns null when no valid local key pair
-     * is present, allowing the regular provider-license path to remain unchanged.
-     */
-    private fun buildClearKeyResponse(source: StreamSource): ByteArray? {
-        val licenseValue = source.licenseUrl.trim()
-        var kid = source.keyId.trim()
-        var key = source.key.trim()
-
-        if (kid.isBlank() || key.isBlank()) {
-            if (licenseValue.startsWith("http://", true) || licenseValue.startsWith("https://", true)) {
-                return null
-            }
-            val separator = licenseValue.indexOf(':')
-            if (separator <= 0 || separator >= licenseValue.lastIndex) return null
-            kid = licenseValue.substring(0, separator).trim()
-            key = licenseValue.substring(separator + 1).trim()
-        }
-
-        val kidBytes = decodeHexKey(kid) ?: return null
-        val keyBytes = decodeHexKey(key) ?: return null
-        // ClearKey KID and content key are 128-bit values (16 bytes each).
-        if (kidBytes.size != 16 || keyBytes.size != 16) return null
-
-        fun base64Url(bytes: ByteArray): String =
-            android.util.Base64.encodeToString(
-                bytes,
-                android.util.Base64.URL_SAFE or android.util.Base64.NO_PADDING or android.util.Base64.NO_WRAP
-            )
-
-        return JSONObject()
-            .put(
-                "keys",
-                JSONArray().put(
-                    JSONObject()
-                        .put("kty", "oct")
-                        .put("kid", base64Url(kidBytes))
-                        .put("k", base64Url(keyBytes))
-                )
-            )
-            .put("type", "temporary")
-            .toString()
-            .toByteArray(Charsets.UTF_8)
-    }
-
-    private fun decodeHexKey(value: String): ByteArray? {
-        val hex = value.trim().removePrefix("0x").removePrefix("0X")
-        if (hex.isEmpty() || hex.length % 2 != 0 || !hex.all { it in "0123456789abcdefABCDEF" }) {
-            return null
-        }
-        return try {
-            ByteArray(hex.length / 2) { index ->
-                hex.substring(index * 2, index * 2 + 2).toInt(16).toByte()
-            }
-        } catch (_: Exception) {
-            null
-        }
     }
 
     private fun switchServerInsidePlayer(index: Int) {
@@ -2843,6 +2756,25 @@ private fun isDashStreamUrl(url: String): Boolean {
                             item.optString("key", "")
                         ))
                     }
+                    // Preserve locally saved DRM fields if Hostinger still returns an older
+                    // source row without those fields (for example after a failed cloud save).
+                    // Match by channel plus server name, with channel plus URL as a fallback.
+                    for (index in downloaded.indices) {
+                        val remote = downloaded[index]
+                        val local = sources.firstOrNull { candidate ->
+                            candidate.channel.equals(remote.channel, ignoreCase = true) &&
+                                (candidate.serverName.equals(remote.serverName, ignoreCase = true) ||
+                                 candidate.url.equals(remote.url, ignoreCase = true))
+                        } ?: continue
+                        downloaded[index] = remote.copy(
+                            licenseUrl = remote.licenseUrl.ifBlank { local.licenseUrl },
+                            scheme = remote.scheme.ifBlank { local.scheme },
+                            drmScheme = remote.drmScheme.ifBlank { local.drmScheme },
+                            keyId = remote.keyId.ifBlank { local.keyId },
+                            key = remote.key.ifBlank { local.key }
+                        )
+                    }
+
                     // If a channel has sources but no separate channel_settings row yet, still show it.
                     downloaded.forEach { source ->
                         if (source.channel.isNotBlank() && !remoteChannelNames.contains(source.channel)) {
@@ -3068,7 +3000,11 @@ private fun isDashStreamUrl(url: String): Boolean {
                     Toast.makeText(this, "تم حفظ روابط القنوات بنجاح.", Toast.LENGTH_SHORT).show()
                     onComplete?.invoke()
                 } else {
-                    Toast.makeText(this, "تعذر حفظ التعديلات حاليًا. تحقق من الاتصال وحاول مجددًا.", Toast.LENGTH_LONG).show()
+                    Toast.makeText(
+                        this,
+                        "تم الاحتفاظ بالتعديلات على هذا الجهاز، لكن تعذر حفظها على الخادم. ستبقى البيانات المحلية محفوظة؛ تحقق من الاتصال وإعدادات API في Hostinger.",
+                        Toast.LENGTH_LONG
+                    ).show()
                     onComplete?.invoke()
                 }
             }
