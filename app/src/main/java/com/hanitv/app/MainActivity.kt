@@ -42,6 +42,7 @@ import androidx.media3.common.Player
 import androidx.media3.common.VideoSize
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.drm.MediaDrmCallback
 import androidx.media3.exoplayer.drm.ExoMediaDrm
 import androidx.media3.exoplayer.drm.DefaultDrmSessionManager
@@ -1546,7 +1547,12 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
                 defaultDrmProvider.get(mediaItem)
             }
         }
-        val exo = ExoPlayer.Builder(this)
+        // Allow Media3 to fall back to another compatible decoder if the preferred
+        // hardware decoder cannot initialize this stream reliably.
+        val renderersFactory = DefaultRenderersFactory(this)
+            .setEnableDecoderFallback(true)
+
+        val exo = ExoPlayer.Builder(this, renderersFactory)
             .setTrackSelector(trackSelector)
             .setLoadControl(loadControl)
             .setMediaSourceFactory(
