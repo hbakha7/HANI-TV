@@ -135,6 +135,7 @@ class MainActivity : Activity() {
     private var embeddedServerContent: LinearLayout? = null
     private var serverRefreshRunnable: Runnable? = null
     private val embeddedChannelCards = linkedMapOf<String, View>()
+    private var embeddedChannelScroll: HorizontalScrollView? = null
     private var loadingIndicator: ProgressBar? = null
     private var scheduleOverlayHideAction: (() -> Unit)? = null
     private var progressUpdater: Runnable? = null
@@ -1042,11 +1043,20 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
 
     if (playerAlreadyOpen) {
         // Update the selected channel card without rebuilding the entire player UI.
+        val selectedChannelName = options.first().channel
         embeddedChannelCards.forEach { (name, card) ->
             card.setBackgroundColor(
-                if (name == options.first().channel) Color.rgb(28, 105, 165)
+                if (name == selectedChannelName) Color.rgb(28, 105, 165)
                 else Color.TRANSPARENT
             )
+        }
+        // Keep the global channel order unchanged; scroll the strip to the selected card.
+        embeddedChannelScroll?.let { strip ->
+            strip.post {
+                val card = embeddedChannelCards[selectedChannelName] ?: return@post
+                val targetX = (card.left + card.width / 2 - strip.width / 2).coerceAtLeast(0)
+                strip.smoothScrollTo(targetX, 0)
+            }
         }
 
         // Rebuild only the circular server choices for the newly selected channel.
@@ -1465,6 +1475,7 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
             embeddedChannelCards[channel.first] = card
         }
         channelScroll.addView(channelRow)
+        embeddedChannelScroll = channelScroll
         videoFrame.addView(
             channelScroll,
             FrameLayout.LayoutParams(
@@ -1483,6 +1494,14 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
         }
         dialog.show()
         dialog.window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+        // The selected channel stays at its original index. Move only the viewport
+        // so that channel is visible immediately when the player opens.
+        channelScroll.post {
+            val selectedCard = embeddedChannelCards[source.channel] ?: return@post
+            val targetX = (selectedCard.left + selectedCard.width / 2 - channelScroll.width / 2)
+                .coerceAtLeast(0)
+            channelScroll.scrollTo(targetX, 0)
+        }
         scheduleOverlayHide()
         scheduleServerRefreshWhilePlaying()
         dialog.window?.decorView?.systemUiVisibility = (
@@ -1944,6 +1963,7 @@ private fun isDashStreamUrl(url: String): Boolean {
         embeddedChannelTitle = null
         embeddedServerButtons.clear()
         embeddedChannelCards.clear()
+        embeddedChannelScroll = null
         failoverPending = false
         sameServerRetryUsed = false
         if (!keepScreenOnWasSet) window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
