@@ -228,6 +228,16 @@ class MainActivity : Activity() {
             "ALWAN 10" to "A10"
         ),
         "القنوات العربية" to listOf(
+            "MBC 1" to "MBC1",
+            "MBC 2" to "MBC2",
+            "MBC 3" to "MBC3",
+            "MBC 4" to "MBC4",
+            "MBC 5" to "MBC5",
+            "MBC Action" to "ACTION",
+            "MBC Max" to "MAX",
+            "MBC Drama" to "DRAMA",
+            "MBC Masr 1" to "MASR1",
+            "MBC Masr 2" to "MASR2",
             "قناة عربية 1" to "AR",
             "قناة عربية 2" to "A2",
             "قناة عربية 3" to "A3",
@@ -893,6 +903,10 @@ class MainActivity : Activity() {
         addText(category, 23f, white, true)
         addText("القنوات المتاحة في هذا القسم", 14f, gray, false)
 
+        if (category == "القنوات العربية") {
+            addMbcSectionCard()
+        }
+
         val predefinedChannels = channelGroups.values.flatten().distinctBy { it.first }
         val configuredChannels = sources.map { it.channel.trim() }
             .filter { it.isNotBlank() }
@@ -904,7 +918,10 @@ class MainActivity : Activity() {
             }
         val channels = (predefinedChannels + configuredChannels)
             .distinctBy { it.first }
-            .filter { (name, _) -> (builtInBrandCategoryFor(name) ?: channelCategories[name] ?: defaultCategoryFor(name)) == category }
+            .filter { (name, _) ->
+                (builtInBrandCategoryFor(name) ?: channelCategories[name] ?: defaultCategoryFor(name)) == category &&
+                    !(category == "القنوات العربية" && isMbcChannel(name))
+            }
 
         val grid = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -941,6 +958,92 @@ class MainActivity : Activity() {
             addText("لا توجد قنوات مضافة لهذا القسم بعد.", 13f, gray, false, 8)
         }
         addBackButton()
+    }
+
+    private fun isMbcChannel(name: String): Boolean =
+        name.trim().startsWith("MBC", ignoreCase = true)
+
+    private fun addMbcSectionCard() {
+        val card = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(14), dp(12), dp(14), dp(12))
+            background = GradientDrawable(
+                GradientDrawable.Orientation.LEFT_RIGHT,
+                intArrayOf(Color.rgb(31, 25, 43), Color.rgb(20, 20, 26))
+            ).apply {
+                cornerRadius = dp(14).toFloat()
+                setStroke(dp(1), Color.rgb(104, 74, 137))
+            }
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { showMbcChannels() }
+        }
+
+        val logo = ImageView(this).apply {
+            setImageResource(R.drawable.mbc_1)
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            contentDescription = "MBC 1 logo"
+        }
+        card.addView(logo, LinearLayout.LayoutParams(dp(72), dp(48)))
+
+        val labels = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(12), 0, dp(8), 0)
+        }
+        labels.addView(TextView(this).apply {
+            text = "قنوات MBC"
+            textSize = 17f
+            setTextColor(Color.WHITE)
+            setTypeface(null, Typeface.BOLD)
+        })
+        labels.addView(TextView(this).apply {
+            text = "10 قنوات • MBC 1–5 و Action و Max و Drama ومصر"
+            textSize = 11f
+            setTextColor(gray)
+            setPadding(0, dp(4), 0, 0)
+        })
+        card.addView(labels, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        card.addView(TextView(this).apply {
+            text = "‹"
+            textSize = 30f
+            setTextColor(Color.rgb(210, 45, 60))
+        })
+        content.addView(card, fullWidthParams().apply {
+            topMargin = dp(10)
+            bottomMargin = dp(14)
+        })
+    }
+
+    private fun showMbcChannels() {
+        showingServerManager = false
+        content.removeAllViews()
+        content.setPadding(dp(14), dp(16), dp(14), dp(24))
+        addText("قنوات MBC", 23f, white, true)
+        addText("اختر القناة التي تريد مشاهدتها", 14f, gray, false, 12)
+
+        val channels = channelGroups["القنوات العربية"].orEmpty().filter { isMbcChannel(it.first) }
+        val grid = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        var index = 0
+        while (index < channels.size) {
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                layoutDirection = View.LAYOUT_DIRECTION_LTR
+            }
+            addChannelCard(row, channels[index])
+            if (index + 1 < channels.size) addChannelCard(row, channels[index + 1])
+            grid.addView(row, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { bottomMargin = dp(10) })
+            index += 2
+        }
+        content.addView(grid)
+        val back = makeButton("العودة إلى القنوات العربية")
+        back.setOnClickListener { showChannels("القنوات العربية") }
+        content.addView(back, fullWidthParams().apply { topMargin = dp(18) })
     }
 
     private fun addChannelCard(
@@ -2161,6 +2264,8 @@ private fun isDashStreamUrl(url: String): Boolean {
     }
 
     private fun builtInBrandCategoryFor(channelName: String): String? = when (channelName) {
+        "MBC 1", "MBC 2", "MBC 3", "MBC 4", "MBC 5", "MBC Action", "MBC Max",
+        "MBC Drama", "MBC Masr 1", "MBC Masr 2" -> "القنوات العربية"
         "ثمانية 1", "ثمانية 2", "ثمانية 3" -> "ثمانية"
         "STARZPLAY 1", "STARZPLAY 2", "STARZPLAY 3" -> "STARZPLAY"
         "ALWAN 1", "ALWAN 2", "ALWAN 3", "ALWAN 4", "ALWAN 5",
@@ -2178,6 +2283,18 @@ private fun isDashStreamUrl(url: String): Boolean {
 
     private fun ensureBuiltInBrandChannels() {
         val builtIns = linkedMapOf(
+            "القنوات العربية" to listOf(
+                "MBC 1" to "MBC1",
+                "MBC 2" to "MBC2",
+                "MBC 3" to "MBC3",
+                "MBC 4" to "MBC4",
+                "MBC 5" to "MBC5",
+                "MBC Action" to "ACTION",
+                "MBC Max" to "MAX",
+                "MBC Drama" to "DRAMA",
+                "MBC Masr 1" to "MASR1",
+                "MBC Masr 2" to "MASR2"
+            ),
             "ثمانية" to listOf(
                 "ثمانية 1" to "T1",
                 "ثمانية 2" to "T2",
@@ -2363,6 +2480,16 @@ private fun isDashStreamUrl(url: String): Boolean {
         // Official sports-brand logos are bundled in res/drawable-nodpi.
         // Resolve them locally first so they appear immediately, without any network request.
         val localLogoRes = when {
+            channelName.equals("MBC 1", ignoreCase = true) -> R.drawable.mbc_1
+            channelName.equals("MBC 2", ignoreCase = true) -> R.drawable.mbc_2
+            channelName.equals("MBC 3", ignoreCase = true) -> R.drawable.mbc_3
+            channelName.equals("MBC 4", ignoreCase = true) -> R.drawable.mbc_4
+            channelName.equals("MBC 5", ignoreCase = true) -> R.drawable.mbc_5
+            channelName.equals("MBC Action", ignoreCase = true) -> R.drawable.mbc_action
+            channelName.equals("MBC Max", ignoreCase = true) -> R.drawable.mbc_max
+            channelName.equals("MBC Drama", ignoreCase = true) -> R.drawable.mbc_drama
+            channelName.equals("MBC Masr 1", ignoreCase = true) -> R.drawable.mbc_masr
+            channelName.equals("MBC Masr 2", ignoreCase = true) -> R.drawable.mbc_masr_2
             channelName.contains("ثمانية", ignoreCase = true) ||
                 channelName.contains("thmanyah", ignoreCase = true) -> R.drawable.thmanyah
             channelName.contains("STARZPLAY", ignoreCase = true) -> R.drawable.logo_starzplay
