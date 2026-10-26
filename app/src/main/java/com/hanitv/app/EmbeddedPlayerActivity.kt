@@ -126,6 +126,13 @@ private var incomingServerReferers = arrayListOf<String>()
 private var incomingServerUserAgents = arrayListOf<String>()
 private var incomingServerCookies = arrayListOf<String>()
 private var incomingServerAuthorizations = arrayListOf<String>()
+// Optional per-server DRM values supplied by the caller. Each array uses the same
+// index as server_urls so switching servers also switches its own DRM configuration.
+private var incomingServerLicenses = arrayListOf<String>()
+private var incomingServerDrmSchemes = arrayListOf<String>()
+private var incomingServerSchemes = arrayListOf<String>()
+private var incomingServerKeyIds = arrayListOf<String>()
+private var incomingServerKeys = arrayListOf<String>()
 private var incomingSelectedServer = 0
 private var incomingChannelName = ""
 // Automatically rotate through the received server URLs after playback errors.
@@ -181,6 +188,11 @@ private fun handleExternalLink(incoming: android.content.Intent?) {
     incomingServerUserAgents = incoming.getStringArrayListExtra("server_user_agents") ?: arrayListOf()
     incomingServerCookies = incoming.getStringArrayListExtra("server_cookies") ?: arrayListOf()
     incomingServerAuthorizations = incoming.getStringArrayListExtra("server_authorizations") ?: arrayListOf()
+    incomingServerLicenses = incoming.getStringArrayListExtra("server_licenses") ?: arrayListOf()
+    incomingServerDrmSchemes = incoming.getStringArrayListExtra("server_drm_schemes") ?: arrayListOf()
+    incomingServerSchemes = incoming.getStringArrayListExtra("server_schemes") ?: arrayListOf()
+    incomingServerKeyIds = incoming.getStringArrayListExtra("server_key_ids") ?: arrayListOf()
+    incomingServerKeys = incoming.getStringArrayListExtra("server_keys") ?: arrayListOf()
     incomingSelectedServer = incoming.getIntExtra("selected_server_index", 0)
         .coerceIn(0, (incomingServerUrls.size - 1).coerceAtLeast(0))
     incomingChannelName = name
@@ -1301,7 +1313,8 @@ private fun getPlaybackHeaders(refererOverride: String? = null): Map<String, Str
 
 private fun createPlaybackPlayer(
     refererOverride: String? = null,
-    streamUrl: String? = null
+    streamUrl: String? = null,
+    serverClearKey: Pair<String, String>? = null
 ): ExoPlayer {
     val headers = getPlaybackHeaders(refererOverride).toMutableMap()
     // Increase buffering only for the Starzplay-origin stream being troubleshot.
@@ -1345,7 +1358,7 @@ if (referrer.isNotBlank()) {
     val drmProvider = DrmSessionManagerProvider { mediaItem ->
         val drmConfig = mediaItem.localConfiguration?.drmConfiguration
         val inlineKeys = if (drmConfig?.scheme == C.CLEARKEY_UUID) {
-            parseInlineClearKey(prefs.getString("add_license", "").orEmpty())
+            serverClearKey ?: parseInlineClearKey(prefs.getString("add_license", "").orEmpty())
         } else null
 
         if (inlineKeys != null) {
@@ -1795,10 +1808,24 @@ private fun play(ch: Channel) {
 try {
 // Allow one fresh HLS fallback attempt for each new playback request.
 hlsFallbackAttemptedUrl = ""
+// Select the DRM values that belong to this exact server button, when supplied.
+val serverIndex = incomingServerUrls.indexOf(ch.url)
+val serverDrmName = incomingServerDrmSchemes.getOrNull(serverIndex).orEmpty()
+    .ifBlank { incomingServerSchemes.getOrNull(serverIndex).orEmpty() }
+    .ifBlank { prefs.getString("add_drm_scheme", "بدون DRM").orEmpty() }
+    .trim().lowercase(java.util.Locale.ROOT)
+val serverLicenseValue = incomingServerLicenses.getOrNull(serverIndex).orEmpty()
+    .ifBlank { prefs.getString("add_license", "").orEmpty() }.trim()
+val serverKeyId = incomingServerKeyIds.getOrNull(serverIndex).orEmpty().trim()
+val serverKey = incomingServerKeys.getOrNull(serverIndex).orEmpty().trim()
+val serverInlineKeys = if (serverDrmName.contains("clearkey") || serverDrmName.contains("clear key")) {
+    parseInlineClearKey("$serverKeyId:$serverKey") ?: parseInlineClearKey(serverLicenseValue)
+} else null
+
 // إنشاء مشغّل جديد لضمان تطبيق رؤوس الطلبات الحالية
 playerView?.player = null
 player?.release()
-player = createPlaybackPlayer(ch.referer, ch.url)
+player = createPlaybackPlayer(ch.referer, ch.url, serverInlineKeys)
 
 if (playerView == null) {  
         showLibrary()  
@@ -1833,8 +1860,8 @@ if (playerView == null) {
         }
     }
 
-    val drmName = prefs.getString("add_drm_scheme", "بدون DRM").orEmpty().trim().lowercase()
-    val licenseValue = prefs.getString("add_license", "").orEmpty().trim()
+    val drmName = serverDrmName
+    val licenseValue = serverLicenseValue
     if (drmName != "بدون drm" && drmName.isNotBlank()) {
         val drmUuid: UUID = when (drmName) {
             "clearkey" -> C.CLEARKEY_UUID
@@ -1847,7 +1874,9 @@ if (playerView == null) {
         }
 
         // For ClearKey, accept either the provider's KID:KEY hex pair or a normal license URL.
-        val inlineKeys = if (drmName == "clearkey") parseInlineClearKey(licenseValue) else null
+        val inlineKeys = if (drmName == "clearkey" || drmName.contains("clear key")) {
+            serverInlineKeys ?: parseInlineClearKey(licenseValue)
+        } else null
         if (inlineKeys != null) {
             itemBuilder.setDrmConfiguration(
                 MediaItem.DrmConfiguration.Builder(C.CLEARKEY_UUID).build()
