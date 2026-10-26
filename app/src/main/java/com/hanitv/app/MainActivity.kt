@@ -26,6 +26,8 @@ import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.ProgressBar
 import android.widget.SeekBar
+import android.widget.Spinner
+import android.widget.ArrayAdapter
 import android.app.Dialog
 import android.os.Handler
 import android.os.Looper
@@ -1000,7 +1002,12 @@ private fun displayChannelName(name: String): String {
     private fun openChannel(channelName: String) {
         // Use cached Hostinger sources immediately; never wait for the cloud refresh
         // when this channel already has locally saved server links.
-        val options = sources.filter { it.channel == channelName }
+        fun channelKey(value: String): String = value.trim()
+            .replace(Regex("\\s+"), " ")
+            .lowercase(java.util.Locale.ROOT)
+
+        val requestedKey = channelKey(channelName)
+        val options = sources.filter { channelKey(it.channel) == requestedKey }
 
         if (options.isNotEmpty()) {
             pendingChannelToOpen = null
@@ -2576,8 +2583,33 @@ private fun isDashStreamUrl(url: String): Boolean {
                 }
             }.also { box.addView(it) }
         }
-        val channelNames = channelGroups.values.flatten().map { it.first }.distinct()
-        val channelInput = field("اسم القناة (مثال: SPORT 1)", existing?.channel ?: channelName ?: channelNames.firstOrNull().orEmpty())
+        // Choose a channel from the app's actual channel list instead of free typing.
+        // Include channels already received from Hostinger so custom channel names remain selectable.
+        val channelNames = (
+            channelGroups.values.flatten().map { it.first } +
+            sources.map { it.channel.trim() } +
+            listOfNotNull(existing?.channel?.trim(), channelName?.trim())
+        ).filter { it.isNotBlank() }.distinct()
+
+        box.addView(TextView(this).apply {
+            text = "اسم القناة — اختر من القائمة لضمان الربط الصحيح"
+            textSize = 13f
+            setTextColor(gray)
+            setPadding(0, dp(8), 0, dp(4))
+        })
+
+        val channelInput = Spinner(this).apply {
+            adapter = ArrayAdapter(
+                this@MainActivity,
+                android.R.layout.simple_spinner_item,
+                channelNames
+            ).also { it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }
+            val selectedName = existing?.channel ?: channelName
+            val selectedIndex = channelNames.indexOfFirst { it == selectedName }
+            setSelection(if (selectedIndex >= 0) selectedIndex else 0)
+        }
+        box.addView(channelInput, fullWidthParams())
+
         val serverInput = field("اسم السيرفر للإدارة (مثال: السيرفر الاحتياطي)", existing?.serverName ?: "السيرفر الأساسي")
         val displayNameInput = field("الاسم الذي يظهر داخل المشغّل", existing?.displayName ?: existing?.serverName ?: "السيرفر الأساسي")
         val urlInput = field("رابط البث الكامل", existing?.url ?: "")
@@ -2607,7 +2639,7 @@ private fun isDashStreamUrl(url: String): Boolean {
             .create().also { dialog ->
                 dialog.setOnShowListener {
                     dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
-                        val channel = channelInput.text.toString().trim()
+                        val channel = channelInput.selectedItem?.toString()?.trim().orEmpty()
                         val server = serverInput.text.toString().trim()
                         val displayName = displayNameInput.text.toString().trim()
                         val url = urlInput.text.toString().trim()
