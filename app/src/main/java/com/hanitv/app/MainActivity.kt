@@ -1063,46 +1063,169 @@ class MainActivity : Activity() {
         row: LinearLayout,
         channel: Pair<String, String>
     ) {
+        val name = channel.first
         val card = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
-            setPadding(dp(8), dp(12), dp(8), dp(12))
-            background = graphiteCardDrawable(accent = Color.rgb(86, 89, 99), radius = 14)
-            elevation = dp(2).toFloat()
-            clipToOutline = true
+            gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+            setPadding(dp(3), dp(3), dp(3), dp(8))
+            setBackgroundColor(Color.TRANSPARENT)
             isClickable = true
             isFocusable = true
-            setOnClickListener { openChannel(channel.first) }
+            contentDescription = displayChannelName(name)
+            setOnClickListener { openChannel(name) }
         }
 
-        // Keep the original logo drawable untouched. Only wrap a real local/remote logo
-        // in an adaptive surface; do not add a second silver frame around text fallbacks.
-        val logoView = channelLogoView(channel.first, channel.second, dp(66), dp(66))
-        if (hasRealChannelLogo(channel.first)) {
-            val logoStage = makeAdaptiveLogoStage(channel.first, dp(76), dp(76))
-            logoStage.addView(
-                logoView,
-                FrameLayout.LayoutParams(dp(66), dp(66), Gravity.CENTER)
-            )
-            card.addView(logoStage, LinearLayout.LayoutParams(dp(76), dp(76)))
-        } else {
-            card.addView(logoView, LinearLayout.LayoutParams(dp(66), dp(66)))
+        // Poster-style artwork fills the whole thumbnail. The original logo is placed
+        // directly over it, with no recoloring, cropping, or replacement of the asset.
+        val poster = FrameLayout(this).apply {
+            background = ChannelPosterDrawable(name)
+            clipToOutline = true
+            foreground = GradientDrawable().apply {
+                cornerRadius = dp(12).toFloat()
+                setStroke(dp(1), Color.argb(70, 235, 238, 245))
+            }
+            elevation = dp(2).toFloat()
         }
+        val logoView = channelLogoView(name, channel.second, dp(142), dp(76))
+        poster.addView(
+            logoView,
+            FrameLayout.LayoutParams(dp(142), dp(76), Gravity.CENTER)
+        )
+        card.addView(
+            poster,
+            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(108))
+        )
 
         card.addView(TextView(this).apply {
-            text = displayChannelName(channel.first)
+            text = displayChannelName(name)
             textSize = 14f
             gravity = Gravity.CENTER
-            setTextColor(white)
-            setPadding(0, dp(10), 0, 0)
-        })
+            setTextColor(Color.rgb(245, 245, 247))
+            setTypeface(null, Typeface.BOLD)
+            maxLines = 2
+            ellipsize = android.text.TextUtils.TruncateAt.END
+            setPadding(dp(2), dp(7), dp(2), 0)
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+
+        card.addView(TextView(this).apply {
+            text = channelPosterSubtitle(name)
+            textSize = 11f
+            gravity = Gravity.CENTER
+            setTextColor(Color.rgb(158, 160, 169))
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.END
+            setPadding(dp(2), dp(3), dp(2), 0)
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
 
         row.addView(
             card,
-            LinearLayout.LayoutParams(0, -2, 1f).apply {
-                setMargins(dp(4), 0, dp(4), 0)
+            LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                setMargins(dp(5), 0, dp(5), 0)
             }
         )
+    }
+
+    private fun channelPosterSubtitle(name: String): String {
+        val value = name.lowercase(java.util.Locale.ROOT)
+        return when {
+            value.contains("bein") || value.contains("رياض") || value.contains("sports") ||
+                value.contains("الكأس") || value.contains("ثمانية") || value.contains("shahid sports") -> "رياضة"
+            value.contains("mbc") || value.contains("روتانا") || value.contains("العربية") -> "قنوات عربية"
+            value.contains("طفل") || value.contains("كرتون") || value.contains("kids") ||
+                value.contains("toons") || value.contains("spacetoon") -> "الأطفال"
+            value.contains("news") || value.contains("أخبار") || value.contains("الجزيرة") ||
+                value.contains("dw") || value.contains("العراقية") -> "إخباري وثقافي"
+            value.contains("document") || value.contains("جيوغرافيك") || value.contains("nat geo") -> "وثائقي"
+            value.contains("starzplay") || value.contains("max") || value.contains("film") ||
+                value.contains("سينما") || value.contains("أفلام") -> "أفلام وترفيه"
+            else -> defaultCategoryFor(name).takeIf { it.isNotBlank() } ?: "قنوات مباشرة"
+        }
+    }
+
+    /** Artwork-only thumbnail background: channel logo assets remain unchanged and on top. */
+    private inner class ChannelPosterDrawable(private val channelName: String) : Drawable() {
+        private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+        private val key = channelName.lowercase(java.util.Locale.ROOT)
+        private val palette: IntArray = when {
+            key.contains("bein") -> intArrayOf(Color.rgb(79, 34, 123), Color.rgb(34, 10, 57), Color.rgb(15, 12, 28))
+            key.contains("alwan") || key.contains("ألوان") -> intArrayOf(Color.rgb(12, 102, 103), Color.rgb(5, 57, 60), Color.rgb(7, 27, 37))
+            key.contains("ثمانية") || key.contains("shahid sports") -> intArrayOf(Color.rgb(0, 94, 76), Color.rgb(10, 42, 45), Color.rgb(13, 23, 32))
+            key.contains("starzplay") || key.contains("film") || key.contains("سينما") -> intArrayOf(Color.rgb(91, 43, 52), Color.rgb(42, 25, 34), Color.rgb(20, 18, 25))
+            key.contains("mbc") || key.contains("روتانا") -> intArrayOf(Color.rgb(94, 47, 54), Color.rgb(44, 27, 34), Color.rgb(20, 19, 24))
+            key.contains("طفل") || key.contains("كرتون") || key.contains("kids") || key.contains("toons") -> intArrayOf(Color.rgb(103, 39, 127), Color.rgb(53, 23, 76), Color.rgb(24, 18, 37))
+            key.contains("news") || key.contains("أخبار") || key.contains("الجزيرة") || key.contains("dw") -> intArrayOf(Color.rgb(83, 48, 54), Color.rgb(39, 30, 37), Color.rgb(19, 22, 28))
+            key.contains("جيوغرافيك") || key.contains("document") || key.contains("nat geo") -> intArrayOf(Color.rgb(24, 79, 82), Color.rgb(20, 43, 48), Color.rgb(13, 22, 29))
+            key.contains("دبي") || key.contains("أبو ظبي") || key.contains("الكأس") || key.contains("رياض") -> intArrayOf(Color.rgb(26, 67, 99), Color.rgb(20, 34, 53), Color.rgb(14, 19, 30))
+            else -> {
+                val palettes = arrayOf(
+                    intArrayOf(Color.rgb(65, 43, 83), Color.rgb(32, 26, 43), Color.rgb(18, 19, 26)),
+                    intArrayOf(Color.rgb(34, 76, 77), Color.rgb(23, 43, 47), Color.rgb(16, 20, 27)),
+                    intArrayOf(Color.rgb(78, 48, 55), Color.rgb(38, 28, 35), Color.rgb(18, 19, 25)),
+                    intArrayOf(Color.rgb(35, 55, 83), Color.rgb(24, 31, 48), Color.rgb(16, 19, 28))
+                )
+                palettes[(channelName.hashCode().ushr(1) % palettes.size)]
+            }
+        }
+
+        override fun draw(canvas: Canvas) {
+            val b = bounds
+            if (b.width() <= 0 || b.height() <= 0) return
+            val w = b.width().toFloat()
+            val h = b.height().toFloat()
+            paint.style = Paint.Style.FILL
+            paint.shader = LinearGradient(
+                b.left.toFloat(), b.top.toFloat(), b.right.toFloat(), b.bottom.toFloat(),
+                palette, floatArrayOf(0f, .58f, 1f), Shader.TileMode.CLAMP
+            )
+            canvas.drawRect(b, paint)
+            paint.shader = null
+
+            // Soft atmospheric light behind the logo.
+            paint.shader = RadialGradient(
+                b.left + w * .52f, b.top + h * .48f, maxOf(w, h) * .72f,
+                intArrayOf(Color.argb(36, 255, 255, 255), Color.argb(9, 255, 255, 255), Color.TRANSPARENT),
+                floatArrayOf(0f, .48f, 1f), Shader.TileMode.CLAMP
+            )
+            canvas.drawRect(b, paint)
+            paint.shader = null
+
+            // Elegant curved rings in opposite corners, inspired by broadcast poster artwork.
+            paint.style = Paint.Style.STROKE
+            paint.strokeWidth = dp(2).toFloat()
+            paint.color = Color.argb(30, 235, 238, 245)
+            val ring = RectF(b.left - w * .30f, b.top - h * .72f, b.left + w * .62f, b.top + h * .92f)
+            for (i in 0..2) {
+                val inset = dp(i * 11).toFloat()
+                canvas.drawArc(RectF(ring.left + inset, ring.top + inset, ring.right + inset, ring.bottom + inset), 5f, 105f, false, paint)
+            }
+            val ring2 = RectF(b.right - w * .55f, b.bottom - h * .78f, b.right + w * .38f, b.bottom + h * .85f)
+            for (i in 0..2) {
+                val inset = dp(i * 12).toFloat()
+                canvas.drawArc(RectF(ring2.left - inset, ring2.top - inset, ring2.right - inset, ring2.bottom - inset), 185f, 105f, false, paint)
+            }
+
+            // A few restrained angular streaks on sports thumbnails; other categories stay calm.
+            if (key.contains("sports") || key.contains("bein") || key.contains("رياض") || key.contains("الكأس") || key.contains("ثمانية")) {
+                paint.style = Paint.Style.FILL
+                paint.color = Color.argb(34, 255, 255, 255)
+                val path = android.graphics.Path().apply {
+                    moveTo(b.left.toFloat(), b.top + h * .13f)
+                    lineTo(b.left + w * .12f, b.top.toFloat())
+                    lineTo(b.left + w * .06f, b.top.toFloat())
+                    close()
+                }
+                canvas.drawPath(path, paint)
+                canvas.drawLine(b.right - w * .20f, b.top.toFloat(), b.right.toFloat(), b.top + h * .20f, paint.apply { strokeWidth = dp(3).toFloat() })
+            }
+            paint.style = Paint.Style.FILL
+            paint.color = Color.WHITE
+            paint.alpha = 255
+        }
+
+        override fun setAlpha(alpha: Int) { paint.alpha = alpha }
+        override fun setColorFilter(colorFilter: ColorFilter?) { paint.colorFilter = colorFilter }
+        @Deprecated("Deprecated on Android")
+        override fun getOpacity(): Int = PixelFormat.OPAQUE
     }
 
 private fun displayChannelName(name: String): String {
@@ -2470,7 +2593,7 @@ private fun isDashStreamUrl(url: String): Boolean {
     private fun graphiteCardDrawable(accent: Int = Color.rgb(83, 86, 96), radius: Int = 14): GradientDrawable =
         GradientDrawable(
             GradientDrawable.Orientation.TL_BR,
-            intArrayOf(Color.rgb(48, 49, 58), Color.rgb(31, 32, 40), Color.rgb(20, 21, 27))
+            intArrayOf(Color.rgb(39, 40, 46), Color.rgb(24, 25, 30), Color.rgb(19, 20, 24))
         ).apply {
             cornerRadius = dp(radius).toFloat()
             setStroke(dp(1), Color.argb(210, Color.red(accent), Color.green(accent), Color.blue(accent)))
@@ -2481,23 +2604,6 @@ private fun isDashStreamUrl(url: String): Boolean {
         view.background = graphiteCardDrawable(Color.rgb(88, 91, 101), 13)
         view.elevation = dp(2).toFloat()
         view.clipToOutline = true
-    }
-
-    /** True only when a bundled brand mark or an administrator-configured image exists. */
-    private fun hasRealChannelLogo(channelName: String): Boolean {
-        if (channelImageUrls[channelName].orEmpty().isNotBlank()) return true
-        val name = channelName.trim()
-        return name.equals("MBC 1", true) || name.equals("MBC 2", true) ||
-            name.equals("MBC 3", true) || name.equals("MBC 4", true) ||
-            name.equals("MBC 5", true) || name.equals("MBC Action", true) ||
-            name.equals("MBC Max", true) || name.equals("MBC Drama", true) ||
-            name.equals("MBC Masr 1", true) || name.equals("MBC Masr 2", true) ||
-            name.contains("ثمانية", true) || name.contains("thmanyah", true) ||
-            name.contains("STARZPLAY", true) || name.contains("ALWAN", true) ||
-            name.contains("ألوان", true) || name.contains("bein", true) ||
-            name.contains("الكأس") || name.contains("أبو ظبي الرياضية") ||
-            name.contains("abu dhabi", true) || name.contains("دبي الرياضية") ||
-            (name.contains("شاهد", true) && name.contains("sports", true))
     }
 
     /**
@@ -2548,7 +2654,7 @@ private fun isDashStreamUrl(url: String): Boolean {
             if (b.width() <= 0 || b.height() <= 0) return
             paint.shader = LinearGradient(
                 b.left.toFloat(), b.top.toFloat(), b.right.toFloat(), b.bottom.toFloat(),
-                intArrayOf(Color.rgb(37, 39, 48), Color.rgb(17, 18, 23), Color.rgb(27, 29, 38)),
+                intArrayOf(Color.rgb(30, 31, 37), Color.rgb(17, 18, 22), Color.rgb(25, 26, 31)),
                 floatArrayOf(0f, .56f, 1f), Shader.TileMode.CLAMP
             )
             canvas.drawRect(b, paint)
@@ -2565,16 +2671,12 @@ private fun isDashStreamUrl(url: String): Boolean {
                 val cx = b.left + glow[0] * w
                 val cy = b.top + glow[1] * h
                 val radius = maxOf(dp(100).toFloat(), w * glow[2])
-                val tint = when (index) {
-                    0 -> Color.rgb(112, 62, 77)   // muted wine highlight
-                    1 -> Color.rgb(55, 82, 112)  // cool steel blue
-                    else -> Color.rgb(72, 67, 104) // restrained violet graphite
-                }
+                val tint = if (index == 0) Color.rgb(90, 52, 58) else Color.rgb(55, 65, 82)
                 paint.shader = RadialGradient(
                     cx, cy, radius,
                     intArrayOf(
-                        Color.argb(34, Color.red(tint), Color.green(tint), Color.blue(tint)),
-                        Color.argb(13, Color.red(tint), Color.green(tint), Color.blue(tint)),
+                        Color.argb(20, Color.red(tint), Color.green(tint), Color.blue(tint)),
+                        Color.argb(8, Color.red(tint), Color.green(tint), Color.blue(tint)),
                         Color.TRANSPARENT
                     ),
                     floatArrayOf(0f, .55f, 1f), Shader.TileMode.CLAMP
