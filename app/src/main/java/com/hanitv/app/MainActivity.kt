@@ -1075,14 +1075,19 @@ class MainActivity : Activity() {
             setOnClickListener { openChannel(channel.first) }
         }
 
-        // Keep the original logo drawable untouched; only its presentation surface adapts
-        // to the mark so dark logos use a light inset and white/neon logos use a dark inset.
-        val logoStage = makeAdaptiveLogoStage(channel.first, dp(76), dp(76))
-        logoStage.addView(
-            channelLogoView(channel.first, channel.second, dp(64), dp(64)),
-            FrameLayout.LayoutParams(dp(64), dp(64), Gravity.CENTER)
-        )
-        card.addView(logoStage, LinearLayout.LayoutParams(dp(76), dp(76)))
+        // Keep the original logo drawable untouched. Only wrap a real local/remote logo
+        // in an adaptive surface; do not add a second silver frame around text fallbacks.
+        val logoView = channelLogoView(channel.first, channel.second, dp(66), dp(66))
+        if (hasRealChannelLogo(channel.first)) {
+            val logoStage = makeAdaptiveLogoStage(channel.first, dp(76), dp(76))
+            logoStage.addView(
+                logoView,
+                FrameLayout.LayoutParams(dp(66), dp(66), Gravity.CENTER)
+            )
+            card.addView(logoStage, LinearLayout.LayoutParams(dp(76), dp(76)))
+        } else {
+            card.addView(logoView, LinearLayout.LayoutParams(dp(66), dp(66)))
+        }
 
         card.addView(TextView(this).apply {
             text = displayChannelName(channel.first)
@@ -2465,7 +2470,7 @@ private fun isDashStreamUrl(url: String): Boolean {
     private fun graphiteCardDrawable(accent: Int = Color.rgb(83, 86, 96), radius: Int = 14): GradientDrawable =
         GradientDrawable(
             GradientDrawable.Orientation.TL_BR,
-            intArrayOf(Color.rgb(39, 40, 46), Color.rgb(24, 25, 30), Color.rgb(19, 20, 24))
+            intArrayOf(Color.rgb(48, 49, 58), Color.rgb(31, 32, 40), Color.rgb(20, 21, 27))
         ).apply {
             cornerRadius = dp(radius).toFloat()
             setStroke(dp(1), Color.argb(210, Color.red(accent), Color.green(accent), Color.blue(accent)))
@@ -2476,6 +2481,23 @@ private fun isDashStreamUrl(url: String): Boolean {
         view.background = graphiteCardDrawable(Color.rgb(88, 91, 101), 13)
         view.elevation = dp(2).toFloat()
         view.clipToOutline = true
+    }
+
+    /** True only when a bundled brand mark or an administrator-configured image exists. */
+    private fun hasRealChannelLogo(channelName: String): Boolean {
+        if (channelImageUrls[channelName].orEmpty().isNotBlank()) return true
+        val name = channelName.trim()
+        return name.equals("MBC 1", true) || name.equals("MBC 2", true) ||
+            name.equals("MBC 3", true) || name.equals("MBC 4", true) ||
+            name.equals("MBC 5", true) || name.equals("MBC Action", true) ||
+            name.equals("MBC Max", true) || name.equals("MBC Drama", true) ||
+            name.equals("MBC Masr 1", true) || name.equals("MBC Masr 2", true) ||
+            name.contains("ثمانية", true) || name.contains("thmanyah", true) ||
+            name.contains("STARZPLAY", true) || name.contains("ALWAN", true) ||
+            name.contains("ألوان", true) || name.contains("bein", true) ||
+            name.contains("الكأس") || name.contains("أبو ظبي الرياضية") ||
+            name.contains("abu dhabi", true) || name.contains("دبي الرياضية") ||
+            (name.contains("شاهد", true) && name.contains("sports", true))
     }
 
     /**
@@ -2526,7 +2548,7 @@ private fun isDashStreamUrl(url: String): Boolean {
             if (b.width() <= 0 || b.height() <= 0) return
             paint.shader = LinearGradient(
                 b.left.toFloat(), b.top.toFloat(), b.right.toFloat(), b.bottom.toFloat(),
-                intArrayOf(Color.rgb(30, 31, 37), Color.rgb(17, 18, 22), Color.rgb(25, 26, 31)),
+                intArrayOf(Color.rgb(37, 39, 48), Color.rgb(17, 18, 23), Color.rgb(27, 29, 38)),
                 floatArrayOf(0f, .56f, 1f), Shader.TileMode.CLAMP
             )
             canvas.drawRect(b, paint)
@@ -2543,12 +2565,16 @@ private fun isDashStreamUrl(url: String): Boolean {
                 val cx = b.left + glow[0] * w
                 val cy = b.top + glow[1] * h
                 val radius = maxOf(dp(100).toFloat(), w * glow[2])
-                val tint = if (index == 0) Color.rgb(90, 52, 58) else Color.rgb(55, 65, 82)
+                val tint = when (index) {
+                    0 -> Color.rgb(112, 62, 77)   // muted wine highlight
+                    1 -> Color.rgb(55, 82, 112)  // cool steel blue
+                    else -> Color.rgb(72, 67, 104) // restrained violet graphite
+                }
                 paint.shader = RadialGradient(
                     cx, cy, radius,
                     intArrayOf(
-                        Color.argb(20, Color.red(tint), Color.green(tint), Color.blue(tint)),
-                        Color.argb(8, Color.red(tint), Color.green(tint), Color.blue(tint)),
+                        Color.argb(34, Color.red(tint), Color.green(tint), Color.blue(tint)),
+                        Color.argb(13, Color.red(tint), Color.green(tint), Color.blue(tint)),
                         Color.TRANSPARENT
                     ),
                     floatArrayOf(0f, .55f, 1f), Shader.TileMode.CLAMP
