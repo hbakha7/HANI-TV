@@ -717,14 +717,8 @@ class MainActivity : Activity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(14), dp(16), dp(14), dp(16))
-            background = GradientDrawable(
-                GradientDrawable.Orientation.TL_BR,
-                intArrayOf(Color.argb(220, 8, 78, 91), Color.argb(235, 3, 30, 40))
-            ).apply {
-                cornerRadius = dp(13).toFloat()
-                setStroke(dp(1), Color.argb(220, 210, 247, 250))
-            }
-            elevation = dp(3).toFloat()
+            background = graphiteCardDrawable(accent = Color.rgb(105, 108, 118), radius = 13)
+            elevation = dp(2).toFloat()
             clipToOutline = true
             isClickable = true
             isFocusable = true
@@ -820,14 +814,8 @@ class MainActivity : Activity() {
                     orientation = LinearLayout.VERTICAL
                     gravity = Gravity.CENTER
                     setPadding(dp(5), dp(12), dp(5), dp(12))
-                    background = GradientDrawable(
-                        GradientDrawable.Orientation.TL_BR,
-                        intArrayOf(Color.argb(220, 9, 83, 94), Color.argb(232, 4, 34, 45))
-                    ).apply {
-                        cornerRadius = dp(12).toFloat()
-                        setStroke(dp(1), Color.argb(220, 205, 245, 250))
-                    }
-                    elevation = dp(3).toFloat()
+                    background = graphiteCardDrawable(accent = Color.rgb(83, 86, 96), radius = 12)
+                    elevation = dp(2).toFloat()
                     clipToOutline = true
                     isClickable = true
                     isFocusable = true
@@ -841,10 +829,13 @@ class MainActivity : Activity() {
                         }
                     }
                 }
-                applyChannelGlassCard(card)
-
+                val logoStage = makeAdaptiveLogoStage(brand.second, dp(100), dp(52))
+                logoStage.addView(
+                    channelLogoView(brand.second, brand.first, dp(92), dp(44), plainBrandFallback = true),
+                    FrameLayout.LayoutParams(dp(92), dp(44), Gravity.CENTER)
+                )
                 card.addView(
-                    channelLogoView(brand.second, brand.first, dp(100), dp(52), plainBrandFallback = true),
+                    logoStage,
                     LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(52))
                 )
                 card.addView(TextView(this).apply {
@@ -992,14 +983,8 @@ class MainActivity : Activity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(14), dp(12), dp(14), dp(12))
-            background = GradientDrawable(
-                GradientDrawable.Orientation.TL_BR,
-                intArrayOf(Color.argb(225, 9, 85, 96), Color.argb(235, 4, 35, 45))
-            ).apply {
-                cornerRadius = dp(14).toFloat()
-                setStroke(dp(1), Color.argb(225, 210, 247, 250))
-            }
-            elevation = dp(3).toFloat()
+            background = graphiteCardDrawable(accent = Color.rgb(100, 102, 112), radius = 14)
+            elevation = dp(2).toFloat()
             clipToOutline = true
             isClickable = true
             isFocusable = true
@@ -1011,7 +996,9 @@ class MainActivity : Activity() {
             scaleType = ImageView.ScaleType.FIT_CENTER
             contentDescription = "MBC 1 logo"
         }
-        card.addView(logo, LinearLayout.LayoutParams(dp(72), dp(48)))
+        val logoStage = makeAdaptiveLogoStage("MBC 1", dp(76), dp(52))
+        logoStage.addView(logo, FrameLayout.LayoutParams(dp(68), dp(42), Gravity.CENTER))
+        card.addView(logoStage, LinearLayout.LayoutParams(dp(76), dp(52)))
 
         val labels = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -1080,32 +1067,17 @@ class MainActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
             setPadding(dp(8), dp(12), dp(8), dp(12))
-            background = GradientDrawable(
-                GradientDrawable.Orientation.TL_BR,
-                intArrayOf(Color.argb(222, 8, 76, 87), Color.argb(235, 3, 30, 40))
-            ).apply {
-                cornerRadius = dp(13).toFloat()
-                setStroke(dp(1), Color.argb(225, 205, 245, 250))
-            }
-            elevation = dp(4).toFloat()
+            background = graphiteCardDrawable(accent = Color.rgb(86, 89, 99), radius = 14)
+            elevation = dp(2).toFloat()
             clipToOutline = true
             isClickable = true
             isFocusable = true
             setOnClickListener { openChannel(channel.first) }
         }
 
-        // A neutral frosted logo stage helps both dark and light transparent logos remain visible.
-        val logoStage = FrameLayout(this).apply {
-            background = GradientDrawable(
-                GradientDrawable.Orientation.TL_BR,
-                intArrayOf(Color.rgb(184, 198, 202), Color.rgb(132, 151, 157))
-            ).apply {
-                cornerRadius = dp(9).toFloat()
-                setStroke(dp(1), Color.argb(220, 235, 246, 248))
-            }
-            clipToOutline = true
-            elevation = dp(1).toFloat()
-        }
+        // Keep the original logo drawable untouched; only its presentation surface adapts
+        // to the mark so dark logos use a light inset and white/neon logos use a dark inset.
+        val logoStage = makeAdaptiveLogoStage(channel.first, dp(76), dp(76))
         logoStage.addView(
             channelLogoView(channel.first, channel.second, dp(64), dp(64)),
             FrameLayout.LayoutParams(dp(64), dp(64), Gravity.CENTER)
@@ -2484,95 +2456,105 @@ private fun isDashStreamUrl(url: String): Boolean {
         dialog.show()
     }
 
-    /** Apply the approved cinematic turquoise background only to channel-browsing screens. */
+    /** Apply the graphite-luxury visual system only to channel-browsing screens. */
     private fun applyChannelPageTheme() {
         content.setPadding(dp(14), dp(16), dp(14), dp(24))
         content.background = ChannelAtmosphereDrawable()
     }
 
-    /** Consistent translucent glass card with a subtle icy outline and accent glow. */
-    private fun applyChannelGlassCard(view: View) {
-        view.background = GradientDrawable(
+    private fun graphiteCardDrawable(accent: Int = Color.rgb(83, 86, 96), radius: Int = 14): GradientDrawable =
+        GradientDrawable(
             GradientDrawable.Orientation.TL_BR,
-            intArrayOf(Color.argb(222, 8, 78, 91), Color.argb(236, 3, 29, 40))
+            intArrayOf(Color.rgb(39, 40, 46), Color.rgb(24, 25, 30), Color.rgb(19, 20, 24))
         ).apply {
-            cornerRadius = dp(13).toFloat()
-            setStroke(dp(1), Color.argb(225, 215, 248, 250))
+            cornerRadius = dp(radius).toFloat()
+            setStroke(dp(1), Color.argb(210, Color.red(accent), Color.green(accent), Color.blue(accent)))
         }
-        view.elevation = dp(4).toFloat()
+
+    /** A restrained graphite card used by the category tiles, with no bright glass glow. */
+    private fun applyChannelGlassCard(view: View) {
+        view.background = graphiteCardDrawable(Color.rgb(88, 91, 101), 13)
+        view.elevation = dp(2).toFloat()
         view.clipToOutline = true
     }
 
     /**
-     * Lightweight drawn wallpaper: turquoise cinematic gradient, soft bokeh and sparse
-     * colored confetti. It needs no image asset or network request and scrolls with the page.
+     * Logo surface selection changes only the panel behind the asset, never the original PNG.
+     * Black/dark wordmarks receive a pearl surface; white, neon and saturated marks receive
+     * a graphite surface; unclassified logos get a neutral mid-silver surface.
      */
+    private fun makeAdaptiveLogoStage(channelName: String, width: Int, height: Int): FrameLayout {
+        val name = channelName.trim().lowercase(java.util.Locale.ROOT)
+        val surfaceMode = when {
+            name == "mbc max" || name == "mbc drama" || name == "mbc 1" ||
+                name == "قنوات الكأس" || name == "الكأس" -> "light"
+            name.contains("ثمانية") || name.contains("thmanyah") ||
+                name.contains("bein") || name.contains("starzplay") || name.contains("alwan") ||
+                name.contains("ألوان") || name.contains("mbc 3") || name.contains("mbc 4") ||
+                name.contains("mbc 5") || name.contains("mbc action") || name.contains("masr") ||
+                name.contains("شاهد") || name.contains("shahid") || name.contains("دبي الرياضية") ||
+                name.contains("أبو ظبي") || name.contains("abu dhabi") -> "dark"
+            else -> "neutral"
+        }
+        val colors = when (surfaceMode) {
+            "light" -> intArrayOf(Color.rgb(245, 245, 247), Color.rgb(211, 213, 218))
+            "dark" -> intArrayOf(Color.rgb(38, 39, 45), Color.rgb(20, 21, 26))
+            else -> intArrayOf(Color.rgb(171, 174, 181), Color.rgb(123, 127, 136))
+        }
+        val stroke = when (surfaceMode) {
+            "light" -> Color.rgb(255, 255, 255)
+            "dark" -> Color.rgb(76, 79, 89)
+            else -> Color.rgb(211, 213, 218)
+        }
+        return FrameLayout(this).apply {
+            background = GradientDrawable(GradientDrawable.Orientation.TL_BR, colors).apply {
+                cornerRadius = dp(9).toFloat()
+                setStroke(dp(1), stroke)
+            }
+            clipToOutline = true
+            elevation = dp(1).toFloat()
+            contentDescription = "$channelName logo background"
+        }
+    }
+
+    /** A subtle charcoal wallpaper with restrained cool highlights; no confetti or busy texture. */
     private inner class ChannelAtmosphereDrawable : Drawable() {
         private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-        private val bokeh = arrayOf(
-            floatArrayOf(.10f, .12f, .17f), floatArrayOf(.82f, .18f, .13f),
-            floatArrayOf(.30f, .40f, .22f), floatArrayOf(.92f, .55f, .18f),
-            floatArrayOf(.12f, .72f, .20f), floatArrayOf(.65f, .86f, .16f),
-            floatArrayOf(.42f, .95f, .12f), floatArrayOf(.72f, .35f, .10f)
-        )
-        private val confetti = arrayOf(
-            floatArrayOf(.08f, .28f, 0f), floatArrayOf(.91f, .32f, 1f),
-            floatArrayOf(.22f, .57f, 2f), floatArrayOf(.78f, .66f, 3f),
-            floatArrayOf(.48f, .21f, 4f), floatArrayOf(.16f, .88f, 5f),
-            floatArrayOf(.86f, .91f, 1f), floatArrayOf(.57f, .49f, 2f),
-            floatArrayOf(.35f, .76f, 3f), floatArrayOf(.97f, .13f, 4f),
-            floatArrayOf(.04f, .64f, 5f), floatArrayOf(.61f, .08f, 2f)
-        )
-        private val confettiColors = intArrayOf(
-            Color.rgb(255, 194, 75), Color.rgb(255, 93, 164),
-            Color.rgb(98, 232, 246), Color.rgb(244, 244, 255),
-            Color.rgb(255, 132, 83), Color.rgb(119, 255, 209)
-        )
 
         override fun draw(canvas: Canvas) {
             val b = bounds
             if (b.width() <= 0 || b.height() <= 0) return
             paint.shader = LinearGradient(
                 b.left.toFloat(), b.top.toFloat(), b.right.toFloat(), b.bottom.toFloat(),
-                intArrayOf(Color.rgb(10, 105, 119), Color.rgb(8, 70, 88), Color.rgb(3, 35, 49)),
-                floatArrayOf(0f, .48f, 1f), Shader.TileMode.CLAMP
+                intArrayOf(Color.rgb(30, 31, 37), Color.rgb(17, 18, 22), Color.rgb(25, 26, 31)),
+                floatArrayOf(0f, .56f, 1f), Shader.TileMode.CLAMP
             )
             canvas.drawRect(b, paint)
             paint.shader = null
 
             val w = b.width().toFloat()
             val h = b.height().toFloat()
-            bokeh.forEachIndexed { i, dot ->
-                val cx = b.left + dot[0] * w
-                val cy = b.top + dot[1] * h
-                val radius = dp((22 + (i % 3) * 13)).toFloat()
-                val color = when (i % 4) {
-                    0 -> Color.rgb(51, 224, 231)
-                    1 -> Color.rgb(51, 166, 199)
-                    2 -> Color.rgb(90, 245, 202)
-                    else -> Color.rgb(73, 132, 255)
-                }
+            val glows = arrayOf(
+                floatArrayOf(.92f, .06f, .48f),
+                floatArrayOf(.04f, .52f, .36f),
+                floatArrayOf(.76f, .92f, .30f)
+            )
+            glows.forEachIndexed { index, glow ->
+                val cx = b.left + glow[0] * w
+                val cy = b.top + glow[1] * h
+                val radius = maxOf(dp(100).toFloat(), w * glow[2])
+                val tint = if (index == 0) Color.rgb(90, 52, 58) else Color.rgb(55, 65, 82)
                 paint.shader = RadialGradient(
                     cx, cy, radius,
-                    intArrayOf(Color.argb(75, Color.red(color), Color.green(color), Color.blue(color)),
-                        Color.argb(24, Color.red(color), Color.green(color), Color.blue(color)), Color.TRANSPARENT),
-                    floatArrayOf(0f, .58f, 1f), Shader.TileMode.CLAMP
+                    intArrayOf(
+                        Color.argb(20, Color.red(tint), Color.green(tint), Color.blue(tint)),
+                        Color.argb(8, Color.red(tint), Color.green(tint), Color.blue(tint)),
+                        Color.TRANSPARENT
+                    ),
+                    floatArrayOf(0f, .55f, 1f), Shader.TileMode.CLAMP
                 )
                 canvas.drawCircle(cx, cy, radius, paint)
                 paint.shader = null
-            }
-
-            confetti.forEachIndexed { i, piece ->
-                val x = b.left + piece[0] * w
-                val y = b.top + piece[1] * h
-                val cw = dp(if (i % 3 == 0) 4 else 3).toFloat()
-                val ch = dp(if (i % 2 == 0) 11 else 7).toFloat()
-                paint.color = confettiColors[piece[2].toInt() % confettiColors.size]
-                paint.alpha = if (i % 3 == 0) 175 else 115
-                canvas.save()
-                canvas.rotate(((i * 29) % 70 - 35).toFloat(), x, y)
-                canvas.drawRoundRect(RectF(x, y, x + cw, y + ch), dp(1).toFloat(), dp(1).toFloat(), paint)
-                canvas.restore()
             }
             paint.alpha = 255
             paint.color = Color.WHITE
@@ -2580,7 +2562,7 @@ private fun isDashStreamUrl(url: String): Boolean {
 
         override fun setAlpha(alpha: Int) { paint.alpha = alpha }
         override fun setColorFilter(colorFilter: ColorFilter?) { paint.colorFilter = colorFilter }
-        @Deprecated("Deprecated in Android")
+        @Deprecated("Deprecated on Android")
         override fun getOpacity(): Int = PixelFormat.OPAQUE
     }
 
