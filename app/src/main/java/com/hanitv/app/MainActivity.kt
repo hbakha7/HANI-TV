@@ -1529,7 +1529,11 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
         }
         val drmProvider = DrmSessionManagerProvider { mediaItem ->
             val drmConfig = mediaItem.localConfiguration?.drmConfiguration
-            val sourceForItem = (currentOptions + sources).firstOrNull { it.url == mediaItem.mediaId }
+            // Resolve DRM credentials against the exact source record, not just its URL.
+            // This keeps each server's own KID/Key paired with its MPD when URLs repeat.
+            val sourceForItem = (currentOptions + sources).firstOrNull {
+                sourceMediaId(it) == mediaItem.mediaId
+            }
             val inlineKeys = if (drmConfig?.scheme == C.CLEARKEY_UUID && sourceForItem != null) {
                 parseHaniClearKey(sourceForItem.keyId, sourceForItem.key)
                     ?: parseHaniClearKeyPair(sourceForItem.licenseUrl)
@@ -1756,14 +1760,19 @@ private fun isDashStreamUrl(url: String): Boolean {
         false
     }
 }
-    /**
-     * Creates a Media3 item using this source's stream format and official DRM license settings.
-     * Key ID/Key fields are metadata only here; they do not replace a provider license endpoint.
-     */
+    // A stable per-source media ID prevents two server rows that share a URL from
+    // accidentally using each other's DRM credentials.
+    private fun sourceMediaId(source: StreamSource): String = listOf(
+        source.channel, source.serverName, source.url,
+        source.keyId.hashCode().toString(), source.key.hashCode().toString(),
+        source.licenseUrl.hashCode().toString(), source.scheme, source.drmScheme
+    ).joinToString("\u001f")
+
+    /** Creates a Media3 item using this server row's format and DRM settings. */
     private fun buildMediaItem(source: StreamSource): MediaItem? {
         val builder = MediaItem.Builder()
             .setUri(source.url)
-            .setMediaId(source.url)
+            .setMediaId(sourceMediaId(source))
 
         val normalizedPath = try {
             android.net.Uri.parse(source.url).path.orEmpty()
