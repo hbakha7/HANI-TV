@@ -17,6 +17,7 @@ import android.graphics.RadialGradient
 import android.graphics.drawable.Drawable
 import android.graphics.BitmapFactory
 import android.graphics.Typeface
+import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.LayerDrawable
@@ -785,6 +786,8 @@ class MainActivity : Activity() {
         addText("القنوات الرياضية ⚽", 23f, white, true)
         addText("اختر القسم الذي تريد مشاهدته", 14f, gray, false, 12)
 
+        // Use the same cinematic poster-card language as the individual channel pages.
+        // The existing local logo assets, click actions, and channel/category mappings remain unchanged.
         val brands = listOf(
             Triple("beIN\nSPORTS", "beIN SPORTS", Color.rgb(177, 105, 235)),
             Triple("ثمانية", "ثمانية", Color.rgb(245, 245, 250)),
@@ -796,6 +799,7 @@ class MainActivity : Activity() {
             Triple("شاهد VIP\nSPORTS", "شاهد Sports", Color.rgb(0, 190, 160)),
             Triple("DUBAI\nSPORTS", "دبي الرياضية", Color.rgb(220, 30, 50))
         )
+
         val grid = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
         }
@@ -803,22 +807,21 @@ class MainActivity : Activity() {
         while (index < brands.size) {
             val row = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-                layoutDirection = View.LAYOUT_DIRECTION_LTR
+                gravity = Gravity.TOP
             }
-            for (offset in 0 until 3) {
+
+            for (offset in 0 until 2) {
                 val brandIndex = index + offset
                 if (brandIndex >= brands.size) break
                 val brand = brands[brandIndex]
                 val card = LinearLayout(this).apply {
                     orientation = LinearLayout.VERTICAL
-                    gravity = Gravity.CENTER
-                    setPadding(dp(5), dp(12), dp(5), dp(12))
-                    background = graphiteCardDrawable(accent = Color.rgb(83, 86, 96), radius = 12)
-                    elevation = dp(2).toFloat()
-                    clipToOutline = true
+                    gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+                    setPadding(dp(3), dp(3), dp(3), dp(8))
+                    setBackgroundColor(Color.TRANSPARENT)
                     isClickable = true
                     isFocusable = true
+                    contentDescription = brand.second
                     setOnClickListener {
                         when (brand.second) {
                             "beIN SPORTS", "قنوات الكأس", "أبو ظبي الرياضية", "أبو ظبي الرياضية بريميوم",
@@ -829,31 +832,85 @@ class MainActivity : Activity() {
                         }
                     }
                 }
-                val logoStage = makeAdaptiveLogoStage(brand.second, dp(100), dp(52))
-                logoStage.addView(
-                    channelLogoView(brand.second, brand.first, dp(92), dp(44), plainBrandFallback = true),
-                    FrameLayout.LayoutParams(dp(92), dp(44), Gravity.CENTER)
+
+                val poster = FrameLayout(this).apply {
+                    background = ChannelPosterDrawable(brand.second)
+                    foreground = GradientDrawable().apply {
+                        cornerRadius = dp(12).toFloat()
+                        setColor(Color.TRANSPARENT)
+                        setStroke(dp(1), Color.argb(70, 235, 238, 245))
+                    }
+                    outlineProvider = object : android.view.ViewOutlineProvider() {
+                        override fun getOutline(view: View, outline: android.graphics.Outline) {
+                            outline.setRoundRect(0, 0, view.width, view.height, dp(12).toFloat())
+                        }
+                    }
+                    clipToOutline = true
+                    elevation = dp(2).toFloat()
+                }
+                poster.addView(
+                    channelLogoView(
+                        brand.second,
+                        brand.first,
+                        dp(142),
+                        dp(76),
+                        plainBrandFallback = true
+                    ),
+                    FrameLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT
+                    ).apply {
+                        setMargins(dp(10), dp(7), dp(10), dp(7))
+                        gravity = Gravity.CENTER
+                    }
                 )
                 card.addView(
-                    logoStage,
-                    LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(52))
+                    poster,
+                    LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(108))
                 )
                 card.addView(TextView(this).apply {
                     text = brand.second
-                    textSize = 10f
+                    textSize = 14f
                     gravity = Gravity.CENTER
-                    setTextColor(Color.WHITE)
+                    setTextColor(Color.rgb(245, 245, 247))
+                    setTypeface(null, Typeface.BOLD)
+                    maxLines = 2
+                    ellipsize = android.text.TextUtils.TruncateAt.END
+                    setPadding(dp(2), dp(7), dp(2), 0)
+                }, LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                ))
+                card.addView(TextView(this).apply {
+                    text = "قنوات رياضية"
+                    textSize = 11f
+                    gravity = Gravity.CENTER
+                    setTextColor(Color.rgb(158, 160, 169))
                     maxLines = 1
-                    setPadding(0, dp(8), 0, 0)
-                }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(24)))
-                row.addView(card, LinearLayout.LayoutParams(0, dp(112), 1f).apply {
-                    setMargins(dp(4), dp(3), dp(4), dp(7))
+                    setPadding(dp(2), dp(3), dp(2), 0)
+                }, LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                ))
+                row.addView(
+                    card,
+                    LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                        setMargins(dp(5), 0, dp(5), dp(12))
+                    }
+                )
+            }
+
+            // Keep the grid balanced when the final row has only one brand.
+            if (brands.size - index == 1) {
+                row.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f).apply {
+                    setMargins(dp(5), 0, dp(5), 0)
                 })
             }
             grid.addView(row, LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
             ))
-            index += 3
+            index += 2
         }
         content.addView(grid)
         addBackButton()
@@ -2918,10 +2975,16 @@ private fun isDashStreamUrl(url: String): Boolean {
             }
         }
 
-        imageView.background = GradientDrawable().apply {
-            setColor(Color.rgb(25, 25, 30))
-            cornerRadius = dp(8).toFloat()
-            setStroke(dp(1), Color.rgb(65, 65, 75))
+        // Poster/brand tiles must remain a single full-bleed artwork surface.
+        // Do not draw a second inset rectangle behind the logo inside each card.
+        imageView.background = if (plainBrandFallback) {
+            ColorDrawable(Color.TRANSPARENT)
+        } else {
+            GradientDrawable().apply {
+                setColor(Color.rgb(25, 25, 30))
+                cornerRadius = dp(8).toFloat()
+                setStroke(dp(1), Color.rgb(65, 65, 75))
+            }
         }
         return imageView
     }
