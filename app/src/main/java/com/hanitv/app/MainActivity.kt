@@ -45,6 +45,14 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.exoplayer.drm.MediaDrmCallback
+import androidx.media3.exoplayer.drm.ExoMediaDrm
+import androidx.media3.exoplayer.drm.DefaultDrmSessionManager
+import androidx.media3.exoplayer.drm.DefaultDrmSessionManagerProvider
+import androidx.media3.exoplayer.drm.DrmSessionManagerProvider
+import androidx.media3.exoplayer.drm.FrameworkMediaDrm
+import android.util.Base64
+import java.util.UUID
 import androidx.media3.ui.PlayerView
 import androidx.media3.ui.TrackSelectionDialogBuilder
 import android.text.InputType
@@ -52,6 +60,38 @@ import android.app.AlertDialog
 import android.content.Intent
 import org.json.JSONArray
 import org.json.JSONObject
+
+/** Local ClearKey callback for KID:KEY values supplied by the stream owner. */
+private class HaniInlineClearKeyCallback(private val kidHex: String, private val keyHex: String) : MediaDrmCallback {
+    override fun executeProvisionRequest(uuid: UUID, request: ExoMediaDrm.ProvisionRequest): ByteArray {
+        throw UnsupportedOperationException("ClearKey does not require provisioning")
+    }
+
+    override fun executeKeyRequest(uuid: UUID, request: ExoMediaDrm.KeyRequest): ByteArray {
+        fun hexBytes(value: String): ByteArray = ByteArray(value.length / 2) { i ->
+            value.substring(i * 2, i * 2 + 2).toInt(16).toByte()
+        }
+        fun base64Url(bytes: ByteArray): String =
+            Base64.encodeToString(bytes, Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP)
+        return JSONObject()
+            .put("keys", JSONArray().put(JSONObject()
+                .put("kty", "oct")
+                .put("kid", base64Url(hexBytes(kidHex)))
+                .put("k", base64Url(hexBytes(keyHex)))))
+            .put("type", "temporary")
+            .toString().toByteArray(Charsets.UTF_8)
+    }
+}
+
+private fun parseHaniClearKey(value: String): Pair<String, String>? {
+    val parts = value.trim().split(":", limit = 2)
+    if (parts.size != 2) return null
+    fun clean(s: String) = s.trim().removePrefix("0x").removePrefix("0X").replace(Regex("\\s+"), "")
+    val kid = clean(parts[0]); val key = clean(parts[1])
+    val hex = Regex("^[0-9a-fA-F]{32}$")
+    if (!hex.matches(kid) || !hex.matches(key)) return null
+    return kid.lowercase(java.util.Locale.ROOT) to key.lowercase(java.util.Locale.ROOT)
+}
 
 class MainActivity : Activity() {
 
@@ -91,6 +131,7 @@ class MainActivity : Activity() {
     private var progressUpdater: Runnable? = null
     private var currentOptions: List<StreamSource> = emptyList()
     private var currentServerIndex = 0
+    private val inlineClearKeysByChannel = mutableMapOf<String, Pair<String, String>>()
     private var failoverCount = 0
     private val playerHandler = Handler(Looper.getMainLooper())
     private var startupTimeout: Runnable? = null
@@ -1481,7 +1522,22 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
         val exo = ExoPlayer.Builder(this)
             .setTrackSelector(trackSelector)
             .setLoadControl(loadControl)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(this).setDataSourceFactory(httpFactory))
+            .setMediaSourceFactory(
+                DefaultMediaSourceFactory(this)
+                    .setDataSourceFactory(httpFactory)
+                    .setDrmSessionManagerProvider(DrmSessionManagerProvider { mediaItem ->
+                        val keys = inlineClearKeysByChannel[mediaItem.mediaId]
+                        if (keys != null) {
+                            DefaultDrmSessionManager.Builder()
+                                .setUuidAndExoMediaDrmProvider(C.CLEARKEY_UUID, FrameworkMediaDrm.DEFAULT_PROVIDER)
+                                .build(HaniInlineClearKeyCallback(keys.first, keys.second))
+                        } else {
+                            DefaultDrmSessionManagerProvider().apply {
+                                setDrmHttpDataSourceFactory(httpFactory)
+                            }.get(mediaItem)
+                        }
+                    })
+            )
             .build()
         embeddedPlayer = exo
         video.player = exo
@@ -1714,49 +1770,69 @@ private fun isDashStreamUrl(url: String): Boolean {
         val licenseUrl = source.licenseUrl.trim()
         val schemeName = source.scheme.trim().lowercase(java.util.Locale.ROOT)
         val drmName = source.drmScheme.trim().lowercase(java.util.Locale.ROOT)
-        val hasLocalKeyValues = source.keyId.isNotBlank() || source.key.isNotBlank()
+        val keyPairFromFields = if (source.keyId.isNotBlank() && source.key.isNotBlank())
+            parseHaniClearKey("${source.keyId}:${source.key}") else null
+        val keyPairFromLicense = parseHaniClearKey(licenseUrl)
+        // Infer ClearKey from the actual KID:KEY value too, because older saved rows
+        // may have the Scheme field empty while License contains the key pair.
+        val isClearKey = schemeName.contains("clearkey") || schemeName.contains("clear key") ||
+            drmName.contains("clearkey") || drmName.contains("clear key") ||
+            keyPairFromFields != null || keyPairFromLicense != null
+        val inlineKeys = if (isClearKey) keyPairFromFields ?: keyPairFromLicense else null
+        val hasLocalKeyValues = source.keyId.isNotBlank() || source.key.isNotBlank() || inlineKeys != null
         val drmRequested = licenseUrl.isNotBlank() || schemeName.isNotBlank() ||
             drmName.isNotBlank() || hasLocalKeyValues
 
         if (drmRequested) {
-            if (licenseUrl.isBlank() ||
-                !(licenseUrl.startsWith("https://", true) || licenseUrl.startsWith("http://", true))) {
-                Toast.makeText(
-                    this,
-                    "إعدادات DRM تحتاج License URL رسميًا؛ Key ID وKey وحدهما لا يكفيان هنا.",
-                    Toast.LENGTH_LONG
-                ).show()
-                return null
-            }
+            if (isClearKey && inlineKeys != null) {
+                // ClearKey KID:KEY is handled locally; it is not a License URL.
+                inlineClearKeysByChannel[source.channel] = inlineKeys
+                builder.setDrmConfiguration(
+                    MediaItem.DrmConfiguration.Builder(C.CLEARKEY_UUID).build()
+                )
+            } else {
+                if (licenseUrl.isBlank() ||
+                    !(licenseUrl.startsWith("https://", true) || licenseUrl.startsWith("http://", true))) {
+                    Toast.makeText(
+                        this,
+                        "إعدادات DRM غير مكتملة: أدخل مفاتيح ClearKey الصحيحة أو رابط الترخيص الرسمي للمزوّد.",
+                        Toast.LENGTH_LONG
+                    ).show()
+                    return null
+                }
 
-            val explicitUuid = try {
-                java.util.UUID.fromString(source.drmScheme.trim())
-            } catch (_: Exception) {
-                null
-            }
-            val drmUuid = explicitUuid ?: when {
-                schemeName.contains("widevine") || drmName.contains("widevine") -> C.WIDEVINE_UUID
-                schemeName.contains("clearkey") || schemeName.contains("clear key") ||
-                    drmName.contains("clearkey") || drmName.contains("clear key") -> C.CLEARKEY_UUID
-                schemeName.contains("playready") || drmName.contains("playready") -> C.PLAYREADY_UUID
-                else -> null
-            }
+                val explicitUuid = try {
+                    java.util.UUID.fromString(source.drmScheme.trim())
+                } catch (_: Exception) {
+                    null
+                }
+                val drmUuid = explicitUuid ?: when {
+                    schemeName.contains("widevine") || drmName.contains("widevine") -> C.WIDEVINE_UUID
+                    schemeName.contains("clearkey") || schemeName.contains("clear key") ||
+                        drmName.contains("clearkey") || drmName.contains("clear key") -> C.CLEARKEY_UUID
+                    schemeName.contains("playready") || drmName.contains("playready") -> C.PLAYREADY_UUID
+                    else -> null
+                }
 
-            if (drmUuid == null) {
-                Toast.makeText(
-                    this,
-                    "نوع DRM غير معروف. استخدم widevine أو clearkey أو playready أو UUID صحيحًا.",
-                    Toast.LENGTH_LONG
-                ).show()
-                return null
-            }
+                if (drmUuid == null) {
+                    Toast.makeText(
+                        this,
+                        "نوع DRM غير معروف. استخدم widevine أو clearkey أو playready أو UUID صحيحًا.",
+                        Toast.LENGTH_LONG
+                    ).show()
+                    return null
+                }
 
-            builder.setDrmConfiguration(
-                MediaItem.DrmConfiguration.Builder(drmUuid)
-                    .setLicenseUri(android.net.Uri.parse(licenseUrl))
-                    .setLicenseRequestHeaders(buildSourceHeaders(source))
-                    .build()
-            )
+                inlineClearKeysByChannel.remove(source.channel)
+                builder.setDrmConfiguration(
+                    MediaItem.DrmConfiguration.Builder(drmUuid)
+                        .setLicenseUri(android.net.Uri.parse(licenseUrl))
+                        .setLicenseRequestHeaders(buildSourceHeaders(source))
+                        .build()
+                )
+            }
+        } else {
+            inlineClearKeysByChannel.remove(source.channel)
         }
 
         return builder.build()
@@ -2606,12 +2682,19 @@ private fun isDashStreamUrl(url: String): Boolean {
                 put("cookie", source.cookie)
                 put("authorization", source.authorization)
                 put("extraHeaders", source.extraHeaders)
-                put("licenseUrl", source.licenseUrl)
-                put("scheme", source.scheme)
-                put("drmScheme", source.drmScheme)
+                put("headers", source.extraHeaders)
+                val combinedClearKey = when {
+                    source.keyId.isNotBlank() && source.key.isNotBlank() -> "${source.keyId}:${source.key}"
+                    parseHaniClearKey(source.licenseUrl) != null -> source.licenseUrl.trim()
+                    else -> ""
+                }
+                put("clearKey", combinedClearKey)
+                put("licenseUrl", if (parseHaniClearKey(source.licenseUrl) != null) "" else source.licenseUrl)
+                put("scheme", source.scheme.ifBlank { if (combinedClearKey.isNotBlank()) "clearkey" else "" })
+                put("drmScheme", source.drmScheme.ifBlank { if (combinedClearKey.isNotBlank()) "clearkey" else "" })
                 put("playerType", source.playerType)
-                put("keyId", source.keyId)
-                put("key", source.key)
+                put("keyId", source.keyId.ifBlank { combinedClearKey.substringBefore(":").takeIf { combinedClearKey.contains(":") }.orEmpty() })
+                put("key", source.key.ifBlank { combinedClearKey.substringAfter(":", "") })
             })
         }
         prefs.edit().putString("sources_json", array.toString()).apply()
@@ -2747,13 +2830,13 @@ private fun isDashStreamUrl(url: String): Boolean {
                             item.optString("userAgent", ""),
                             item.optString("cookie", ""),
                             item.optString("authorization", ""),
-                            item.optString("extraHeaders", ""),
+                            item.optString("extraHeaders", item.optString("headers", "")),
                             item.optString("licenseUrl", ""),
-                            item.optString("scheme", ""),
-                            item.optString("drmScheme", ""),
+                            item.optString("scheme", item.optString("drmScheme", "")),
+                            item.optString("drmScheme", item.optString("scheme", "")),
                             item.optString("playerType", "Exo Player"),
-                            item.optString("keyId", ""),
-                            item.optString("key", "")
+                            item.optString("keyId", item.optString("clearKey", "").substringBefore(":")),
+                            item.optString("key", item.optString("clearKey", "").substringAfter(":", ""))
                         ))
                     }
                     // Preserve locally saved DRM fields if Hostinger still returns an older
@@ -2962,12 +3045,19 @@ private fun isDashStreamUrl(url: String): Boolean {
                 put("cookie", source.cookie)
                 put("authorization", source.authorization)
                 put("extraHeaders", source.extraHeaders)
-                put("licenseUrl", source.licenseUrl)
-                put("scheme", source.scheme)
-                put("drmScheme", source.drmScheme)
+                put("headers", source.extraHeaders)
+                val combinedClearKey = when {
+                    source.keyId.isNotBlank() && source.key.isNotBlank() -> "${source.keyId}:${source.key}"
+                    parseHaniClearKey(source.licenseUrl) != null -> source.licenseUrl.trim()
+                    else -> ""
+                }
+                put("clearKey", combinedClearKey)
+                put("licenseUrl", if (parseHaniClearKey(source.licenseUrl) != null) "" else source.licenseUrl)
+                put("scheme", source.scheme.ifBlank { if (combinedClearKey.isNotBlank()) "clearkey" else "" })
+                put("drmScheme", source.drmScheme.ifBlank { if (combinedClearKey.isNotBlank()) "clearkey" else "" })
                 put("playerType", source.playerType)
-                put("keyId", source.keyId)
-                put("key", source.key)
+                put("keyId", source.keyId.ifBlank { combinedClearKey.substringBefore(":").takeIf { combinedClearKey.contains(":") }.orEmpty() })
+                put("key", source.key.ifBlank { combinedClearKey.substringAfter(":", "") })
             })
         }
         val payload = JSONObject().put("sources", list).toString()
