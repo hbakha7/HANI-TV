@@ -6,6 +6,15 @@ import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.Bundle
 import android.graphics.Color
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.RectF
+import android.graphics.PixelFormat
+import android.graphics.ColorFilter
+import android.graphics.Shader
+import android.graphics.LinearGradient
+import android.graphics.RadialGradient
+import android.graphics.drawable.Drawable
 import android.graphics.BitmapFactory
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
@@ -352,6 +361,7 @@ class MainActivity : Activity() {
         // functions are intentionally left unchanged.
         showingServerManager = false
         content.removeAllViews()
+        content.setBackgroundColor(Color.TRANSPARENT)
         content.setPadding(dp(14), dp(16), dp(14), dp(28))
 
         // Remote update ticker: hidden by default and controlled from the admin panel.
@@ -693,6 +703,7 @@ class MainActivity : Activity() {
     private fun showAllChannels() {
         showingServerManager = false
         content.removeAllViews()
+        applyChannelPageTheme()
         addText("جميع القنوات", 24f, white, true, 8)
 
         allCategories().forEach { category ->
@@ -706,7 +717,15 @@ class MainActivity : Activity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(14), dp(16), dp(14), dp(16))
-            setBackgroundColor(panel)
+            background = GradientDrawable(
+                GradientDrawable.Orientation.TL_BR,
+                intArrayOf(Color.argb(220, 8, 78, 91), Color.argb(235, 3, 30, 40))
+            ).apply {
+                cornerRadius = dp(13).toFloat()
+                setStroke(dp(1), Color.argb(220, 210, 247, 250))
+            }
+            elevation = dp(3).toFloat()
+            clipToOutline = true
             isClickable = true
             isFocusable = true
             setOnClickListener { showChannels(category) }
@@ -768,7 +787,7 @@ class MainActivity : Activity() {
     private fun showSportsSections() {
         showingServerManager = false
         content.removeAllViews()
-        content.setPadding(dp(14), dp(16), dp(14), dp(24))
+        applyChannelPageTheme()
         addText("القنوات الرياضية ⚽", 23f, white, true)
         addText("اختر القسم الذي تريد مشاهدته", 14f, gray, false, 12)
 
@@ -801,11 +820,15 @@ class MainActivity : Activity() {
                     orientation = LinearLayout.VERTICAL
                     gravity = Gravity.CENTER
                     setPadding(dp(5), dp(12), dp(5), dp(12))
-                    background = GradientDrawable().apply {
-                        setColor(Color.rgb(25, 24, 30))
+                    background = GradientDrawable(
+                        GradientDrawable.Orientation.TL_BR,
+                        intArrayOf(Color.argb(220, 9, 83, 94), Color.argb(232, 4, 34, 45))
+                    ).apply {
                         cornerRadius = dp(12).toFloat()
-                        setStroke(dp(1), Color.rgb(43, 58, 88))
+                        setStroke(dp(1), Color.argb(220, 205, 245, 250))
                     }
+                    elevation = dp(3).toFloat()
+                    clipToOutline = true
                     isClickable = true
                     isFocusable = true
                     setOnClickListener {
@@ -818,7 +841,7 @@ class MainActivity : Activity() {
                         }
                     }
                 }
-                applyBrandPhotoBackground(card, brand.second)
+                applyChannelGlassCard(card)
 
                 card.addView(
                     channelLogoView(brand.second, brand.first, dp(100), dp(52), plainBrandFallback = true),
@@ -849,7 +872,7 @@ class MainActivity : Activity() {
         ensureBuiltInBrandChannels()
         showingServerManager = false
         content.removeAllViews()
-        content.setPadding(dp(14), dp(16), dp(14), dp(24))
+        applyChannelPageTheme()
         addText(brand, 23f, white, true)
         addText("القنوات المتاحة في هذا القسم", 14f, gray, false)
 
@@ -900,6 +923,7 @@ class MainActivity : Activity() {
         ensureBuiltInBrandChannels()
         showingServerManager = false
         content.removeAllViews()
+        applyChannelPageTheme()
         addText(category, 23f, white, true)
         addText("القنوات المتاحة في هذا القسم", 14f, gray, false)
 
@@ -969,12 +993,14 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(14), dp(12), dp(14), dp(12))
             background = GradientDrawable(
-                GradientDrawable.Orientation.LEFT_RIGHT,
-                intArrayOf(Color.rgb(31, 25, 43), Color.rgb(20, 20, 26))
+                GradientDrawable.Orientation.TL_BR,
+                intArrayOf(Color.argb(225, 9, 85, 96), Color.argb(235, 4, 35, 45))
             ).apply {
                 cornerRadius = dp(14).toFloat()
-                setStroke(dp(1), Color.rgb(104, 74, 137))
+                setStroke(dp(1), Color.argb(225, 210, 247, 250))
             }
+            elevation = dp(3).toFloat()
+            clipToOutline = true
             isClickable = true
             isFocusable = true
             setOnClickListener { showMbcChannels() }
@@ -1019,7 +1045,7 @@ class MainActivity : Activity() {
     private fun showMbcChannels() {
         showingServerManager = false
         content.removeAllViews()
-        content.setPadding(dp(14), dp(16), dp(14), dp(24))
+        applyChannelPageTheme()
         addText("قنوات MBC", 23f, white, true)
         addText("اختر القناة التي تريد مشاهدتها", 14f, gray, false, 12)
 
@@ -1053,17 +1079,38 @@ class MainActivity : Activity() {
         val card = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
-            setPadding(dp(8), dp(16), dp(8), dp(16))
-            setBackgroundColor(panel)
+            setPadding(dp(8), dp(12), dp(8), dp(12))
+            background = GradientDrawable(
+                GradientDrawable.Orientation.TL_BR,
+                intArrayOf(Color.argb(222, 8, 76, 87), Color.argb(235, 3, 30, 40))
+            ).apply {
+                cornerRadius = dp(13).toFloat()
+                setStroke(dp(1), Color.argb(225, 205, 245, 250))
+            }
+            elevation = dp(4).toFloat()
+            clipToOutline = true
             isClickable = true
             isFocusable = true
             setOnClickListener { openChannel(channel.first) }
         }
 
-        card.addView(
-            channelLogoView(channel.first, channel.second, dp(66), dp(66)),
-            LinearLayout.LayoutParams(dp(66), dp(66))
+        // A neutral frosted logo stage helps both dark and light transparent logos remain visible.
+        val logoStage = FrameLayout(this).apply {
+            background = GradientDrawable(
+                GradientDrawable.Orientation.TL_BR,
+                intArrayOf(Color.rgb(184, 198, 202), Color.rgb(132, 151, 157))
+            ).apply {
+                cornerRadius = dp(9).toFloat()
+                setStroke(dp(1), Color.argb(220, 235, 246, 248))
+            }
+            clipToOutline = true
+            elevation = dp(1).toFloat()
+        }
+        logoStage.addView(
+            channelLogoView(channel.first, channel.second, dp(64), dp(64)),
+            FrameLayout.LayoutParams(dp(64), dp(64), Gravity.CENTER)
         )
+        card.addView(logoStage, LinearLayout.LayoutParams(dp(76), dp(76)))
 
         card.addView(TextView(this).apply {
             text = displayChannelName(channel.first)
@@ -2077,6 +2124,7 @@ private fun isDashStreamUrl(url: String): Boolean {
     private fun showServerManager() {
         showingServerManager = true
         content.removeAllViews()
+        content.setBackgroundColor(Color.TRANSPARENT)
         val purple = Color.rgb(169, 112, 245)
         val darkCard = Color.rgb(25, 24, 32)
         val lineColor = Color.rgb(58, 48, 71)
@@ -2356,6 +2404,7 @@ private fun isDashStreamUrl(url: String): Boolean {
     private fun showChannelImageManager() {
         showingServerManager = true
         content.removeAllViews()
+        content.setBackgroundColor(Color.TRANSPARENT)
         addText("إدارة صور القنوات", 23f, white, true)
         addText("أدخل رابط صورة مباشر يبدأ بـ https:// لكل قناة. التغييرات تظهر على الأجهزة بعد المزامنة.", 13f, gray, false)
         val allChannels = channelGroups.values.flatten().distinctBy { it.first }
@@ -2433,6 +2482,106 @@ private fun isDashStreamUrl(url: String): Boolean {
             }
         }
         dialog.show()
+    }
+
+    /** Apply the approved cinematic turquoise background only to channel-browsing screens. */
+    private fun applyChannelPageTheme() {
+        content.setPadding(dp(14), dp(16), dp(14), dp(24))
+        content.background = ChannelAtmosphereDrawable()
+    }
+
+    /** Consistent translucent glass card with a subtle icy outline and accent glow. */
+    private fun applyChannelGlassCard(view: View) {
+        view.background = GradientDrawable(
+            GradientDrawable.Orientation.TL_BR,
+            intArrayOf(Color.argb(222, 8, 78, 91), Color.argb(236, 3, 29, 40))
+        ).apply {
+            cornerRadius = dp(13).toFloat()
+            setStroke(dp(1), Color.argb(225, 215, 248, 250))
+        }
+        view.elevation = dp(4).toFloat()
+        view.clipToOutline = true
+    }
+
+    /**
+     * Lightweight drawn wallpaper: turquoise cinematic gradient, soft bokeh and sparse
+     * colored confetti. It needs no image asset or network request and scrolls with the page.
+     */
+    private inner class ChannelAtmosphereDrawable : Drawable() {
+        private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+        private val bokeh = arrayOf(
+            floatArrayOf(.10f, .12f, .17f), floatArrayOf(.82f, .18f, .13f),
+            floatArrayOf(.30f, .40f, .22f), floatArrayOf(.92f, .55f, .18f),
+            floatArrayOf(.12f, .72f, .20f), floatArrayOf(.65f, .86f, .16f),
+            floatArrayOf(.42f, .95f, .12f), floatArrayOf(.72f, .35f, .10f)
+        )
+        private val confetti = arrayOf(
+            floatArrayOf(.08f, .28f, 0f), floatArrayOf(.91f, .32f, 1f),
+            floatArrayOf(.22f, .57f, 2f), floatArrayOf(.78f, .66f, 3f),
+            floatArrayOf(.48f, .21f, 4f), floatArrayOf(.16f, .88f, 5f),
+            floatArrayOf(.86f, .91f, 1f), floatArrayOf(.57f, .49f, 2f),
+            floatArrayOf(.35f, .76f, 3f), floatArrayOf(.97f, .13f, 4f),
+            floatArrayOf(.04f, .64f, 5f), floatArrayOf(.61f, .08f, 2f)
+        )
+        private val confettiColors = intArrayOf(
+            Color.rgb(255, 194, 75), Color.rgb(255, 93, 164),
+            Color.rgb(98, 232, 246), Color.rgb(244, 244, 255),
+            Color.rgb(255, 132, 83), Color.rgb(119, 255, 209)
+        )
+
+        override fun draw(canvas: Canvas) {
+            val b = bounds
+            if (b.width() <= 0 || b.height() <= 0) return
+            paint.shader = LinearGradient(
+                b.left.toFloat(), b.top.toFloat(), b.right.toFloat(), b.bottom.toFloat(),
+                intArrayOf(Color.rgb(10, 105, 119), Color.rgb(8, 70, 88), Color.rgb(3, 35, 49)),
+                floatArrayOf(0f, .48f, 1f), Shader.TileMode.CLAMP
+            )
+            canvas.drawRect(b, paint)
+            paint.shader = null
+
+            val w = b.width().toFloat()
+            val h = b.height().toFloat()
+            bokeh.forEachIndexed { i, dot ->
+                val cx = b.left + dot[0] * w
+                val cy = b.top + dot[1] * h
+                val radius = dp((22 + (i % 3) * 13)).toFloat()
+                val color = when (i % 4) {
+                    0 -> Color.rgb(51, 224, 231)
+                    1 -> Color.rgb(51, 166, 199)
+                    2 -> Color.rgb(90, 245, 202)
+                    else -> Color.rgb(73, 132, 255)
+                }
+                paint.shader = RadialGradient(
+                    cx, cy, radius,
+                    intArrayOf(Color.argb(75, Color.red(color), Color.green(color), Color.blue(color)),
+                        Color.argb(24, Color.red(color), Color.green(color), Color.blue(color)), Color.TRANSPARENT),
+                    floatArrayOf(0f, .58f, 1f), Shader.TileMode.CLAMP
+                )
+                canvas.drawCircle(cx, cy, radius, paint)
+                paint.shader = null
+            }
+
+            confetti.forEachIndexed { i, piece ->
+                val x = b.left + piece[0] * w
+                val y = b.top + piece[1] * h
+                val cw = dp(if (i % 3 == 0) 4 else 3).toFloat()
+                val ch = dp(if (i % 2 == 0) 11 else 7).toFloat()
+                paint.color = confettiColors[piece[2].toInt() % confettiColors.size]
+                paint.alpha = if (i % 3 == 0) 175 else 115
+                canvas.save()
+                canvas.rotate(((i * 29) % 70 - 35).toFloat(), x, y)
+                canvas.drawRoundRect(RectF(x, y, x + cw, y + ch), dp(1).toFloat(), dp(1).toFloat(), paint)
+                canvas.restore()
+            }
+            paint.alpha = 255
+            paint.color = Color.WHITE
+        }
+
+        override fun setAlpha(alpha: Int) { paint.alpha = alpha }
+        override fun setColorFilter(colorFilter: ColorFilter?) { paint.colorFilter = colorFilter }
+        @Deprecated("Deprecated in Android")
+        override fun getOpacity(): Int = PixelFormat.OPAQUE
     }
 
     /**
