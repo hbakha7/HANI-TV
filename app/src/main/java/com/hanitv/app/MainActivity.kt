@@ -550,20 +550,42 @@ class MainActivity : Activity() {
             }
 
             val brandArtwork = ChannelPosterDrawable(brand.second)
-            val brandLogoHeight = if (brand.second == "ثمانية") dp(56) else dp(48)
-            val brandLogo = channelLogoView(
-                brand.second,
-                brand.first,
-                dp(92),
-                brandLogoHeight,
-                plainBrandFallback = true
-            )
-            bitmapFromLogoView(brandLogo)?.let { brandArtwork.updateFromLogo(it) }
-            brandCard.background = brandArtwork
-            brandCard.addView(
-                brandLogo,
-                LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, brandLogoHeight)
-            )
+            val isThamaniaBrand = brand.second.contains("ثمانية", ignoreCase = true)
+            val brandLogoHeight = if (isThamaniaBrand) dp(56) else dp(48)
+            if (isThamaniaBrand) {
+                // Thamania artwork is a complete 16:9 card image, not a transparent logo.
+                // Show it edge-to-edge here; keep the separate channel name label below.
+                brandCard.background = ColorDrawable(Color.TRANSPARENT)
+                brandCard.addView(
+                    ImageView(this).apply {
+                        layoutParams = LinearLayout.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                            brandLogoHeight
+                        )
+                        scaleType = ImageView.ScaleType.CENTER_CROP
+                        setImageResource(R.drawable.thamania_card)
+                        contentDescription = "ثمانية"
+                    },
+                    LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        brandLogoHeight
+                    )
+                )
+            } else {
+                val brandLogo = channelLogoView(
+                    brand.second,
+                    brand.first,
+                    dp(92),
+                    brandLogoHeight,
+                    plainBrandFallback = true
+                )
+                bitmapFromLogoView(brandLogo)?.let { brandArtwork.updateFromLogo(it) }
+                brandCard.background = brandArtwork
+                brandCard.addView(
+                    brandLogo,
+                    LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, brandLogoHeight)
+                )
+            }
             brandCard.addView(TextView(this).apply {
                 text = when (brand.second) {
                     "أبو ظبي الرياضية بريميوم" -> "أبو ظبي بريميوم"
@@ -849,17 +871,18 @@ class MainActivity : Activity() {
                     }
                 }
 
+                val isThamaniaBrand = brand.second.contains("ثمانية", ignoreCase = true)
                 val posterArtwork = ChannelPosterDrawable(brand.second)
-                val brandLogo = channelLogoView(
+                val brandLogo = if (isThamaniaBrand) null else channelLogoView(
                     brand.second,
                     brand.first,
                     dp(142),
                     dp(76),
                     plainBrandFallback = true
                 )
-                bitmapFromLogoView(brandLogo)?.let { posterArtwork.updateFromLogo(it) }
+                if (brandLogo != null) bitmapFromLogoView(brandLogo)?.let { posterArtwork.updateFromLogo(it) }
                 val poster = FrameLayout(this).apply {
-                    background = posterArtwork
+                    background = if (isThamaniaBrand) ColorDrawable(Color.TRANSPARENT) else posterArtwork
                     foreground = GradientDrawable().apply {
                         cornerRadius = dp(12).toFloat()
                         setColor(Color.TRANSPARENT)
@@ -873,16 +896,27 @@ class MainActivity : Activity() {
                     clipToOutline = true
                     elevation = dp(2).toFloat()
                 }
-                poster.addView(
-                    brandLogo,
-                    FrameLayout.LayoutParams(
+                if (isThamaniaBrand) {
+                    poster.addView(ImageView(this).apply {
+                        scaleType = ImageView.ScaleType.CENTER_CROP
+                        setImageResource(R.drawable.thamania_card)
+                        contentDescription = "ثمانية"
+                    }, FrameLayout.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.MATCH_PARENT
-                    ).apply {
-                        setMargins(dp(10), dp(7), dp(10), dp(7))
-                        gravity = Gravity.CENTER
-                    }
-                )
+                    ))
+                } else if (brandLogo != null) {
+                    poster.addView(
+                        brandLogo,
+                        FrameLayout.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                            ViewGroup.LayoutParams.MATCH_PARENT
+                        ).apply {
+                            setMargins(dp(10), dp(7), dp(10), dp(7))
+                            gravity = Gravity.CENTER
+                        }
+                    )
+                }
                 card.addView(
                     poster,
                     LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(108))
@@ -1151,24 +1185,43 @@ class MainActivity : Activity() {
             setOnClickListener { openChannel(name) }
         }
 
-        // Poster-style artwork fills the whole thumbnail. The original logo is placed
-        // directly over it, with no recoloring, cropping, or replacement of the asset.
-        val logoView = channelLogoView(name, channel.second, dp(142), dp(76))
+        // Thamania uses a complete edge-to-edge 16:9 card image. Other channels
+        // retain the existing generated artwork and their original logo treatment.
+        val isThamaniaChannel = name.contains("ثمانية", ignoreCase = true) ||
+            name.contains("thmanyah", ignoreCase = true)
+        val logoView = if (isThamaniaChannel) null else channelLogoView(name, channel.second, dp(142), dp(76))
         val posterArtwork = ChannelPosterDrawable(name)
-        bitmapFromLogoView(logoView)?.let { posterArtwork.updateFromLogo(it) }
+        if (logoView != null) bitmapFromLogoView(logoView)?.let { posterArtwork.updateFromLogo(it) }
         val poster = FrameLayout(this).apply {
-            background = posterArtwork
+            background = if (isThamaniaChannel) ColorDrawable(Color.TRANSPARENT) else posterArtwork
+            outlineProvider = object : android.view.ViewOutlineProvider() {
+                override fun getOutline(view: View, outline: android.graphics.Outline) {
+                    outline.setRoundRect(0, 0, view.width, view.height, dp(12).toFloat())
+                }
+            }
             clipToOutline = true
             foreground = GradientDrawable().apply {
                 cornerRadius = dp(12).toFloat()
+                setColor(Color.TRANSPARENT)
                 setStroke(dp(1), Color.argb(70, 235, 238, 245))
             }
             elevation = dp(2).toFloat()
         }
-        poster.addView(
-            logoView,
-            FrameLayout.LayoutParams(dp(142), dp(76), Gravity.CENTER)
-        )
+        if (isThamaniaChannel) {
+            poster.addView(ImageView(this).apply {
+                scaleType = ImageView.ScaleType.CENTER_CROP
+                setImageResource(R.drawable.thamania_card)
+                contentDescription = "شعار ثمانية"
+            }, FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            ))
+        } else if (logoView != null) {
+            poster.addView(
+                logoView,
+                FrameLayout.LayoutParams(dp(142), dp(76), Gravity.CENTER)
+            )
+        }
         card.addView(
             poster,
             LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(108))
@@ -2907,7 +2960,7 @@ private fun isDashStreamUrl(url: String): Boolean {
             channelName.equals("MBC Masr 1", ignoreCase = true) -> R.drawable.mbc_masr
             channelName.equals("MBC Masr 2", ignoreCase = true) -> R.drawable.mbc_masr_2
             channelName.contains("ثمانية", ignoreCase = true) ||
-                channelName.contains("thmanyah", ignoreCase = true) -> R.drawable.thamania
+                channelName.contains("thmanyah", ignoreCase = true) -> R.drawable.thmanyah
             channelName.contains("STARZPLAY", ignoreCase = true) -> R.drawable.logo_starzplay
             channelName.contains("ALWAN", ignoreCase = true) ||
                 channelName.contains("ألوان", ignoreCase = true) -> R.drawable.logo_alwan
