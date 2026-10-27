@@ -5,6 +5,7 @@ import android.content.pm.ActivityInfo
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.Bundle
+import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.Canvas
 import android.graphics.Paint
@@ -553,22 +554,42 @@ class MainActivity : Activity() {
             val isThamaniaBrand = brand.second.contains("ثمانية", ignoreCase = true)
             val brandLogoHeight = if (isThamaniaBrand) dp(56) else dp(48)
             if (isThamaniaBrand) {
-                // Thamania artwork is a complete 16:9 card image, not a transparent logo.
-                // Show it edge-to-edge here; keep the separate channel name label below.
-                brandCard.background = ColorDrawable(Color.TRANSPARENT)
+                // Use the complete Thamania artwork as the card background, not as a small
+                // image above a black area. Center-crop to the card's aspect ratio so it
+                // fills the same rounded card as the other brands without black margins.
+                brandCard.setPadding(0, 0, 0, 0)
+                val sourceBitmap = BitmapFactory.decodeResource(resources, R.drawable.thamania)
+                val cardRatio = 104f / 91f
+                val cardBitmap = if (sourceBitmap.width.toFloat() / sourceBitmap.height > cardRatio) {
+                    val cropWidth = (sourceBitmap.height * cardRatio).toInt().coerceAtLeast(1)
+                    Bitmap.createBitmap(
+                        sourceBitmap,
+                        ((sourceBitmap.width - cropWidth) / 2).coerceAtLeast(0),
+                        0,
+                        cropWidth.coerceAtMost(sourceBitmap.width),
+                        sourceBitmap.height
+                    )
+                } else {
+                    val cropHeight = (sourceBitmap.width / cardRatio).toInt().coerceAtLeast(1)
+                    Bitmap.createBitmap(
+                        sourceBitmap,
+                        0,
+                        ((sourceBitmap.height - cropHeight) / 2).coerceAtLeast(0),
+                        sourceBitmap.width,
+                        cropHeight.coerceAtMost(sourceBitmap.height)
+                    )
+                }
+                brandCard.background = BitmapDrawable(resources, cardBitmap).apply {
+                    gravity = Gravity.FILL
+                }
+                // Keep the channel name at the bottom while the artwork remains visible
+                // behind the entire card, including the label area.
                 brandCard.addView(
-                    ImageView(this).apply {
-                        layoutParams = LinearLayout.LayoutParams(
-                            ViewGroup.LayoutParams.MATCH_PARENT,
-                            brandLogoHeight
-                        )
-                        scaleType = ImageView.ScaleType.CENTER_CROP
-                        setImageResource(R.drawable.thamania)
-                        contentDescription = "ثمانية"
-                    },
+                    View(this),
                     LinearLayout.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT,
-                        brandLogoHeight
+                        0,
+                        1f
                     )
                 )
             } else {
