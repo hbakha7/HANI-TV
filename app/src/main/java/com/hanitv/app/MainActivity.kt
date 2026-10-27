@@ -523,7 +523,7 @@ class MainActivity : Activity() {
             val brandCard = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER
-                // Thamania asset is already a complete poster; do not inset it inside a second card.
+                // Thamania uses a full-width image area; its height plus the label must exactly fill the card.
                 setPadding(if (isThamaniaBrand) 0 else dp(5), if (isThamaniaBrand) 0 else dp(8), if (isThamaniaBrand) 0 else dp(5), if (isThamaniaBrand) 0 else dp(8))
                 isClickable = true
                 isFocusable = true
@@ -552,7 +552,7 @@ class MainActivity : Activity() {
             }
 
             val brandArtwork = ChannelPosterDrawable(brand.second)
-            val brandLogoHeight = if (isThamaniaBrand) dp(66) else dp(48)
+            val brandLogoHeight = if (isThamaniaBrand) dp(71) else dp(48)
             val brandLogo = channelLogoView(
                 brand.second,
                 brand.first,
