@@ -1134,8 +1134,11 @@ class MainActivity : Activity() {
 
         // Poster-style artwork fills the whole thumbnail. The original logo is placed
         // directly over it, with no recoloring, cropping, or replacement of the asset.
+        val logoView = channelLogoView(name, channel.second, dp(142), dp(76))
+        val posterArtwork = ChannelPosterDrawable(name)
+        bitmapFromLogoView(logoView)?.let { posterArtwork.updateFromLogo(it) }
         val poster = FrameLayout(this).apply {
-            background = ChannelPosterDrawable(name)
+            background = posterArtwork
             clipToOutline = true
             foreground = GradientDrawable().apply {
                 cornerRadius = dp(12).toFloat()
@@ -1143,7 +1146,6 @@ class MainActivity : Activity() {
             }
             elevation = dp(2).toFloat()
         }
-        val logoView = channelLogoView(name, channel.second, dp(142), dp(76))
         poster.addView(
             logoView,
             FrameLayout.LayoutParams(dp(142), dp(76), Gravity.CENTER)
@@ -1203,11 +1205,21 @@ class MainActivity : Activity() {
     private inner class ChannelPosterDrawable(private val channelName: String) : Drawable() {
         private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
         private val key = channelName.lowercase(java.util.Locale.ROOT)
-        private val palette: IntArray = when {
+        private var palette: IntArray = when {
+            key.contains("mbc 1") -> intArrayOf(Color.rgb(116, 24, 35), Color.rgb(51, 15, 25), Color.rgb(18, 15, 22))
+            key.contains("mbc 2") -> intArrayOf(Color.rgb(20, 91, 139), Color.rgb(13, 42, 72), Color.rgb(13, 17, 29))
+            key.contains("mbc 3") -> intArrayOf(Color.rgb(67, 139, 38), Color.rgb(28, 66, 30), Color.rgb(13, 22, 23))
+            key.contains("mbc 4") -> intArrayOf(Color.rgb(27, 123, 151), Color.rgb(17, 53, 72), Color.rgb(14, 18, 27))
+            key.contains("mbc 5") -> intArrayOf(Color.rgb(0, 133, 169), Color.rgb(10, 49, 72), Color.rgb(13, 17, 29))
+            key.contains("mbc action") -> intArrayOf(Color.rgb(151, 105, 22), Color.rgb(66, 43, 24), Color.rgb(20, 17, 24))
+            key.contains("mbc max") -> intArrayOf(Color.rgb(117, 72, 37), Color.rgb(51, 32, 29), Color.rgb(17, 16, 23))
+            key.contains("mbc drama") -> intArrayOf(Color.rgb(83, 43, 112), Color.rgb(38, 24, 53), Color.rgb(17, 16, 24))
+            key.contains("mbc masr 2") -> intArrayOf(Color.rgb(112, 26, 39), Color.rgb(53, 17, 28), Color.rgb(18, 15, 22))
+            key.contains("mbc masr") -> intArrayOf(Color.rgb(176, 28, 39), Color.rgb(67, 17, 28), Color.rgb(18, 15, 22))
             key.contains("bein") -> intArrayOf(Color.rgb(79, 34, 123), Color.rgb(34, 10, 57), Color.rgb(15, 12, 28))
             key.contains("alwan") || key.contains("ألوان") -> intArrayOf(Color.rgb(12, 102, 103), Color.rgb(5, 57, 60), Color.rgb(7, 27, 37))
             key.contains("ثمانية") || key.contains("shahid sports") -> intArrayOf(Color.rgb(0, 94, 76), Color.rgb(10, 42, 45), Color.rgb(13, 23, 32))
-            key.contains("starzplay") || key.contains("film") || key.contains("سينما") -> intArrayOf(Color.rgb(91, 43, 52), Color.rgb(42, 25, 34), Color.rgb(20, 18, 25))
+            key.contains("starzplay") || key.contains("film") || key.contains("سينما") -> intArrayOf(Color.rgb(47, 77, 119), Color.rgb(24, 38, 65), Color.rgb(15, 17, 28))
             key.contains("mbc") || key.contains("روتانا") -> intArrayOf(Color.rgb(94, 47, 54), Color.rgb(44, 27, 34), Color.rgb(20, 19, 24))
             key.contains("طفل") || key.contains("كرتون") || key.contains("kids") || key.contains("toons") -> intArrayOf(Color.rgb(103, 39, 127), Color.rgb(53, 23, 76), Color.rgb(24, 18, 37))
             key.contains("news") || key.contains("أخبار") || key.contains("الجزيرة") || key.contains("dw") -> intArrayOf(Color.rgb(83, 48, 54), Color.rgb(39, 30, 37), Color.rgb(19, 22, 28))
@@ -1222,6 +1234,53 @@ class MainActivity : Activity() {
                 )
                 palettes[(channelName.hashCode().ushr(1) % palettes.size)]
             }
+        }
+
+        /** Update the artwork palette from the actual logo pixels, without modifying the logo. */
+        fun updateFromLogo(bitmap: android.graphics.Bitmap) {
+            if (bitmap.width <= 0 || bitmap.height <= 0) return
+            val hueCounts = IntArray(24)
+            val hueSums = FloatArray(24)
+            val satSums = FloatArray(24)
+            val valSums = FloatArray(24)
+            val xStep = maxOf(1, bitmap.width / 64)
+            val yStep = maxOf(1, bitmap.height / 64)
+            var y = 0
+            while (y < bitmap.height) {
+                var x = 0
+                while (x < bitmap.width) {
+                    val pixel = bitmap.getPixel(x, y)
+                    if (Color.alpha(pixel) >= 100) {
+                        val hsv = FloatArray(3)
+                        Color.colorToHSV(pixel, hsv)
+                        // Ignore transparent, near-gray, near-black and near-white pixels so
+                        // a logo's true brand color, rather than its blank canvas, drives the art.
+                        if (hsv[1] >= 0.28f && hsv[2] in 0.18f..0.94f) {
+                            val bucket = ((hsv[0] / 360f) * hueCounts.size).toInt().coerceIn(0, hueCounts.lastIndex)
+                            hueCounts[bucket]++
+                            hueSums[bucket] += hsv[0]
+                            satSums[bucket] += hsv[1]
+                            valSums[bucket] += hsv[2]
+                        }
+                    }
+                    x += xStep
+                }
+                y += yStep
+            }
+            val best = hueCounts.indices.maxByOrNull { hueCounts[it] } ?: return
+            if (hueCounts[best] < 2) return
+            val hue = hueSums[best] / hueCounts[best]
+            val saturation = (satSums[best] / hueCounts[best]).coerceIn(0.48f, 0.88f)
+            val hsv = floatArrayOf(hue, saturation, 0.42f)
+            val primary = Color.HSVToColor(hsv)
+            hsv[1] = (saturation * 0.82f).coerceIn(0.38f, 0.78f)
+            hsv[2] = 0.23f
+            val secondary = Color.HSVToColor(hsv)
+            hsv[1] = (saturation * 0.62f).coerceIn(0.28f, 0.60f)
+            hsv[2] = 0.095f
+            val deep = Color.HSVToColor(hsv)
+            palette = intArrayOf(primary, secondary, deep)
+            invalidateSelf()
         }
 
         override fun draw(canvas: Canvas) {
@@ -2786,6 +2845,28 @@ private fun isDashStreamUrl(url: String): Boolean {
         view.elevation = dp(3).toFloat()
     }
 
+    private fun bitmapFromLogoView(view: View): android.graphics.Bitmap? {
+        val image = view as? ImageView ?: return null
+        val drawable = image.drawable ?: return null
+        return try {
+            if (drawable is BitmapDrawable) {
+                drawable.bitmap
+            } else {
+                val width = drawable.intrinsicWidth.coerceAtLeast(1).coerceAtMost(512)
+                val height = drawable.intrinsicHeight.coerceAtLeast(1).coerceAtMost(512)
+                val bitmap = android.graphics.Bitmap.createBitmap(width, height, android.graphics.Bitmap.Config.ARGB_8888)
+                val canvas = Canvas(bitmap)
+                val oldBounds = RectF(drawable.bounds)
+                drawable.setBounds(0, 0, width, height)
+                drawable.draw(canvas)
+                drawable.setBounds(oldBounds.left.toInt(), oldBounds.top.toInt(), oldBounds.right.toInt(), oldBounds.bottom.toInt())
+                bitmap
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
     private fun channelLogoView(
         channelName: String,
         fallback: String,
@@ -2970,6 +3051,8 @@ private fun isDashStreamUrl(url: String): Boolean {
                     if (imageView.parent != null) {
                         imageView.setImageBitmap(loadedBitmap)
                         imageView.background = null
+                        val poster = imageView.parent as? FrameLayout
+                        (poster?.background as? ChannelPosterDrawable)?.updateFromLogo(loadedBitmap)
                     }
                 }
             }
