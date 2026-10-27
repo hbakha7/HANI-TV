@@ -1029,9 +1029,7 @@ class MainActivity : Activity() {
         addText(category, 23f, white, true)
         addText("القنوات المتاحة في هذا القسم", 14f, gray, false)
 
-        if (category == "القنوات العربية") {
-            addMbcSectionCard()
-        }
+        val isArabicCategory = category == "القنوات العربية"
 
         val predefinedChannels = channelGroups.values.flatten().distinctBy { it.first }
         val configuredChannels = sources.map { it.channel.trim() }
@@ -1056,33 +1054,39 @@ class MainActivity : Activity() {
         }
 
         var index = 0
+        if (isArabicCategory) {
+            // The MBC group is a normal two-column poster tile, matching the channel cards.
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.TOP
+            }
+            addMbcSectionCard(row)
+            if (channels.isNotEmpty()) {
+                addChannelCard(row, channels[0])
+                index = 1
+            }
+            grid.addView(row, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { bottomMargin = dp(10) })
+        }
+
         while (index < channels.size) {
             val row = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
             }
-
             addChannelCard(row, channels[index])
-
-            if (index + 1 < channels.size) {
-                addChannelCard(row, channels[index + 1])
-            }
-
-            grid.addView(
-                row,
-                LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT
-                ).apply {
-                    bottomMargin = dp(10)
-                }
-            )
-
+            if (index + 1 < channels.size) addChannelCard(row, channels[index + 1])
+            grid.addView(row, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { bottomMargin = dp(10) })
             index += 2
         }
 
         content.addView(grid)
-        if (channels.isEmpty()) {
+        if (channels.isEmpty() && !isArabicCategory) {
             addText("لا توجد قنوات مضافة لهذا القسم بعد.", 13f, gray, false, 8)
         }
         addBackButton()
@@ -1104,49 +1108,69 @@ class MainActivity : Activity() {
             value.contains("أبو ظبي الرياضية") || value.contains("شاهد sports")
     }
 
-    private fun addMbcSectionCard() {
+    private fun addMbcSectionCard(row: LinearLayout) {
         val card = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(14), dp(12), dp(14), dp(12))
-            background = graphiteCardDrawable(accent = Color.rgb(100, 102, 112), radius = 14)
-            elevation = dp(2).toFloat()
-            clipToOutline = true
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+            setPadding(dp(3), dp(3), dp(3), dp(8))
+            setBackgroundColor(Color.TRANSPARENT)
             isClickable = true
             isFocusable = true
+            contentDescription = "قنوات MBC"
             setOnClickListener { showMbcChannels() }
         }
 
-        val logo = ImageView(this).apply {
+        val poster = FrameLayout(this).apply {
+            background = ChannelPosterDrawable("MBC 1")
+            outlineProvider = object : android.view.ViewOutlineProvider() {
+                override fun getOutline(view: View, outline: android.graphics.Outline) {
+                    outline.setRoundRect(0, 0, view.width, view.height, dp(12).toFloat())
+                }
+            }
+            clipToOutline = true
+            foreground = GradientDrawable().apply {
+                cornerRadius = dp(12).toFloat()
+                setColor(Color.TRANSPARENT)
+                setStroke(dp(1), Color.argb(70, 235, 238, 245))
+            }
+            elevation = dp(2).toFloat()
+        }
+        poster.addView(ImageView(this).apply {
             setImageResource(R.drawable.mbc_1)
             scaleType = ImageView.ScaleType.FIT_CENTER
-            contentDescription = "MBC 1 logo"
-        }
-        val logoStage = makeAdaptiveLogoStage("MBC 1", dp(76), dp(52))
-        logoStage.addView(logo, FrameLayout.LayoutParams(dp(68), dp(42), Gravity.CENTER))
-        card.addView(logoStage, LinearLayout.LayoutParams(dp(76), dp(52)))
-
-        val labels = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(12), 0, dp(8), 0)
-        }
-        labels.addView(TextView(this).apply {
-            text = "قنوات MBC"
-            textSize = 17f
-            setTextColor(Color.WHITE)
-            setTypeface(null, Typeface.BOLD)
-        })
-        card.addView(labels, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            contentDescription = "شعار MBC"
+            setPadding(dp(18), dp(12), dp(18), dp(12))
+        }, FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.MATCH_PARENT
+        ))
+        card.addView(poster, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, dp(108)
+        ))
         card.addView(TextView(this).apply {
-            text = "‹"
-            textSize = 30f
-            setTextColor(Color.rgb(210, 45, 60))
-        })
-        content.addView(card, fullWidthParams().apply {
-            topMargin = dp(10)
-            bottomMargin = dp(14)
-        })
+            text = "قنوات MBC"
+            textSize = 14f
+            gravity = Gravity.CENTER
+            setTextColor(Color.rgb(245, 245, 247))
+            setTypeface(null, Typeface.BOLD)
+            maxLines = 2
+            setPadding(dp(2), dp(7), dp(2), 0)
+        }, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ))
+        card.addView(TextView(this).apply {
+            text = "10 قنوات"
+            textSize = 11f
+            gravity = Gravity.CENTER
+            setTextColor(Color.rgb(158, 160, 169))
+            maxLines = 1
+            setPadding(dp(2), dp(3), dp(2), 0)
+        }, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ))
+        row.addView(card, LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f
+        ).apply { setMargins(dp(5), 0, dp(5), 0) })
     }
 
     private fun showMbcChannels() {
