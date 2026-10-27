@@ -619,7 +619,13 @@ class MainActivity : Activity() {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
                 setPadding(dp(14), dp(13), dp(14), dp(13))
-                background = categorySurfaceDrawable(category, 16)
+                background = GradientDrawable(
+                    GradientDrawable.Orientation.TL_BR,
+                    intArrayOf(Color.rgb(31, 33, 41), Color.rgb(18, 19, 24))
+                ).apply {
+                    cornerRadius = dp(16).toFloat()
+                    setStroke(dp(1), Color.argb(155, 61, 64, 76))
+                }
                 elevation = dp(1).toFloat()
                 isClickable = true
                 isFocusable = true
@@ -728,7 +734,7 @@ class MainActivity : Activity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(14), dp(16), dp(14), dp(16))
-            background = categorySurfaceDrawable(category)
+            background = graphiteCardDrawable(accent = Color.rgb(105, 108, 118), radius = 13)
             elevation = dp(2).toFloat()
             clipToOutline = true
             isClickable = true
@@ -851,11 +857,6 @@ class MainActivity : Activity() {
                     dp(76),
                     plainBrandFallback = true
                 )
-                // Thamania uses a landscape artwork intended to cover the whole poster.
-                // Fill the card edge-to-edge instead of leaving an inset logo area.
-                if (brand.second == "ثمانية" && brandLogo is ImageView) {
-                    brandLogo.scaleType = ImageView.ScaleType.CENTER_CROP
-                }
                 bitmapFromLogoView(brandLogo)?.let { posterArtwork.updateFromLogo(it) }
                 val poster = FrameLayout(this).apply {
                     background = posterArtwork
@@ -878,11 +879,7 @@ class MainActivity : Activity() {
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.MATCH_PARENT
                     ).apply {
-                        if (brand.second == "ثمانية") {
-                            setMargins(0, 0, 0, 0)
-                        } else {
-                            setMargins(dp(10), dp(7), dp(10), dp(7))
-                        }
+                        setMargins(dp(10), dp(7), dp(10), dp(7))
                         gravity = Gravity.CENTER
                     }
                 )
@@ -1156,6 +1153,8 @@ class MainActivity : Activity() {
 
         // Poster-style artwork fills the whole thumbnail. The original logo is placed
         // directly over it, with no recoloring, cropping, or replacement of the asset.
+        val isThmanyah = name.contains("ثمانية", ignoreCase = true) ||
+            name.contains("thmanyah", ignoreCase = true)
         val logoView = channelLogoView(name, channel.second, dp(142), dp(76))
         val posterArtwork = ChannelPosterDrawable(name)
         bitmapFromLogoView(logoView)?.let { posterArtwork.updateFromLogo(it) }
@@ -1168,9 +1167,18 @@ class MainActivity : Activity() {
             }
             elevation = dp(2).toFloat()
         }
+        // Thamania cards can occupy a full row (for example, channel 3). Let its
+        // artwork use the entire poster instead of keeping the old fixed 142dp slot.
         poster.addView(
             logoView,
-            FrameLayout.LayoutParams(dp(142), dp(76), Gravity.CENTER)
+            if (isThmanyah) {
+                FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT
+                )
+            } else {
+                FrameLayout.LayoutParams(dp(142), dp(76), Gravity.CENTER)
+            }
         )
         card.addView(
             poster,
@@ -1310,45 +1318,54 @@ class MainActivity : Activity() {
             if (b.width() <= 0 || b.height() <= 0) return
             val w = b.width().toFloat()
             val h = b.height().toFloat()
-
-            // Clean premium artwork: brand-colour gradient and two very soft light blooms.
-            // Intentionally no repeated rings, grids, streaks, or decorative line patterns.
             paint.style = Paint.Style.FILL
             paint.shader = LinearGradient(
                 b.left.toFloat(), b.top.toFloat(), b.right.toFloat(), b.bottom.toFloat(),
-                palette, floatArrayOf(0f, .54f, 1f), Shader.TileMode.CLAMP
+                palette, floatArrayOf(0f, .58f, 1f), Shader.TileMode.CLAMP
             )
             canvas.drawRect(b, paint)
             paint.shader = null
 
-            val glowRadius = maxOf(w, h) * .78f
+            // Soft atmospheric light behind the logo.
             paint.shader = RadialGradient(
-                b.left + w * .24f, b.top + h * .18f, glowRadius,
-                intArrayOf(
-                    Color.argb(27, 255, 255, 255),
-                    Color.argb(10, 255, 255, 255),
-                    Color.TRANSPARENT
-                ),
+                b.left + w * .52f, b.top + h * .48f, maxOf(w, h) * .72f,
+                intArrayOf(Color.argb(36, 255, 255, 255), Color.argb(9, 255, 255, 255), Color.TRANSPARENT),
                 floatArrayOf(0f, .48f, 1f), Shader.TileMode.CLAMP
             )
             canvas.drawRect(b, paint)
             paint.shader = null
 
-            // A restrained brand-colour bloom adds depth without competing with the logo.
-            val accent = palette[0]
-            paint.shader = RadialGradient(
-                b.left + w * .88f, b.top + h * .92f, maxOf(w, h) * .66f,
-                intArrayOf(
-                    Color.argb(28, Color.red(accent), Color.green(accent), Color.blue(accent)),
-                    Color.argb(8, Color.red(accent), Color.green(accent), Color.blue(accent)),
-                    Color.TRANSPARENT
-                ),
-                floatArrayOf(0f, .52f, 1f), Shader.TileMode.CLAMP
-            )
-            canvas.drawRect(b, paint)
-            paint.shader = null
-            paint.alpha = 255
+            // Elegant curved rings in opposite corners, inspired by broadcast poster artwork.
+            paint.style = Paint.Style.STROKE
+            paint.strokeWidth = dp(2).toFloat()
+            paint.color = Color.argb(30, 235, 238, 245)
+            val ring = RectF(b.left - w * .30f, b.top - h * .72f, b.left + w * .62f, b.top + h * .92f)
+            for (i in 0..2) {
+                val inset = dp(i * 11).toFloat()
+                canvas.drawArc(RectF(ring.left + inset, ring.top + inset, ring.right + inset, ring.bottom + inset), 5f, 105f, false, paint)
+            }
+            val ring2 = RectF(b.right - w * .55f, b.bottom - h * .78f, b.right + w * .38f, b.bottom + h * .85f)
+            for (i in 0..2) {
+                val inset = dp(i * 12).toFloat()
+                canvas.drawArc(RectF(ring2.left - inset, ring2.top - inset, ring2.right - inset, ring2.bottom - inset), 185f, 105f, false, paint)
+            }
+
+            // A few restrained angular streaks on sports thumbnails; other categories stay calm.
+            if (key.contains("sports") || key.contains("bein") || key.contains("رياض") || key.contains("الكأس") || key.contains("ثمانية")) {
+                paint.style = Paint.Style.FILL
+                paint.color = Color.argb(34, 255, 255, 255)
+                val path = android.graphics.Path().apply {
+                    moveTo(b.left.toFloat(), b.top + h * .13f)
+                    lineTo(b.left + w * .12f, b.top.toFloat())
+                    lineTo(b.left + w * .06f, b.top.toFloat())
+                    close()
+                }
+                canvas.drawPath(path, paint)
+                canvas.drawLine(b.right - w * .20f, b.top.toFloat(), b.right.toFloat(), b.top + h * .20f, paint.apply { strokeWidth = dp(3).toFloat() })
+            }
+            paint.style = Paint.Style.FILL
             paint.color = Color.WHITE
+            paint.alpha = 255
         }
 
         override fun setAlpha(alpha: Int) { paint.alpha = alpha }
@@ -2719,36 +2736,6 @@ private fun isDashStreamUrl(url: String): Boolean {
         content.background = ChannelAtmosphereDrawable()
     }
 
-    /**
-     * Minimal category surfaces keyed by category name. New/custom categories get a
-     * deterministic quiet palette too, so future categories never inherit busy patterns.
-     */
-    private fun categorySurfaceDrawable(category: String, radius: Int = 13): GradientDrawable {
-        val colors = when (category) {
-            "القنوات الرياضية" -> intArrayOf(Color.rgb(64, 35, 102), Color.rgb(27, 24, 39))
-            "القنوات العربية" -> intArrayOf(Color.rgb(112, 43, 59), Color.rgb(31, 23, 31))
-            "القنوات الإخبارية" -> intArrayOf(Color.rgb(25, 91, 101), Color.rgb(20, 29, 38))
-            "قنوات الأطفال" -> intArrayOf(Color.rgb(91, 49, 126), Color.rgb(30, 24, 42))
-            "قنوات الترفيه" -> intArrayOf(Color.rgb(115, 48, 76), Color.rgb(34, 24, 34))
-            "ثمانية" -> intArrayOf(Color.rgb(15, 100, 77), Color.rgb(18, 34, 35))
-            "STARZPLAY" -> intArrayOf(Color.rgb(43, 76, 119), Color.rgb(22, 29, 47))
-            "ALWAN" -> intArrayOf(Color.rgb(19, 91, 91), Color.rgb(17, 34, 40))
-            else -> {
-                val palettes = arrayOf(
-                    intArrayOf(Color.rgb(48, 59, 83), Color.rgb(22, 27, 37)),
-                    intArrayOf(Color.rgb(69, 43, 67), Color.rgb(28, 23, 32)),
-                    intArrayOf(Color.rgb(35, 74, 73), Color.rgb(20, 29, 34)),
-                    intArrayOf(Color.rgb(72, 54, 40), Color.rgb(30, 26, 27))
-                )
-                palettes[(category.hashCode().ushr(1) % palettes.size)]
-            }
-        }
-        return GradientDrawable(GradientDrawable.Orientation.TL_BR, colors).apply {
-            cornerRadius = dp(radius).toFloat()
-            setStroke(dp(1), Color.argb(115, 205, 211, 225))
-        }
-    }
-
     private fun graphiteCardDrawable(accent: Int = Color.rgb(83, 86, 96), radius: Int = 14): GradientDrawable =
         GradientDrawable(
             GradientDrawable.Orientation.TL_BR,
@@ -2954,16 +2941,15 @@ private fun isDashStreamUrl(url: String): Boolean {
                 layoutParams = LinearLayout.LayoutParams(width, height)
                 val isThmanyah = channelName.contains("ثمانية", ignoreCase = true) ||
                     channelName.contains("thmanyah", ignoreCase = true)
-                // Use Android's real CENTER_CROP measurement against the final measured view.
-                // The previous hand-built MATRIX used the requested dp slot dimensions rather
-                // than the actual laid-out card dimensions, so wide cards (especially channel 3)
-                // showed the artwork as a small inset image instead of filling the card.
+                // Thamania is supplied as a full-bleed 3:2 poster. Crop it to each
+                // logo slot so it fills the same card area as the other sports brands.
+                // Do not apply a second manual zoom: it causes different results in
+                // the small home carousel and the wide third channel card.
                 scaleType = if (isThmanyah) ImageView.ScaleType.CENTER_CROP else ImageView.ScaleType.FIT_CENTER
                 contentDescription = "$channelName logo"
                 setBackgroundColor(Color.TRANSPARENT)
                 setImageResource(localLogoRes)
                 adjustViewBounds = false
-                if (isThmanyah) imageMatrix = android.graphics.Matrix()
             }
         }
 
