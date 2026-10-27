@@ -554,26 +554,18 @@ class MainActivity : Activity() {
             val isThamaniaBrand = brand.second.contains("ثمانية", ignoreCase = true)
             val brandLogoHeight = dp(48)
 
-            // Keep the same card dimensions. The Thamania artwork already contains
-            // its own background, so let it span the available card width without
-            // extra inner padding that creates the visible inset rectangle.
-            // Thamania artwork already includes its own teal background. Do not
-            // draw ChannelPosterDrawable behind it, which creates a second
-            // contrasting rectangle around the image. Keep the existing logo
-            // height and label sizing unchanged.
-            brandCard.background = if (isThamaniaBrand) {
-                ColorDrawable(Color.TRANSPARENT)
-            } else {
-                brandArtwork
-            }
+            // Use the same generated, rounded brand-card background as the other logos.
+            // Thamania's transparent logo sits centered above it; never stretch/crop it
+            // to fill the card, because that creates a black rectangular inset.
+            brandCard.background = brandArtwork
             if (isThamaniaBrand) {
-                brandCard.setPadding(0, dp(8), 0, dp(8))
+                brandCard.setPadding(dp(5), dp(8), dp(5), dp(8))
                 brandCard.addView(
                     ImageView(this).apply {
                         setImageResource(R.drawable.thamania)
-                        scaleType = ImageView.ScaleType.CENTER_CROP
+                        scaleType = ImageView.ScaleType.FIT_CENTER
                         contentDescription = "شعار ثمانية"
-                        setPadding(0, 0, 0, 0)
+                        setPadding(dp(8), dp(2), dp(8), dp(2))
                     },
                     LinearLayout.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT,
@@ -890,7 +882,7 @@ class MainActivity : Activity() {
                 )
                 if (brandLogo != null) bitmapFromLogoView(brandLogo)?.let { posterArtwork.updateFromLogo(it) }
                 val poster = FrameLayout(this).apply {
-                    background = if (isThamaniaBrand) ColorDrawable(Color.TRANSPARENT) else posterArtwork
+                    background = posterArtwork
                     foreground = GradientDrawable().apply {
                         cornerRadius = dp(12).toFloat()
                         setColor(Color.TRANSPARENT)
@@ -906,9 +898,10 @@ class MainActivity : Activity() {
                 }
                 if (isThamaniaBrand) {
                     poster.addView(ImageView(this).apply {
-                        scaleType = ImageView.ScaleType.CENTER_CROP
+                        scaleType = ImageView.ScaleType.FIT_CENTER
                         setImageResource(R.drawable.thamania)
-                        contentDescription = "ثمانية"
+                        contentDescription = "شعار ثمانية"
+                        setPadding(dp(12), dp(8), dp(12), dp(8))
                     }, FrameLayout.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.MATCH_PARENT
@@ -1201,7 +1194,7 @@ class MainActivity : Activity() {
         val posterArtwork = ChannelPosterDrawable(name)
         if (logoView != null) bitmapFromLogoView(logoView)?.let { posterArtwork.updateFromLogo(it) }
         val poster = FrameLayout(this).apply {
-            background = if (isThamaniaChannel) ColorDrawable(Color.TRANSPARENT) else posterArtwork
+            background = posterArtwork
             outlineProvider = object : android.view.ViewOutlineProvider() {
                 override fun getOutline(view: View, outline: android.graphics.Outline) {
                     outline.setRoundRect(0, 0, view.width, view.height, dp(12).toFloat())
@@ -1217,9 +1210,10 @@ class MainActivity : Activity() {
         }
         if (isThamaniaChannel) {
             poster.addView(ImageView(this).apply {
-                scaleType = ImageView.ScaleType.CENTER_CROP
+                scaleType = ImageView.ScaleType.FIT_CENTER
                 setImageResource(R.drawable.thamania)
                 contentDescription = "شعار ثمانية"
+                setPadding(dp(12), dp(8), dp(12), dp(8))
             }, FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
