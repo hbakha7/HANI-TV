@@ -2907,7 +2907,7 @@ private fun isDashStreamUrl(url: String): Boolean {
             channelName.equals("MBC Masr 1", ignoreCase = true) -> R.drawable.mbc_masr
             channelName.equals("MBC Masr 2", ignoreCase = true) -> R.drawable.mbc_masr_2
             channelName.contains("ثمانية", ignoreCase = true) ||
-                channelName.contains("thmanyah", ignoreCase = true) -> R.drawable.thmanyah
+                channelName.contains("thmanyah", ignoreCase = true) -> R.drawable.thamania
             channelName.contains("STARZPLAY", ignoreCase = true) -> R.drawable.logo_starzplay
             channelName.contains("ALWAN", ignoreCase = true) ||
                 channelName.contains("ألوان", ignoreCase = true) -> R.drawable.logo_alwan
