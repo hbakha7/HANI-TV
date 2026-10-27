@@ -619,19 +619,8 @@ class MainActivity : Activity() {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
                 setPadding(dp(14), dp(13), dp(14), dp(13))
-                background = ChannelPosterDrawable(category)
-                foreground = GradientDrawable().apply {
-                    cornerRadius = dp(16).toFloat()
-                    setColor(Color.TRANSPARENT)
-                    setStroke(dp(1), Color.argb(95, 225, 230, 245))
-                }
-                outlineProvider = object : android.view.ViewOutlineProvider() {
-                    override fun getOutline(view: View, outline: android.graphics.Outline) {
-                        outline.setRoundRect(0, 0, view.width, view.height, dp(16).toFloat())
-                    }
-                }
-                clipToOutline = true
-                elevation = dp(2).toFloat()
+                background = categorySurfaceDrawable(category, 16)
+                elevation = dp(1).toFloat()
                 isClickable = true
                 isFocusable = true
                 setOnClickListener {
@@ -739,17 +728,7 @@ class MainActivity : Activity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(14), dp(16), dp(14), dp(16))
-            background = ChannelPosterDrawable(category)
-            foreground = GradientDrawable().apply {
-                cornerRadius = dp(13).toFloat()
-                setColor(Color.TRANSPARENT)
-                setStroke(dp(1), Color.argb(95, 225, 230, 245))
-            }
-            outlineProvider = object : android.view.ViewOutlineProvider() {
-                override fun getOutline(view: View, outline: android.graphics.Outline) {
-                    outline.setRoundRect(0, 0, view.width, view.height, dp(13).toFloat())
-                }
-            }
+            background = categorySurfaceDrawable(category)
             elevation = dp(2).toFloat()
             clipToOutline = true
             isClickable = true
@@ -1240,18 +1219,6 @@ class MainActivity : Activity() {
         private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
         private val key = channelName.lowercase(java.util.Locale.ROOT)
         private var palette: IntArray = when {
-            key == "القنوات الرياضية" || key == "قنوات رياضية" ->
-                intArrayOf(Color.rgb(92, 35, 150), Color.rgb(39, 20, 66), Color.rgb(13, 16, 28))
-            key == "القنوات العربية" || key == "قنوات عربية" ->
-                intArrayOf(Color.rgb(128, 43, 58), Color.rgb(54, 25, 35), Color.rgb(17, 16, 24))
-            key == "القنوات الإخبارية" || key == "أخبار" ->
-                intArrayOf(Color.rgb(22, 105, 117), Color.rgb(17, 43, 57), Color.rgb(12, 18, 28))
-            key == "قنوات الأطفال" || key == "الأطفال" ->
-                intArrayOf(Color.rgb(105, 48, 153), Color.rgb(49, 29, 79), Color.rgb(19, 17, 34))
-            key == "قنوات الترفيه" || key == "الترفيه" ->
-                intArrayOf(Color.rgb(157, 65, 87), Color.rgb(62, 29, 51), Color.rgb(19, 16, 28))
-            key == "قنوات mbc" ->
-                intArrayOf(Color.rgb(139, 38, 53), Color.rgb(58, 24, 35), Color.rgb(18, 15, 23))
             key.contains("mbc 1") -> intArrayOf(Color.rgb(116, 24, 35), Color.rgb(51, 15, 25), Color.rgb(18, 15, 22))
             key.contains("mbc 2") -> intArrayOf(Color.rgb(20, 91, 139), Color.rgb(13, 42, 72), Color.rgb(13, 17, 29))
             key.contains("mbc 3") -> intArrayOf(Color.rgb(67, 139, 38), Color.rgb(28, 66, 30), Color.rgb(13, 22, 23))
@@ -1334,118 +1301,45 @@ class MainActivity : Activity() {
             if (b.width() <= 0 || b.height() <= 0) return
             val w = b.width().toFloat()
             val h = b.height().toFloat()
+
+            // Clean premium artwork: brand-colour gradient and two very soft light blooms.
+            // Intentionally no repeated rings, grids, streaks, or decorative line patterns.
             paint.style = Paint.Style.FILL
             paint.shader = LinearGradient(
                 b.left.toFloat(), b.top.toFloat(), b.right.toFloat(), b.bottom.toFloat(),
-                palette, floatArrayOf(0f, .58f, 1f), Shader.TileMode.CLAMP
+                palette, floatArrayOf(0f, .54f, 1f), Shader.TileMode.CLAMP
             )
             canvas.drawRect(b, paint)
             paint.shader = null
 
-            // Soft atmospheric light behind the logo.
+            val glowRadius = maxOf(w, h) * .78f
             paint.shader = RadialGradient(
-                b.left + w * .52f, b.top + h * .48f, maxOf(w, h) * .72f,
-                intArrayOf(Color.argb(36, 255, 255, 255), Color.argb(9, 255, 255, 255), Color.TRANSPARENT),
+                b.left + w * .24f, b.top + h * .18f, glowRadius,
+                intArrayOf(
+                    Color.argb(27, 255, 255, 255),
+                    Color.argb(10, 255, 255, 255),
+                    Color.TRANSPARENT
+                ),
                 floatArrayOf(0f, .48f, 1f), Shader.TileMode.CLAMP
             )
             canvas.drawRect(b, paint)
             paint.shader = null
 
-            // Elegant curved rings in opposite corners, inspired by broadcast poster artwork.
-            paint.style = Paint.Style.STROKE
-            paint.strokeWidth = dp(2).toFloat()
-            paint.color = Color.argb(30, 235, 238, 245)
-            val ring = RectF(b.left - w * .30f, b.top - h * .72f, b.left + w * .62f, b.top + h * .92f)
-            for (i in 0..2) {
-                val inset = dp(i * 11).toFloat()
-                canvas.drawArc(RectF(ring.left + inset, ring.top + inset, ring.right + inset, ring.bottom + inset), 5f, 105f, false, paint)
-            }
-            val ring2 = RectF(b.right - w * .55f, b.bottom - h * .78f, b.right + w * .38f, b.bottom + h * .85f)
-            for (i in 0..2) {
-                val inset = dp(i * 12).toFloat()
-                canvas.drawArc(RectF(ring2.left - inset, ring2.top - inset, ring2.right - inset, ring2.bottom - inset), 185f, 105f, false, paint)
-            }
-
-            // Cinematic poster motifs vary deterministically by channel/category name.
-            // This means newly added channels get a designed background automatically,
-            // without needing a new drawable, asset, or manual category-specific code.
-            val motif = (channelName.hashCode().ushr(1) % 5)
-            paint.style = Paint.Style.STROKE
-            paint.strokeCap = Paint.Cap.ROUND
-            paint.strokeWidth = dp(2).toFloat()
-            paint.color = Color.argb(25, 245, 248, 255)
-            when (motif) {
-                0 -> {
-                    // Broadcast-wave arcs.
-                    for (i in 0..4) {
-                        val inset = dp(i * 13).toFloat()
-                        canvas.drawArc(
-                            RectF(b.left - w * .24f + inset, b.top - h * .48f + inset,
-                                b.left + w * .68f + inset, b.top + h * 1.08f + inset),
-                            8f, 115f, false, paint
-                        )
-                    }
-                }
-                1 -> {
-                    // Diagonal light ribbons.
-                    for (i in 0..5) {
-                        val x = b.left + w * (0.12f + i * 0.17f)
-                        canvas.drawLine(x, b.top.toFloat(), x - w * .38f, b.bottom.toFloat(), paint)
-                    }
-                    paint.color = Color.argb(22, 255, 255, 255)
-                    val shard = android.graphics.Path().apply {
-                        moveTo(b.left.toFloat(), b.top + h * .16f)
-                        lineTo(b.left + w * .16f, b.top.toFloat())
-                        lineTo(b.left + w * .08f, b.top.toFloat())
-                        close()
-                    }
-                    paint.style = Paint.Style.FILL
-                    canvas.drawPath(shard, paint)
-                }
-                2 -> {
-                    // Fine technical grid with a softly illuminated corner.
-                    paint.color = Color.argb(17, 245, 248, 255)
-                    paint.strokeWidth = dp(1).toFloat()
-                    for (i in 1..5) {
-                        val x = b.left + w * i / 6f
-                        canvas.drawLine(x, b.top.toFloat(), x, b.bottom.toFloat(), paint)
-                    }
-                    for (i in 1..3) {
-                        val y = b.top + h * i / 4f
-                        canvas.drawLine(b.left.toFloat(), y, b.right.toFloat(), y, paint)
-                    }
-                }
-                3 -> {
-                    // Layered corner rings and a broadcast flare.
-                    for (i in 0..4) {
-                        val inset = dp(i * 10).toFloat()
-                        canvas.drawCircle(b.right - w * .08f, b.top + h * .10f, w * (.12f + i * .055f), paint)
-                    }
-                    paint.style = Paint.Style.FILL
-                    paint.color = Color.argb(23, 255, 255, 255)
-                    val flare = android.graphics.Path().apply {
-                        moveTo(b.left.toFloat(), b.bottom - h * .18f)
-                        lineTo(b.left + w * .28f, b.bottom.toFloat())
-                        lineTo(b.left.toFloat(), b.bottom.toFloat())
-                        close()
-                    }
-                    canvas.drawPath(flare, paint)
-                }
-                else -> {
-                    // Elegant orbital loops, similar to premium sports broadcast graphics.
-                    for (i in 0..3) {
-                        val inset = dp(i * 12).toFloat()
-                        canvas.drawOval(
-                            RectF(b.left + w * .18f - inset, b.top - h * .30f + inset,
-                                b.right + w * .22f - inset, b.bottom + h * .32f - inset),
-                            paint
-                        )
-                    }
-                }
-            }
-            paint.style = Paint.Style.FILL
-            paint.color = Color.WHITE
+            // A restrained brand-colour bloom adds depth without competing with the logo.
+            val accent = palette[0]
+            paint.shader = RadialGradient(
+                b.left + w * .88f, b.top + h * .92f, maxOf(w, h) * .66f,
+                intArrayOf(
+                    Color.argb(28, Color.red(accent), Color.green(accent), Color.blue(accent)),
+                    Color.argb(8, Color.red(accent), Color.green(accent), Color.blue(accent)),
+                    Color.TRANSPARENT
+                ),
+                floatArrayOf(0f, .52f, 1f), Shader.TileMode.CLAMP
+            )
+            canvas.drawRect(b, paint)
+            paint.shader = null
             paint.alpha = 255
+            paint.color = Color.WHITE
         }
 
         override fun setAlpha(alpha: Int) { paint.alpha = alpha }
@@ -2816,6 +2710,36 @@ private fun isDashStreamUrl(url: String): Boolean {
         content.background = ChannelAtmosphereDrawable()
     }
 
+    /**
+     * Minimal category surfaces keyed by category name. New/custom categories get a
+     * deterministic quiet palette too, so future categories never inherit busy patterns.
+     */
+    private fun categorySurfaceDrawable(category: String, radius: Int = 13): GradientDrawable {
+        val colors = when (category) {
+            "القنوات الرياضية" -> intArrayOf(Color.rgb(64, 35, 102), Color.rgb(27, 24, 39))
+            "القنوات العربية" -> intArrayOf(Color.rgb(112, 43, 59), Color.rgb(31, 23, 31))
+            "القنوات الإخبارية" -> intArrayOf(Color.rgb(25, 91, 101), Color.rgb(20, 29, 38))
+            "قنوات الأطفال" -> intArrayOf(Color.rgb(91, 49, 126), Color.rgb(30, 24, 42))
+            "قنوات الترفيه" -> intArrayOf(Color.rgb(115, 48, 76), Color.rgb(34, 24, 34))
+            "ثمانية" -> intArrayOf(Color.rgb(15, 100, 77), Color.rgb(18, 34, 35))
+            "STARZPLAY" -> intArrayOf(Color.rgb(43, 76, 119), Color.rgb(22, 29, 47))
+            "ALWAN" -> intArrayOf(Color.rgb(19, 91, 91), Color.rgb(17, 34, 40))
+            else -> {
+                val palettes = arrayOf(
+                    intArrayOf(Color.rgb(48, 59, 83), Color.rgb(22, 27, 37)),
+                    intArrayOf(Color.rgb(69, 43, 67), Color.rgb(28, 23, 32)),
+                    intArrayOf(Color.rgb(35, 74, 73), Color.rgb(20, 29, 34)),
+                    intArrayOf(Color.rgb(72, 54, 40), Color.rgb(30, 26, 27))
+                )
+                palettes[(category.hashCode().ushr(1) % palettes.size)]
+            }
+        }
+        return GradientDrawable(GradientDrawable.Orientation.TL_BR, colors).apply {
+            cornerRadius = dp(radius).toFloat()
+            setStroke(dp(1), Color.argb(115, 205, 211, 225))
+        }
+    }
+
     private fun graphiteCardDrawable(accent: Int = Color.rgb(83, 86, 96), radius: Int = 14): GradientDrawable =
         GradientDrawable(
             GradientDrawable.Orientation.TL_BR,
@@ -3122,9 +3046,17 @@ private fun isDashStreamUrl(url: String): Boolean {
                 setTypeface(null, Typeface.BOLD)
                 includeFontPadding = false
                 setPadding(dp(3), dp(3), dp(3), dp(3))
-                // One full-bleed poster only: never add an inset rectangle behind the logo.
-                setBackgroundColor(Color.TRANSPARENT)
-                if (plainBrandFallback) setShadowLayer(dp(3).toFloat(), 0f, dp(1).toFloat(), Color.BLACK)
+                if (plainBrandFallback) {
+                    // Brand tiles use one clean photo card: no second rectangle behind the wordmark.
+                    setBackgroundColor(Color.TRANSPARENT)
+                    setShadowLayer(dp(3).toFloat(), 0f, dp(1).toFloat(), Color.BLACK)
+                } else {
+                    background = GradientDrawable().apply {
+                        setColor(Color.rgb(25, 24, 32))
+                        cornerRadius = dp(8).toFloat()
+                        setStroke(dp(1), Color.rgb(65, 65, 82))
+                    }
+                }
                 contentDescription = "$channelName logo"
             }
             return logo
@@ -3160,8 +3092,17 @@ private fun isDashStreamUrl(url: String): Boolean {
             }
         }
 
-        // Every channel logo sits directly on the full-bleed poster; no inset box/border.
-        imageView.background = ColorDrawable(Color.TRANSPARENT)
+        // Poster/brand tiles must remain a single full-bleed artwork surface.
+        // Do not draw a second inset rectangle behind the logo inside each card.
+        imageView.background = if (plainBrandFallback) {
+            ColorDrawable(Color.TRANSPARENT)
+        } else {
+            GradientDrawable().apply {
+                setColor(Color.rgb(25, 25, 30))
+                cornerRadius = dp(8).toFloat()
+                setStroke(dp(1), Color.rgb(65, 65, 75))
+            }
+        }
         return imageView
     }
 
