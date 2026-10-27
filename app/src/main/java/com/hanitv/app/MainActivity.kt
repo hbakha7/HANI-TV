@@ -582,12 +582,9 @@ class MainActivity : Activity() {
                 gravity = Gravity.CENTER
                 setTextColor(Color.WHITE)
                 maxLines = 1
-                setPadding(0, dp(4), 0, 0)
-            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(20)).apply {
-                // The Thamania image remains unchanged in size; only its caption
-                // is raised so its baseline matches the other brand captions.
-                if (isThamaniaBrand) topMargin = -dp(8)
-            })
+                setPadding(0, 0, 0, 0)
+                setBackgroundColor(Color.TRANSPARENT)
+            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(20)))
 
             sportsBrands.addView(brandCard, LinearLayout.LayoutParams(
                 dp(104), dp(91)
@@ -2957,11 +2954,9 @@ private fun isDashStreamUrl(url: String): Boolean {
                 layoutParams = LinearLayout.LayoutParams(width, height)
                 val isThmanyah = channelName.contains("ثمانية", ignoreCase = true) ||
                     channelName.contains("thmanyah", ignoreCase = true)
-                // Thamania is supplied as a full-bleed 3:2 poster. Crop it to each
-                // logo slot so it fills the same card area as the other sports brands.
-                // Do not apply a second manual zoom: it causes different results in
-                // the small home carousel and the wide third channel card.
-                scaleType = if (isThmanyah) ImageView.ScaleType.CENTER_CROP else ImageView.ScaleType.FIT_CENTER
+                // Fill the existing Thamania image slot edge-to-edge without cropping
+                // or leaving a dark/inset strip. Keep every other logo's scaling unchanged.
+                scaleType = if (isThmanyah) ImageView.ScaleType.FIT_XY else ImageView.ScaleType.FIT_CENTER
                 contentDescription = "$channelName logo"
                 setBackgroundColor(Color.TRANSPARENT)
                 setImageResource(localLogoRes)
