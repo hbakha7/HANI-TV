@@ -1409,14 +1409,15 @@ class MainActivity : Activity() {
             val best = hueCounts.indices.maxByOrNull { hueCounts[it] } ?: return
             if (hueCounts[best] < 2) return
             val hue = hueSums[best] / hueCounts[best]
-            val saturation = (satSums[best] / hueCounts[best]).coerceIn(0.48f, 0.88f)
-            val hsv = floatArrayOf(hue, saturation, 0.42f)
+            // Tone down vivid logo colors so the background feels calm and premium.
+            val saturation = ((satSums[best] / hueCounts[best]) * 0.68f).coerceIn(0.24f, 0.56f)
+            val hsv = floatArrayOf(hue, saturation, 0.34f)
             val primary = Color.HSVToColor(hsv)
-            hsv[1] = (saturation * 0.82f).coerceIn(0.38f, 0.78f)
-            hsv[2] = 0.23f
+            hsv[1] = (saturation * 0.82f).coerceIn(0.20f, 0.46f)
+            hsv[2] = 0.205f
             val secondary = Color.HSVToColor(hsv)
-            hsv[1] = (saturation * 0.62f).coerceIn(0.28f, 0.60f)
-            hsv[2] = 0.095f
+            hsv[1] = (saturation * 0.66f).coerceIn(0.16f, 0.36f)
+            hsv[2] = 0.085f
             val deep = Color.HSVToColor(hsv)
             palette = intArrayOf(primary, secondary, deep)
             invalidateSelf()
@@ -1425,66 +1426,55 @@ class MainActivity : Activity() {
         override fun draw(canvas: Canvas) {
             val b = bounds
             if (b.width() <= 0 || b.height() <= 0) return
+
             val w = b.width().toFloat()
             val h = b.height().toFloat()
+
+            // Gently desaturate the base palette as a safeguard for fallback palettes too.
+            // The channel logo itself is drawn separately and is never altered.
+            val softPalette = palette.mapIndexed { index, color ->
+                val hsv = FloatArray(3)
+                Color.colorToHSV(color, hsv)
+                hsv[1] = (hsv[1] * 0.72f).coerceIn(0.08f, 0.58f)
+                hsv[2] = (hsv[2] * when (index) {
+                    0 -> 0.88f
+                    1 -> 0.92f
+                    else -> 0.98f
+                }).coerceIn(0.045f, 0.42f)
+                Color.HSVToColor(Color.alpha(color), hsv)
+            }.toIntArray()
+
             paint.style = Paint.Style.FILL
+            paint.alpha = 255
             paint.shader = LinearGradient(
                 b.left.toFloat(), b.top.toFloat(), b.right.toFloat(), b.bottom.toFloat(),
-                palette, floatArrayOf(0f, .58f, 1f), Shader.TileMode.CLAMP
+                softPalette, floatArrayOf(0f, 0.58f, 1f), Shader.TileMode.CLAMP
             )
             canvas.drawRect(b, paint)
             paint.shader = null
 
-            // Soft atmospheric glow. National Geographic uses a subtle emerald glow
-            // instead of the brighter white light used by other channel cards.
-            val isNatGeo = key.contains("national geographic") || key.contains("جيوغرافيك") || key.contains("nat geo")
+            // A very soft central glow adds depth without decorative lines or patterns.
+            val isNatGeo = key.contains("national geographic") ||
+                key.contains("جيوغرافيك") || key.contains("nat geo")
+            val glowColor = if (isNatGeo) {
+                Color.argb(25, 170, 218, 190)
+            } else {
+                Color.argb(19, 245, 245, 255)
+            }
             paint.shader = RadialGradient(
-                b.left + w * .46f, b.top + h * .48f, maxOf(w, h) * .76f,
-                if (isNatGeo) intArrayOf(
-                    Color.argb(76, 180, 235, 204),
-                    Color.argb(28, 126, 206, 166),
-                    Color.TRANSPARENT
-                ) else intArrayOf(
-                    Color.argb(36, 255, 255, 255),
-                    Color.argb(9, 255, 255, 255),
-                    Color.TRANSPARENT
-                ),
-                floatArrayOf(0f, .48f, 1f), Shader.TileMode.CLAMP
+                b.left + w * 0.48f,
+                b.top + h * 0.42f,
+                maxOf(w, h) * 0.78f,
+                intArrayOf(glowColor, Color.argb(7, 255, 255, 255), Color.TRANSPARENT),
+                floatArrayOf(0f, 0.52f, 1f),
+                Shader.TileMode.CLAMP
             )
             canvas.drawRect(b, paint)
             paint.shader = null
 
-            // Use the same subtle curved-ring artwork as the other HANI TV channel cards.
-            // National Geographic keeps its emerald palette, with slightly softer rings.
-            paint.style = Paint.Style.STROKE
-            paint.strokeWidth = dp(2).toFloat()
-            paint.color = if (isNatGeo) Color.argb(24, 235, 248, 240) else Color.argb(30, 235, 238, 245)
-            val ring = RectF(b.left - w * .30f, b.top - h * .72f, b.left + w * .62f, b.top + h * .92f)
-            for (i in 0..2) {
-                val inset = dp(i * 11).toFloat()
-                canvas.drawArc(RectF(ring.left + inset, ring.top + inset, ring.right + inset, ring.bottom + inset), 5f, 105f, false, paint)
-            }
-            val ring2 = RectF(b.right - w * .55f, b.bottom - h * .78f, b.right + w * .38f, b.bottom + h * .85f)
-            for (i in 0..2) {
-                val inset = dp(i * 12).toFloat()
-                canvas.drawArc(RectF(ring2.left - inset, ring2.top - inset, ring2.right - inset, ring2.bottom - inset), 185f, 105f, false, paint)
-            }
-
-            // A few restrained angular streaks on sports thumbnails; other categories stay calm.
-            if (key.contains("sports") || key.contains("bein") || key.contains("رياض") || key.contains("الكأس") || key.contains("ثمانية")) {
-                paint.style = Paint.Style.FILL
-                paint.color = Color.argb(34, 255, 255, 255)
-                val path = android.graphics.Path().apply {
-                    moveTo(b.left.toFloat(), b.top + h * .13f)
-                    lineTo(b.left + w * .12f, b.top.toFloat())
-                    lineTo(b.left + w * .06f, b.top.toFloat())
-                    close()
-                }
-                canvas.drawPath(path, paint)
-                canvas.drawLine(b.right - w * .20f, b.top.toFloat(), b.right.toFloat(), b.top + h * .20f, paint.apply { strokeWidth = dp(3).toFloat() })
-            }
+            // Intentionally no curved rings, streaks, or line textures:
+            // keep every channel card clean, smooth, and easy on the eyes.
             paint.style = Paint.Style.FILL
-            paint.color = Color.WHITE
             paint.alpha = 255
         }
 
