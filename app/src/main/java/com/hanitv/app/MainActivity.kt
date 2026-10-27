@@ -552,7 +552,7 @@ class MainActivity : Activity() {
             }
 
             val brandArtwork = ChannelPosterDrawable(brand.second)
-            val brandLogoHeight = if (isThamaniaBrand) dp(71) else dp(48)
+            val brandLogoHeight = if (isThamaniaBrand) dp(91) else dp(48)
             val brandLogo = channelLogoView(
                 brand.second,
                 brand.first,
@@ -561,30 +561,63 @@ class MainActivity : Activity() {
                 plainBrandFallback = true
             )
             bitmapFromLogoView(brandLogo)?.let { brandArtwork.updateFromLogo(it) }
-            // Thamania's own image already contains the complete green artwork.
-            // Do not paint a second generated poster behind its label; that creates
-            // the unwanted dark horizontal strip below the image.
+            // Thamania artwork fills the entire card. Put its name over the artwork
+            // at the bottom instead of allocating a separate row that exposes a dark strip.
             brandCard.background = if (isThamaniaBrand) {
                 ColorDrawable(Color.TRANSPARENT)
             } else {
                 brandArtwork
             }
-            brandCard.addView(
-                brandLogo,
-                LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, brandLogoHeight)
-            )
-            brandCard.addView(TextView(this).apply {
-                text = when (brand.second) {
-                    "أبو ظبي الرياضية بريميوم" -> "أبو ظبي بريميوم"
-                    else -> brand.second
+            if (isThamaniaBrand) {
+                val thamaniaStage = FrameLayout(this).apply {
+                    background = ColorDrawable(Color.TRANSPARENT)
                 }
-                textSize = 9f
-                gravity = Gravity.CENTER
-                setTextColor(Color.WHITE)
-                maxLines = 1
-                setPadding(0, 0, 0, 0)
-                setBackgroundColor(Color.TRANSPARENT)
-            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(20)))
+                thamaniaStage.addView(
+                    brandLogo,
+                    FrameLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT
+                    )
+                )
+                thamaniaStage.addView(TextView(this).apply {
+                    text = "ثمانية"
+                    textSize = 9f
+                    gravity = Gravity.CENTER
+                    setTextColor(Color.WHITE)
+                    maxLines = 1
+                    includeFontPadding = false
+                    setPadding(0, 0, 0, dp(2))
+                    setBackgroundColor(Color.TRANSPARENT)
+                }, FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    dp(20),
+                    Gravity.BOTTOM
+                ))
+                brandCard.addView(
+                    thamaniaStage,
+                    LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT
+                    )
+                )
+            } else {
+                brandCard.addView(
+                    brandLogo,
+                    LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, brandLogoHeight)
+                )
+                brandCard.addView(TextView(this).apply {
+                    text = when (brand.second) {
+                        "أبو ظبي الرياضية بريميوم" -> "أبو ظبي بريميوم"
+                        else -> brand.second
+                    }
+                    textSize = 9f
+                    gravity = Gravity.CENTER
+                    setTextColor(Color.WHITE)
+                    maxLines = 1
+                    setPadding(0, 0, 0, 0)
+                    setBackgroundColor(Color.TRANSPARENT)
+                }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(20)))
+            }
 
             sportsBrands.addView(brandCard, LinearLayout.LayoutParams(
                 dp(104), dp(91)
