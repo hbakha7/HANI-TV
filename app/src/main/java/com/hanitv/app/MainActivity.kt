@@ -362,7 +362,9 @@ class MainActivity : Activity() {
         // functions are intentionally left unchanged.
         showingServerManager = false
         content.removeAllViews()
-        content.setBackgroundColor(Color.TRANSPARENT)
+        // Use the same quiet graphite atmosphere across the home page and channel pages.
+        // This changes only the surface styling; navigation and data flows stay untouched.
+        content.background = ChannelAtmosphereDrawable()
         content.setPadding(dp(14), dp(16), dp(14), dp(28))
 
         // Remote update ticker: hidden by default and controlled from the admin panel.
@@ -435,11 +437,12 @@ class MainActivity : Activity() {
             setPadding(dp(18), dp(20), dp(18), dp(20))
             background = GradientDrawable(
                 GradientDrawable.Orientation.TL_BR,
-                intArrayOf(deepPurple, Color.rgb(23, 34, 82), Color.rgb(7, 16, 34))
+                intArrayOf(Color.rgb(47, 27, 70), Color.rgb(27, 29, 43), Color.rgb(18, 19, 25))
             ).apply {
                 cornerRadius = dp(20).toFloat()
-                setStroke(dp(1), Color.rgb(112, 70, 220))
+                setStroke(dp(1), Color.argb(150, 130, 83, 190))
             }
+            elevation = dp(2).toFloat()
             isClickable = true
             isFocusable = true
             setOnClickListener { showSportsSections() }
@@ -520,13 +523,20 @@ class MainActivity : Activity() {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER
                 setPadding(dp(5), dp(8), dp(5), dp(8))
-                background = GradientDrawable().apply {
-                    setColor(Color.rgb(22, 20, 31))
-                    cornerRadius = dp(15).toFloat()
-                    setStroke(dp(1), cardStroke)
-                }
                 isClickable = true
                 isFocusable = true
+                outlineProvider = object : android.view.ViewOutlineProvider() {
+                    override fun getOutline(view: View, outline: android.graphics.Outline) {
+                        outline.setRoundRect(0, 0, view.width, view.height, dp(15).toFloat())
+                    }
+                }
+                clipToOutline = true
+                foreground = GradientDrawable().apply {
+                    cornerRadius = dp(15).toFloat()
+                    setColor(Color.TRANSPARENT)
+                    setStroke(dp(1), Color.argb(95, 220, 222, 232))
+                }
+                elevation = dp(2).toFloat()
                 setOnClickListener {
                     when (brand.second) {
                         "beIN SPORTS" -> showSportsBrandChannels("beIN SPORTS")
@@ -539,16 +549,19 @@ class MainActivity : Activity() {
                 }
             }
 
-            applyBrandPhotoBackground(brandCard, brand.second)
+            val brandArtwork = ChannelPosterDrawable(brand.second)
             val brandLogoHeight = if (brand.second == "ثمانية") dp(56) else dp(48)
+            val brandLogo = channelLogoView(
+                brand.second,
+                brand.first,
+                dp(92),
+                brandLogoHeight,
+                plainBrandFallback = true
+            )
+            bitmapFromLogoView(brandLogo)?.let { brandArtwork.updateFromLogo(it) }
+            brandCard.background = brandArtwork
             brandCard.addView(
-                channelLogoView(
-                    brand.second,
-                    brand.first,
-                    dp(92),
-                    brandLogoHeight,
-                    plainBrandFallback = true
-                ),
+                brandLogo,
                 LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, brandLogoHeight)
             )
             brandCard.addView(TextView(this).apply {
@@ -606,11 +619,14 @@ class MainActivity : Activity() {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
                 setPadding(dp(14), dp(13), dp(14), dp(13))
-                background = GradientDrawable().apply {
-                    setColor(navy)
-                    cornerRadius = dp(15).toFloat()
-                    setStroke(dp(1), cardStroke)
+                background = GradientDrawable(
+                    GradientDrawable.Orientation.TL_BR,
+                    intArrayOf(Color.rgb(31, 33, 41), Color.rgb(18, 19, 24))
+                ).apply {
+                    cornerRadius = dp(16).toFloat()
+                    setStroke(dp(1), Color.argb(155, 61, 64, 76))
                 }
+                elevation = dp(1).toFloat()
                 isClickable = true
                 isFocusable = true
                 setOnClickListener {
@@ -681,9 +697,9 @@ class MainActivity : Activity() {
                 maxLines = 1
                 setPadding(dp(3), dp(12), dp(3), dp(12))
                 background = GradientDrawable().apply {
-                    setColor(Color.rgb(13, 24, 41))
-                    cornerRadius = dp(10).toFloat()
-                    setStroke(dp(1), cardStroke)
+                    setColor(Color.rgb(25, 26, 32))
+                    cornerRadius = dp(12).toFloat()
+                    setStroke(dp(1), Color.rgb(57, 59, 69))
                 }
             }
             platforms.addView(tile, LinearLayout.LayoutParams(
@@ -833,8 +849,17 @@ class MainActivity : Activity() {
                     }
                 }
 
+                val posterArtwork = ChannelPosterDrawable(brand.second)
+                val brandLogo = channelLogoView(
+                    brand.second,
+                    brand.first,
+                    dp(142),
+                    dp(76),
+                    plainBrandFallback = true
+                )
+                bitmapFromLogoView(brandLogo)?.let { posterArtwork.updateFromLogo(it) }
                 val poster = FrameLayout(this).apply {
-                    background = ChannelPosterDrawable(brand.second)
+                    background = posterArtwork
                     foreground = GradientDrawable().apply {
                         cornerRadius = dp(12).toFloat()
                         setColor(Color.TRANSPARENT)
@@ -849,13 +874,7 @@ class MainActivity : Activity() {
                     elevation = dp(2).toFloat()
                 }
                 poster.addView(
-                    channelLogoView(
-                        brand.second,
-                        brand.first,
-                        dp(142),
-                        dp(76),
-                        plainBrandFallback = true
-                    ),
+                    brandLogo,
                     FrameLayout.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.MATCH_PARENT
