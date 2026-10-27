@@ -561,7 +561,14 @@ class MainActivity : Activity() {
                 plainBrandFallback = true
             )
             bitmapFromLogoView(brandLogo)?.let { brandArtwork.updateFromLogo(it) }
-            brandCard.background = brandArtwork
+            // Thamania's own image already contains the complete green artwork.
+            // Do not paint a second generated poster behind its label; that creates
+            // the unwanted dark horizontal strip below the image.
+            brandCard.background = if (isThamaniaBrand) {
+                ColorDrawable(Color.TRANSPARENT)
+            } else {
+                brandArtwork
+            }
             brandCard.addView(
                 brandLogo,
                 LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, brandLogoHeight)
@@ -576,7 +583,11 @@ class MainActivity : Activity() {
                 setTextColor(Color.WHITE)
                 maxLines = 1
                 setPadding(0, dp(4), 0, 0)
-            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(20)))
+            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(20)).apply {
+                // The Thamania image remains unchanged in size; only its caption
+                // is raised so its baseline matches the other brand captions.
+                if (isThamaniaBrand) topMargin = -dp(8)
+            })
 
             sportsBrands.addView(brandCard, LinearLayout.LayoutParams(
                 dp(104), dp(91)
