@@ -554,16 +554,26 @@ class MainActivity : Activity() {
             val isThamaniaBrand = brand.second.contains("ثمانية", ignoreCase = true)
             val brandLogoHeight = dp(48)
 
-            // Keep Thamania in the same card layout as every other brand:
-            // generated card background, logo in the upper area, and the name below.
-            brandCard.background = brandArtwork
+            // Keep the same card dimensions. The Thamania artwork already contains
+            // its own background, so let it span the available card width without
+            // extra inner padding that creates the visible inset rectangle.
+            // Thamania artwork already includes its own teal background. Do not
+            // draw ChannelPosterDrawable behind it, which creates a second
+            // contrasting rectangle around the image. Keep the existing logo
+            // height and label sizing unchanged.
+            brandCard.background = if (isThamaniaBrand) {
+                ColorDrawable(Color.TRANSPARENT)
+            } else {
+                brandArtwork
+            }
             if (isThamaniaBrand) {
+                brandCard.setPadding(0, dp(8), 0, dp(8))
                 brandCard.addView(
                     ImageView(this).apply {
                         setImageResource(R.drawable.thamania)
-                        scaleType = ImageView.ScaleType.FIT_CENTER
+                        scaleType = ImageView.ScaleType.CENTER_CROP
                         contentDescription = "شعار ثمانية"
-                        setPadding(dp(8), dp(2), dp(8), dp(2))
+                        setPadding(0, 0, 0, 0)
                     },
                     LinearLayout.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT,
