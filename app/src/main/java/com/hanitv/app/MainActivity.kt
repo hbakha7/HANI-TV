@@ -563,7 +563,7 @@ class MainActivity : Activity() {
                             brandLogoHeight
                         )
                         scaleType = ImageView.ScaleType.CENTER_CROP
-                        setImageResource(R.drawable.thamania_card)
+                        setImageResource(R.drawable.thamania)
                         contentDescription = "ثمانية"
                     },
                     LinearLayout.LayoutParams(
@@ -899,7 +899,7 @@ class MainActivity : Activity() {
                 if (isThamaniaBrand) {
                     poster.addView(ImageView(this).apply {
                         scaleType = ImageView.ScaleType.CENTER_CROP
-                        setImageResource(R.drawable.thamania_card)
+                        setImageResource(R.drawable.thamania)
                         contentDescription = "ثمانية"
                     }, FrameLayout.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT,
@@ -1210,7 +1210,7 @@ class MainActivity : Activity() {
         if (isThamaniaChannel) {
             poster.addView(ImageView(this).apply {
                 scaleType = ImageView.ScaleType.CENTER_CROP
-                setImageResource(R.drawable.thamania_card)
+                setImageResource(R.drawable.thamania)
                 contentDescription = "شعار ثمانية"
             }, FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -2960,7 +2960,7 @@ private fun isDashStreamUrl(url: String): Boolean {
             channelName.equals("MBC Masr 1", ignoreCase = true) -> R.drawable.mbc_masr
             channelName.equals("MBC Masr 2", ignoreCase = true) -> R.drawable.mbc_masr_2
             channelName.contains("ثمانية", ignoreCase = true) ||
-                channelName.contains("thmanyah", ignoreCase = true) -> R.drawable.thmanyah
+                channelName.contains("thmanyah", ignoreCase = true) -> R.drawable.thamania
             channelName.contains("STARZPLAY", ignoreCase = true) -> R.drawable.logo_starzplay
             channelName.contains("ALWAN", ignoreCase = true) ||
                 channelName.contains("ألوان", ignoreCase = true) -> R.drawable.logo_alwan
