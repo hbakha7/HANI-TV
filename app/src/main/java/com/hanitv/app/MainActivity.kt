@@ -1026,11 +1026,12 @@ class MainActivity : Activity() {
         showingServerManager = false
         content.removeAllViews()
         applyChannelPageTheme()
-
-        // The Arabic channels page now displays only the MBC channels directly,
-        // using the same channel-card grid as the other sections.
         addText(category, 23f, white, true)
         addText("القنوات المتاحة في هذا القسم", 14f, gray, false)
+
+        if (category == "القنوات العربية") {
+            addMbcSectionCard()
+        }
 
         val predefinedChannels = channelGroups.values.flatten().distinctBy { it.first }
         val configuredChannels = sources.map { it.channel.trim() }
@@ -1041,19 +1042,14 @@ class MainActivity : Activity() {
                     ?: name.take(3).ifBlank { "TV" }
                 name to fallback
             }
-
-        val allChannels = (predefinedChannels + configuredChannels).distinctBy { it.first }
-        val channels = if (category == "القنوات العربية") {
-            allChannels.filter { (name, _) -> isMbcChannel(name) }
-                .sortedBy { (_, fallback) ->
-                    channelGroups["القنوات العربية"].orEmpty().indexOfFirst { it.second == fallback }
-                        .let { if (it < 0) Int.MAX_VALUE else it }
-                }
-        } else {
-            allChannels.filter { (name, _) ->
-                (builtInBrandCategoryFor(name) ?: channelCategories[name] ?: defaultCategoryFor(name)) == category
+        val channels = (predefinedChannels + configuredChannels)
+            .distinctBy { it.first }
+            .filter { (name, _) ->
+                val belongsToCategory =
+                    (builtInBrandCategoryFor(name) ?: channelCategories[name] ?: defaultCategoryFor(name)) == category
+                belongsToCategory && !(category == "القنوات العربية" &&
+                    (isMbcChannel(name) || isArabicPlaceholderChannel(name) || isSportsChannel(name)))
             }
-        }
 
         val grid = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -1095,6 +1091,19 @@ class MainActivity : Activity() {
     private fun isMbcChannel(name: String): Boolean =
         name.trim().startsWith("MBC", ignoreCase = true)
 
+    private fun isArabicPlaceholderChannel(name: String): Boolean =
+        Regex("^قناة عربية\\s*[1-4]$", RegexOption.IGNORE_CASE).matches(name.trim())
+
+    private fun isSportsChannel(name: String): Boolean {
+        val value = name.trim().lowercase(java.util.Locale.ROOT)
+        return value.contains("sports") || value.contains("sport") ||
+            value.contains("bein") || value.contains("be in") ||
+            value.contains("رياضية") || value.contains("الكأس") ||
+            value.contains("ثمانية") || value.contains("alwan") ||
+            value.contains("starzplay") || value.contains("دبي الرياضية") ||
+            value.contains("أبو ظبي الرياضية") || value.contains("شاهد sports")
+    }
+
     private fun addMbcSectionCard() {
         val card = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -1127,12 +1136,6 @@ class MainActivity : Activity() {
             textSize = 17f
             setTextColor(Color.WHITE)
             setTypeface(null, Typeface.BOLD)
-        })
-        labels.addView(TextView(this).apply {
-            text = "10 قنوات • MBC 1–5 و Action و Max و Drama ومصر"
-            textSize = 11f
-            setTextColor(gray)
-            setPadding(0, dp(4), 0, 0)
         })
         card.addView(labels, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         card.addView(TextView(this).apply {
