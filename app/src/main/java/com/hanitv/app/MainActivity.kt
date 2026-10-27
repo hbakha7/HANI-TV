@@ -519,10 +519,12 @@ class MainActivity : Activity() {
 
         // Duplicate the same sequence so the slider can wrap without a visible pause.
         (brandItems + brandItems).forEach { brand ->
+            val isThamaniaBrand = brand.second == "ثمانية" || brand.second.contains("thmanyah", ignoreCase = true)
             val brandCard = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER
-                setPadding(dp(5), dp(8), dp(5), dp(8))
+                // Thamania asset is already a complete poster; do not inset it inside a second card.
+                setPadding(if (isThamaniaBrand) 0 else dp(5), if (isThamaniaBrand) 0 else dp(8), if (isThamaniaBrand) 0 else dp(5), if (isThamaniaBrand) 0 else dp(8))
                 isClickable = true
                 isFocusable = true
                 outlineProvider = object : android.view.ViewOutlineProvider() {
@@ -550,7 +552,7 @@ class MainActivity : Activity() {
             }
 
             val brandArtwork = ChannelPosterDrawable(brand.second)
-            val brandLogoHeight = if (brand.second == "ثمانية") dp(56) else dp(48)
+            val brandLogoHeight = if (isThamaniaBrand) dp(66) else dp(48)
             val brandLogo = channelLogoView(
                 brand.second,
                 brand.first,
@@ -849,6 +851,7 @@ class MainActivity : Activity() {
                     }
                 }
 
+                val isThamaniaBrand = brand.second == "ثمانية" || brand.second.contains("thmanyah", ignoreCase = true)
                 val posterArtwork = ChannelPosterDrawable(brand.second)
                 val brandLogo = channelLogoView(
                     brand.second,
@@ -859,7 +862,8 @@ class MainActivity : Activity() {
                 )
                 bitmapFromLogoView(brandLogo)?.let { posterArtwork.updateFromLogo(it) }
                 val poster = FrameLayout(this).apply {
-                    background = posterArtwork
+                    // Thamania is already a complete poster image; avoid a second artwork layer.
+                    background = if (isThamaniaBrand) ColorDrawable(Color.TRANSPARENT) else posterArtwork
                     foreground = GradientDrawable().apply {
                         cornerRadius = dp(12).toFloat()
                         setColor(Color.TRANSPARENT)
@@ -879,7 +883,7 @@ class MainActivity : Activity() {
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.MATCH_PARENT
                     ).apply {
-                        setMargins(dp(10), dp(7), dp(10), dp(7))
+                        if (!isThamaniaBrand) setMargins(dp(10), dp(7), dp(10), dp(7))
                         gravity = Gravity.CENTER
                     }
                 )
@@ -1159,7 +1163,8 @@ class MainActivity : Activity() {
         val posterArtwork = ChannelPosterDrawable(name)
         bitmapFromLogoView(logoView)?.let { posterArtwork.updateFromLogo(it) }
         val poster = FrameLayout(this).apply {
-            background = posterArtwork
+            // Thamania's image itself supplies the full background; do not place it over another poster.
+            background = if (isThmanyah) ColorDrawable(Color.TRANSPARENT) else posterArtwork
             clipToOutline = true
             foreground = GradientDrawable().apply {
                 cornerRadius = dp(12).toFloat()
