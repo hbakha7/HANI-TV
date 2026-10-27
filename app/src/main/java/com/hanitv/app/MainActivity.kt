@@ -519,12 +519,10 @@ class MainActivity : Activity() {
 
         // Duplicate the same sequence so the slider can wrap without a visible pause.
         (brandItems + brandItems).forEach { brand ->
-            val isThamaniaBrand = brand.second == "ثمانية" || brand.second.contains("thmanyah", ignoreCase = true)
             val brandCard = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER
-                // Thamania uses a full-width image area; its height plus the label must exactly fill the card.
-                setPadding(if (isThamaniaBrand) 0 else dp(5), if (isThamaniaBrand) 0 else dp(8), if (isThamaniaBrand) 0 else dp(5), if (isThamaniaBrand) 0 else dp(8))
+                setPadding(dp(5), dp(8), dp(5), dp(8))
                 isClickable = true
                 isFocusable = true
                 outlineProvider = object : android.view.ViewOutlineProvider() {
@@ -552,7 +550,7 @@ class MainActivity : Activity() {
             }
 
             val brandArtwork = ChannelPosterDrawable(brand.second)
-            val brandLogoHeight = if (isThamaniaBrand) dp(91) else dp(48)
+            val brandLogoHeight = if (brand.second == "ثمانية") dp(56) else dp(48)
             val brandLogo = channelLogoView(
                 brand.second,
                 brand.first,
@@ -561,67 +559,22 @@ class MainActivity : Activity() {
                 plainBrandFallback = true
             )
             bitmapFromLogoView(brandLogo)?.let { brandArtwork.updateFromLogo(it) }
-            // Thamania artwork fills the entire card. Put its name over the artwork
-            // at the bottom instead of allocating a separate row that exposes a dark strip.
-            brandCard.background = if (isThamaniaBrand) {
-                ColorDrawable(Color.TRANSPARENT)
-            } else {
-                brandArtwork
-            }
-            if (isThamaniaBrand) {
-                val thamaniaStage = FrameLayout(this).apply {
-                    background = ColorDrawable(Color.TRANSPARENT)
+            brandCard.background = brandArtwork
+            brandCard.addView(
+                brandLogo,
+                LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, brandLogoHeight)
+            )
+            brandCard.addView(TextView(this).apply {
+                text = when (brand.second) {
+                    "أبو ظبي الرياضية بريميوم" -> "أبو ظبي بريميوم"
+                    else -> brand.second
                 }
-                thamaniaStage.addView(
-                    brandLogo,
-                    FrameLayout.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                        ViewGroup.LayoutParams.MATCH_PARENT
-                    )
-                )
-                thamaniaStage.addView(TextView(this).apply {
-                    text = "ثمانية"
-                    textSize = 9f
-                    gravity = Gravity.CENTER
-                    setTextColor(Color.WHITE)
-                    maxLines = 1
-                    includeFontPadding = false
-                    setPadding(0, 0, 0, dp(2))
-                    setBackgroundColor(Color.TRANSPARENT)
-                }, FrameLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    dp(20),
-                    Gravity.BOTTOM
-                ).apply {
-                    // Align the Thamania label with the label row used by the other brand cards.
-                    // The other cards start their 20dp label at about 56dp from the card top.
-                    bottomMargin = dp(15)
-                })
-                brandCard.addView(
-                    thamaniaStage,
-                    LinearLayout.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                        ViewGroup.LayoutParams.MATCH_PARENT
-                    )
-                )
-            } else {
-                brandCard.addView(
-                    brandLogo,
-                    LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, brandLogoHeight)
-                )
-                brandCard.addView(TextView(this).apply {
-                    text = when (brand.second) {
-                        "أبو ظبي الرياضية بريميوم" -> "أبو ظبي بريميوم"
-                        else -> brand.second
-                    }
-                    textSize = 9f
-                    gravity = Gravity.CENTER
-                    setTextColor(Color.WHITE)
-                    maxLines = 1
-                    setPadding(0, 0, 0, 0)
-                    setBackgroundColor(Color.TRANSPARENT)
-                }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(20)))
-            }
+                textSize = 9f
+                gravity = Gravity.CENTER
+                setTextColor(Color.WHITE)
+                maxLines = 1
+                setPadding(0, dp(4), 0, 0)
+            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(20)))
 
             sportsBrands.addView(brandCard, LinearLayout.LayoutParams(
                 dp(104), dp(91)
@@ -896,7 +849,6 @@ class MainActivity : Activity() {
                     }
                 }
 
-                val isThamaniaBrand = brand.second == "ثمانية" || brand.second.contains("thmanyah", ignoreCase = true)
                 val posterArtwork = ChannelPosterDrawable(brand.second)
                 val brandLogo = channelLogoView(
                     brand.second,
@@ -907,8 +859,7 @@ class MainActivity : Activity() {
                 )
                 bitmapFromLogoView(brandLogo)?.let { posterArtwork.updateFromLogo(it) }
                 val poster = FrameLayout(this).apply {
-                    // Thamania is already a complete poster image; avoid a second artwork layer.
-                    background = if (isThamaniaBrand) ColorDrawable(Color.TRANSPARENT) else posterArtwork
+                    background = posterArtwork
                     foreground = GradientDrawable().apply {
                         cornerRadius = dp(12).toFloat()
                         setColor(Color.TRANSPARENT)
@@ -928,7 +879,7 @@ class MainActivity : Activity() {
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.MATCH_PARENT
                     ).apply {
-                        if (!isThamaniaBrand) setMargins(dp(10), dp(7), dp(10), dp(7))
+                        setMargins(dp(10), dp(7), dp(10), dp(7))
                         gravity = Gravity.CENTER
                     }
                 )
@@ -1202,14 +1153,11 @@ class MainActivity : Activity() {
 
         // Poster-style artwork fills the whole thumbnail. The original logo is placed
         // directly over it, with no recoloring, cropping, or replacement of the asset.
-        val isThmanyah = name.contains("ثمانية", ignoreCase = true) ||
-            name.contains("thmanyah", ignoreCase = true)
         val logoView = channelLogoView(name, channel.second, dp(142), dp(76))
         val posterArtwork = ChannelPosterDrawable(name)
         bitmapFromLogoView(logoView)?.let { posterArtwork.updateFromLogo(it) }
         val poster = FrameLayout(this).apply {
-            // Thamania's image itself supplies the full background; do not place it over another poster.
-            background = if (isThmanyah) ColorDrawable(Color.TRANSPARENT) else posterArtwork
+            background = posterArtwork
             clipToOutline = true
             foreground = GradientDrawable().apply {
                 cornerRadius = dp(12).toFloat()
@@ -1217,18 +1165,9 @@ class MainActivity : Activity() {
             }
             elevation = dp(2).toFloat()
         }
-        // Thamania cards can occupy a full row (for example, channel 3). Let its
-        // artwork use the entire poster instead of keeping the old fixed 142dp slot.
         poster.addView(
             logoView,
-            if (isThmanyah) {
-                FrameLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.MATCH_PARENT
-                )
-            } else {
-                FrameLayout.LayoutParams(dp(142), dp(76), Gravity.CENTER)
-            }
+            FrameLayout.LayoutParams(dp(142), dp(76), Gravity.CENTER)
         )
         card.addView(
             poster,
@@ -2968,7 +2907,7 @@ private fun isDashStreamUrl(url: String): Boolean {
             channelName.equals("MBC Masr 1", ignoreCase = true) -> R.drawable.mbc_masr
             channelName.equals("MBC Masr 2", ignoreCase = true) -> R.drawable.mbc_masr_2
             channelName.contains("ثمانية", ignoreCase = true) ||
-                channelName.contains("thmanyah", ignoreCase = true) -> R.drawable.thamania
+                channelName.contains("thmanyah", ignoreCase = true) -> R.drawable.thmanyah
             channelName.contains("STARZPLAY", ignoreCase = true) -> R.drawable.logo_starzplay
             channelName.contains("ALWAN", ignoreCase = true) ||
                 channelName.contains("ألوان", ignoreCase = true) -> R.drawable.logo_alwan
@@ -2991,13 +2930,33 @@ private fun isDashStreamUrl(url: String): Boolean {
                 layoutParams = LinearLayout.LayoutParams(width, height)
                 val isThmanyah = channelName.contains("ثمانية", ignoreCase = true) ||
                     channelName.contains("thmanyah", ignoreCase = true)
-                // Fill the existing Thamania image slot edge-to-edge without cropping
-                // or leaving a dark/inset strip. Keep every other logo's scaling unchanged.
-                scaleType = if (isThmanyah) ImageView.ScaleType.FIT_XY else ImageView.ScaleType.FIT_CENTER
+                scaleType = if (isThmanyah) ImageView.ScaleType.MATRIX else ImageView.ScaleType.FIT_CENTER
                 contentDescription = "$channelName logo"
                 setBackgroundColor(Color.TRANSPARENT)
                 setImageResource(localLogoRes)
-                adjustViewBounds = false
+                adjustViewBounds = true
+
+                // The Thmanyah PNG has substantial empty/transparent margins around its mark.
+                // Zoom the bundled drawable inside the existing logo slot so its visible mark
+                // is comparable in size to the other sports logos, without changing card layout.
+                if (isThmanyah) {
+                    post {
+                        val d = drawable
+                        if (d != null && d.intrinsicWidth > 0 && d.intrinsicHeight > 0 && width > 0 && height > 0) {
+                            val fit = minOf(
+                                width.toFloat() / d.intrinsicWidth.toFloat(),
+                                height.toFloat() / d.intrinsicHeight.toFloat()
+                            )
+                            val dx = (width - d.intrinsicWidth * fit) / 2f
+                            val dy = (height - d.intrinsicHeight * fit) / 2f
+                            imageMatrix = android.graphics.Matrix().apply {
+                                setScale(fit, fit)
+                                postTranslate(dx, dy)
+                                postScale(2.35f, 2.35f, width / 2f, height / 2f)
+                            }
+                        }
+                    }
+                }
             }
         }
 
