@@ -851,6 +851,7 @@ class MainActivity : Activity() {
                     dp(76),
                     plainBrandFallback = true
                 )
+                // Thamania artwork is edge-to-edge; channelLogoView configures it with CENTER_CROP.
                 bitmapFromLogoView(brandLogo)?.let { posterArtwork.updateFromLogo(it) }
                 val poster = FrameLayout(this).apply {
                     background = posterArtwork
@@ -1163,18 +1164,9 @@ class MainActivity : Activity() {
             }
             elevation = dp(2).toFloat()
         }
-        val isThmanyah = name.contains("ثمانية", ignoreCase = true) ||
-            name.contains("thmanyah", ignoreCase = true)
         poster.addView(
             logoView,
-            if (isThmanyah) {
-                FrameLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.MATCH_PARENT
-                )
-            } else {
-                FrameLayout.LayoutParams(dp(142), dp(76), Gravity.CENTER)
-            }
+            FrameLayout.LayoutParams(dp(142), dp(76), Gravity.CENTER)
         )
         card.addView(
             poster,
@@ -2958,33 +2950,14 @@ private fun isDashStreamUrl(url: String): Boolean {
                 layoutParams = LinearLayout.LayoutParams(width, height)
                 val isThmanyah = channelName.contains("ثمانية", ignoreCase = true) ||
                     channelName.contains("thmanyah", ignoreCase = true)
-                scaleType = if (isThmanyah) ImageView.ScaleType.MATRIX else ImageView.ScaleType.FIT_CENTER
+                // Thamania is a landscape poster, not a small centered logo. Keep its
+                // drawable filling the actual ImageView bounds and never apply a delayed
+                // matrix zoom, which caused different crops in different cards.
+                scaleType = if (isThmanyah) ImageView.ScaleType.CENTER_CROP else ImageView.ScaleType.FIT_CENTER
                 contentDescription = "$channelName logo"
                 setBackgroundColor(Color.TRANSPARENT)
                 setImageResource(localLogoRes)
-                adjustViewBounds = true
-
-                // The Thmanyah PNG has substantial empty/transparent margins around its mark.
-                // Zoom the bundled drawable inside the existing logo slot so its visible mark
-                // is comparable in size to the other sports logos, without changing card layout.
-                if (isThmanyah) {
-                    post {
-                        val d = drawable
-                        if (d != null && d.intrinsicWidth > 0 && d.intrinsicHeight > 0 && width > 0 && height > 0) {
-                            val fit = minOf(
-                                width.toFloat() / d.intrinsicWidth.toFloat(),
-                                height.toFloat() / d.intrinsicHeight.toFloat()
-                            )
-                            val dx = (width - d.intrinsicWidth * fit) / 2f
-                            val dy = (height - d.intrinsicHeight * fit) / 2f
-                            imageMatrix = android.graphics.Matrix().apply {
-                                setScale(fit, fit)
-                                postTranslate(dx, dy)
-                                postScale(2.35f, 2.35f, width / 2f, height / 2f)
-                            }
-                        }
-                    }
-                }
+                adjustViewBounds = !isThmanyah
             }
         }
 
