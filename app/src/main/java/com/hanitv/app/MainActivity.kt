@@ -851,6 +851,12 @@ class MainActivity : Activity() {
                     dp(76),
                     plainBrandFallback = true
                 )
+                // Thamania uses a landscape artwork intended to cover the whole poster.
+                // Fill the card edge-to-edge instead of leaving an inset logo area.
+                if (brand.second == "ثمانية" && brandLogo is ImageView) {
+                    brandLogo.scaleType = ImageView.ScaleType.CENTER_CROP
+                    brandLogo.imageMatrix = android.graphics.Matrix()
+                }
                 bitmapFromLogoView(brandLogo)?.let { posterArtwork.updateFromLogo(it) }
                 val poster = FrameLayout(this).apply {
                     background = posterArtwork
@@ -873,7 +879,11 @@ class MainActivity : Activity() {
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.MATCH_PARENT
                     ).apply {
-                        setMargins(dp(10), dp(7), dp(10), dp(7))
+                        if (brand.second == "ثمانية") {
+                            setMargins(0, 0, 0, 0)
+                        } else {
+                            setMargins(dp(10), dp(7), dp(10), dp(7))
+                        }
                         gravity = Gravity.CENTER
                     }
                 )
