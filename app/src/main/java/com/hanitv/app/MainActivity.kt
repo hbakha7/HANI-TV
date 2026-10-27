@@ -1026,12 +1026,11 @@ class MainActivity : Activity() {
         showingServerManager = false
         content.removeAllViews()
         applyChannelPageTheme()
+
+        // The Arabic channels page now displays only the MBC channels directly,
+        // using the same channel-card grid as the other sections.
         addText(category, 23f, white, true)
         addText("القنوات المتاحة في هذا القسم", 14f, gray, false)
-
-        if (category == "القنوات العربية") {
-            addMbcSectionCard()
-        }
 
         val predefinedChannels = channelGroups.values.flatten().distinctBy { it.first }
         val configuredChannels = sources.map { it.channel.trim() }
@@ -1042,12 +1041,19 @@ class MainActivity : Activity() {
                     ?: name.take(3).ifBlank { "TV" }
                 name to fallback
             }
-        val channels = (predefinedChannels + configuredChannels)
-            .distinctBy { it.first }
-            .filter { (name, _) ->
-                (builtInBrandCategoryFor(name) ?: channelCategories[name] ?: defaultCategoryFor(name)) == category &&
-                    !(category == "القنوات العربية" && isMbcChannel(name))
+
+        val allChannels = (predefinedChannels + configuredChannels).distinctBy { it.first }
+        val channels = if (category == "القنوات العربية") {
+            allChannels.filter { (name, _) -> isMbcChannel(name) }
+                .sortedBy { (_, fallback) ->
+                    channelGroups["القنوات العربية"].orEmpty().indexOfFirst { it.second == fallback }
+                        .let { if (it < 0) Int.MAX_VALUE else it }
+                }
+        } else {
+            allChannels.filter { (name, _) ->
+                (builtInBrandCategoryFor(name) ?: channelCategories[name] ?: defaultCategoryFor(name)) == category
             }
+        }
 
         val grid = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
