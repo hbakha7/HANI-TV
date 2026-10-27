@@ -115,7 +115,7 @@ private fun parseHaniClearKeyPair(value: String): Pair<String, String>? {
 
 class MainActivity : Activity() {
 
-    private val bg = Color.rgb(12, 12, 15)
+    private val bg = Color.BLACK
     private val panel = Color.rgb(25, 25, 30)
     private val red = Color.rgb(210, 20, 35)
     private val white = Color.WHITE
@@ -292,7 +292,7 @@ class MainActivity : Activity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(18), dp(15), dp(18), dp(15))
-            setBackgroundColor(Color.rgb(18, 18, 22))
+            setBackgroundColor(Color.BLACK)
         }
 
         header.addView(TextView(this).apply {
@@ -2903,47 +2903,15 @@ private fun isDashStreamUrl(url: String): Boolean {
         }
     }
 
-    /** A subtle charcoal wallpaper with restrained cool highlights; no confetti or busy texture. */
+    /** Pure black app wallpaper matching the requested reference; card artwork remains unchanged. */
     private inner class ChannelAtmosphereDrawable : Drawable() {
         private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
 
         override fun draw(canvas: Canvas) {
-            val b = bounds
-            if (b.width() <= 0 || b.height() <= 0) return
-            paint.shader = LinearGradient(
-                b.left.toFloat(), b.top.toFloat(), b.right.toFloat(), b.bottom.toFloat(),
-                intArrayOf(Color.rgb(30, 31, 37), Color.rgb(17, 18, 22), Color.rgb(25, 26, 31)),
-                floatArrayOf(0f, .56f, 1f), Shader.TileMode.CLAMP
-            )
-            canvas.drawRect(b, paint)
             paint.shader = null
-
-            val w = b.width().toFloat()
-            val h = b.height().toFloat()
-            val glows = arrayOf(
-                floatArrayOf(.92f, .06f, .48f),
-                floatArrayOf(.04f, .52f, .36f),
-                floatArrayOf(.76f, .92f, .30f)
-            )
-            glows.forEachIndexed { index, glow ->
-                val cx = b.left + glow[0] * w
-                val cy = b.top + glow[1] * h
-                val radius = maxOf(dp(100).toFloat(), w * glow[2])
-                val tint = if (index == 0) Color.rgb(90, 52, 58) else Color.rgb(55, 65, 82)
-                paint.shader = RadialGradient(
-                    cx, cy, radius,
-                    intArrayOf(
-                        Color.argb(20, Color.red(tint), Color.green(tint), Color.blue(tint)),
-                        Color.argb(8, Color.red(tint), Color.green(tint), Color.blue(tint)),
-                        Color.TRANSPARENT
-                    ),
-                    floatArrayOf(0f, .55f, 1f), Shader.TileMode.CLAMP
-                )
-                canvas.drawCircle(cx, cy, radius, paint)
-                paint.shader = null
-            }
+            paint.color = Color.BLACK
             paint.alpha = 255
-            paint.color = Color.WHITE
+            canvas.drawColor(Color.BLACK)
         }
 
         override fun setAlpha(alpha: Int) { paint.alpha = alpha }
