@@ -1338,7 +1338,7 @@ class MainActivity : Activity() {
             key.contains("mbc") || key.contains("روتانا") -> intArrayOf(Color.rgb(94, 47, 54), Color.rgb(44, 27, 34), Color.rgb(20, 19, 24))
             key.contains("طفل") || key.contains("كرتون") || key.contains("kids") || key.contains("toons") -> intArrayOf(Color.rgb(103, 39, 127), Color.rgb(53, 23, 76), Color.rgb(24, 18, 37))
             key.contains("news") || key.contains("أخبار") || key.contains("الجزيرة") || key.contains("dw") -> intArrayOf(Color.rgb(83, 48, 54), Color.rgb(39, 30, 37), Color.rgb(19, 22, 28))
-            key.contains("national geographic") || key.contains("جيوغرافيك") || key.contains("document") || key.contains("nat geo") -> intArrayOf(Color.rgb(25, 96, 83), Color.rgb(18, 49, 48), Color.rgb(13, 22, 29))
+            key.contains("national geographic") || key.contains("جيوغرافيك") || key.contains("document") || key.contains("nat geo") -> intArrayOf(Color.rgb(68, 139, 105), Color.rgb(35, 83, 66), Color.rgb(13, 20, 26))
             key.contains("دبي") || key.contains("أبو ظبي") || key.contains("الكأس") || key.contains("رياض") -> intArrayOf(Color.rgb(26, 67, 99), Color.rgb(20, 34, 53), Color.rgb(14, 19, 30))
             else -> {
                 val palettes = arrayOf(
@@ -1354,6 +1354,9 @@ class MainActivity : Activity() {
         /** Update the artwork palette from the actual logo pixels, without modifying the logo. */
         fun updateFromLogo(bitmap: android.graphics.Bitmap) {
             if (bitmap.width <= 0 || bitmap.height <= 0) return
+            // Keep National Geographic's emerald/graphite palette fixed. Sampling the
+            // logo would incorrectly pick up its signature yellow frame as the background.
+            if (key.contains("national geographic") || key.contains("جيوغرافيك") || key.contains("nat geo")) return
             val hueCounts = IntArray(24)
             val hueSums = FloatArray(24)
             val satSums = FloatArray(24)
@@ -1411,19 +1414,30 @@ class MainActivity : Activity() {
             canvas.drawRect(b, paint)
             paint.shader = null
 
-            // Soft atmospheric light behind the logo.
+            // Soft atmospheric glow. National Geographic uses a subtle emerald glow
+            // instead of the brighter white light used by other channel cards.
+            val isNatGeo = key.contains("national geographic") || key.contains("جيوغرافيك") || key.contains("nat geo")
             paint.shader = RadialGradient(
-                b.left + w * .52f, b.top + h * .48f, maxOf(w, h) * .72f,
-                intArrayOf(Color.argb(36, 255, 255, 255), Color.argb(9, 255, 255, 255), Color.TRANSPARENT),
+                b.left + w * .46f, b.top + h * .48f, maxOf(w, h) * .76f,
+                if (isNatGeo) intArrayOf(
+                    Color.argb(76, 180, 235, 204),
+                    Color.argb(28, 126, 206, 166),
+                    Color.TRANSPARENT
+                ) else intArrayOf(
+                    Color.argb(36, 255, 255, 255),
+                    Color.argb(9, 255, 255, 255),
+                    Color.TRANSPARENT
+                ),
                 floatArrayOf(0f, .48f, 1f), Shader.TileMode.CLAMP
             )
             canvas.drawRect(b, paint)
             paint.shader = null
 
-            // Elegant curved rings in opposite corners, inspired by broadcast poster artwork.
+            // Use the same subtle curved-ring artwork as the other HANI TV channel cards.
+            // National Geographic keeps its emerald palette, with slightly softer rings.
             paint.style = Paint.Style.STROKE
             paint.strokeWidth = dp(2).toFloat()
-            paint.color = Color.argb(30, 235, 238, 245)
+            paint.color = if (isNatGeo) Color.argb(24, 235, 248, 240) else Color.argb(30, 235, 238, 245)
             val ring = RectF(b.left - w * .30f, b.top - h * .72f, b.left + w * .62f, b.top + h * .92f)
             for (i in 0..2) {
                 val inset = dp(i * 11).toFloat()
@@ -3015,6 +3029,8 @@ private fun isDashStreamUrl(url: String): Boolean {
             channelName.equals("MBC Drama", ignoreCase = true) -> R.drawable.mbc_drama
             channelName.equals("MBC Masr 1", ignoreCase = true) -> R.drawable.mbc_masr
             channelName.equals("MBC Masr 2", ignoreCase = true) -> R.drawable.mbc_masr_2
+            channelName.equals("MBC Iraq", ignoreCase = true) -> R.drawable.mbc_iraq
+            channelName.equals("MBC Bollywood", ignoreCase = true) -> R.drawable.mbc_bollywood
             channelName.equals("National Geographic", ignoreCase = true) -> R.drawable.national_geographic
             channelName.equals("Sky News Arabia", ignoreCase = true) -> R.drawable.skynewsarabia
             channelName.equals("العربية", ignoreCase = true) -> R.drawable.alarabiya
