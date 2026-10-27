@@ -851,7 +851,11 @@ class MainActivity : Activity() {
                     dp(76),
                     plainBrandFallback = true
                 )
-                // Thamania artwork is edge-to-edge; channelLogoView configures it with CENTER_CROP.
+                // Thamania uses a landscape artwork intended to cover the whole poster.
+                // Fill the card edge-to-edge instead of leaving an inset logo area.
+                if (brand.second == "ثمانية" && brandLogo is ImageView) {
+                    brandLogo.scaleType = ImageView.ScaleType.CENTER_CROP
+                }
                 bitmapFromLogoView(brandLogo)?.let { posterArtwork.updateFromLogo(it) }
                 val poster = FrameLayout(this).apply {
                     background = posterArtwork
@@ -2950,14 +2954,16 @@ private fun isDashStreamUrl(url: String): Boolean {
                 layoutParams = LinearLayout.LayoutParams(width, height)
                 val isThmanyah = channelName.contains("ثمانية", ignoreCase = true) ||
                     channelName.contains("thmanyah", ignoreCase = true)
-                // Thamania is a landscape poster, not a small centered logo. Keep its
-                // drawable filling the actual ImageView bounds and never apply a delayed
-                // matrix zoom, which caused different crops in different cards.
+                // Use Android's real CENTER_CROP measurement against the final measured view.
+                // The previous hand-built MATRIX used the requested dp slot dimensions rather
+                // than the actual laid-out card dimensions, so wide cards (especially channel 3)
+                // showed the artwork as a small inset image instead of filling the card.
                 scaleType = if (isThmanyah) ImageView.ScaleType.CENTER_CROP else ImageView.ScaleType.FIT_CENTER
                 contentDescription = "$channelName logo"
                 setBackgroundColor(Color.TRANSPARENT)
                 setImageResource(localLogoRes)
-                adjustViewBounds = !isThmanyah
+                adjustViewBounds = false
+                if (isThmanyah) imageMatrix = android.graphics.Matrix()
             }
         }
 
