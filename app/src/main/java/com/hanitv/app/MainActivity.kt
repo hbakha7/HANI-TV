@@ -349,7 +349,8 @@ class MainActivity : Activity() {
 
         setContentView(root)
         loadSources()
-        showHome()
+        // Do not render cached/default categories before Hostinger finishes syncing.
+        // syncFromCloud() renders the home screen after applying the latest category data.
         syncFromCloud { finishInitialSourceSync() }
     }
 
@@ -3629,8 +3630,13 @@ private fun isDashStreamUrl(url: String): Boolean {
                                 refreshEmbeddedServerOptions()
                             }
                         }
-                        if (showingServerManager) showServerManager()
-                        else showHome()
+                        if (showingServerManager) {
+                            showServerManager()
+                        } else if (onComplete == null) {
+                            // During initial startup, finishInitialSourceSync() renders
+                            // the home screen once after the remote categories are applied.
+                            showHome()
+                        }
                         onComplete?.invoke()
                     }
                 } else throw IllegalStateException(json.optString("error", "api_error"))
