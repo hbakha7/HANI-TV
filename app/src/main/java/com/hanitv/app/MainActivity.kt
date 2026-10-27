@@ -271,9 +271,13 @@ class MainActivity : Activity() {
             "أطفال 3" to "K3"
         ),
         "قنوات الترفيه" to listOf(
-            "ترفيه 1" to "E1",
-            "ترفيه 2" to "E2",
-            "ترفيه 3" to "E3"
+            "MBC Action" to "ACTION",
+            "Star Films" to "STARFILMS",
+            "MBC 2" to "MBC2",
+            "Movies Thriller" to "MOVIETHRILLER",
+            "MBC Max" to "MAX",
+            "Movies Action" to "MOVIESACTION",
+            "Star Action" to "STARACTION"
         )
     )
 
@@ -1047,14 +1051,29 @@ class MainActivity : Activity() {
                     ?: name.take(3).ifBlank { "TV" }
                 name to fallback
             }
-        val channels = (predefinedChannels + configuredChannels)
-            .distinctBy { it.first }
-            .filter { (name, _) ->
-                val belongsToCategory =
-                    (builtInBrandCategoryFor(name) ?: channelCategories[name] ?: defaultCategoryFor(name)) == category
-                belongsToCategory && !(category == "القنوات العربية والثقافية" &&
-                    (isMbcChannel(name) || isArabicPlaceholderChannel(name) || isSportsChannel(name)))
-            }
+        // Entertainment has its own mixed lineup. The three MBC channels also remain
+        // available in the Arabic/MBC section; listing them here does not move or remove them.
+        val entertainmentChannels = listOf(
+            "MBC Action" to "ACTION",
+            "Star Films" to "STARFILMS",
+            "MBC 2" to "MBC2",
+            "Movies Thriller" to "MOVIETHRILLER",
+            "MBC Max" to "MAX",
+            "Movies Action" to "MOVIESACTION",
+            "Star Action" to "STARACTION"
+        )
+        val channels = if (category == "قنوات الترفيه") {
+            entertainmentChannels
+        } else {
+            (predefinedChannels + configuredChannels)
+                .distinctBy { it.first }
+                .filter { (name, _) ->
+                    val belongsToCategory =
+                        (builtInBrandCategoryFor(name) ?: channelCategories[name] ?: defaultCategoryFor(name)) == category
+                    belongsToCategory && !(category == "القنوات العربية والثقافية" &&
+                        (isMbcChannel(name) || isArabicPlaceholderChannel(name) || isSportsChannel(name)))
+                }
+        }
 
         val grid = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -1310,6 +1329,7 @@ class MainActivity : Activity() {
                 value.contains("dw") || value.contains("العراقية") -> "إخباري وثقافي"
             value.contains("document") || value.contains("جيوغرافيك") || value.contains("nat geo") -> "وثائقي"
             value.contains("starzplay") || value.contains("max") || value.contains("film") ||
+                value.contains("movies") || value.contains("star action") ||
                 value.contains("سينما") || value.contains("أفلام") -> "أفلام وترفيه"
             else -> defaultCategoryFor(name).takeIf { it.isNotBlank() } ?: "قنوات مباشرة"
         }
@@ -2995,6 +3015,10 @@ private fun isDashStreamUrl(url: String): Boolean {
             channelName.equals("MBC 5", ignoreCase = true) -> R.drawable.mbc_5
             channelName.equals("MBC Action", ignoreCase = true) -> R.drawable.mbc_action
             channelName.equals("MBC Max", ignoreCase = true) -> R.drawable.mbc_max
+            channelName.equals("Movies Action", ignoreCase = true) -> R.drawable.movies_action
+            channelName.equals("Movies Thriller", ignoreCase = true) -> R.drawable.movies_thriller
+            channelName.equals("Star Action", ignoreCase = true) -> R.drawable.star_action
+            channelName.equals("Star Films", ignoreCase = true) -> R.drawable.star_films
             channelName.equals("MBC Drama", ignoreCase = true) -> R.drawable.mbc_drama
             channelName.equals("MBC Masr 1", ignoreCase = true) -> R.drawable.mbc_masr
             channelName.equals("MBC Masr 2", ignoreCase = true) -> R.drawable.mbc_masr_2
