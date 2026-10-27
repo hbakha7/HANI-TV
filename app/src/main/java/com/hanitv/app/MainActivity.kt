@@ -593,8 +593,9 @@ class MainActivity : Activity() {
                     dp(20),
                     Gravity.BOTTOM
                 ).apply {
-                    // Raise the Thamania label to align with the other brand labels.
-                    bottomMargin = dp(10)
+                    // Align the Thamania label with the label row used by the other brand cards.
+                    // The other cards start their 20dp label at about 56dp from the card top.
+                    bottomMargin = dp(15)
                 })
                 brandCard.addView(
                     thamaniaStage,
