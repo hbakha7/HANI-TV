@@ -238,7 +238,7 @@ class MainActivity : Activity() {
             "ALWAN 9" to "A9",
             "ALWAN 10" to "A10"
         ),
-        "القنوات العربية" to listOf(
+        "القنوات العربية والثقافية" to listOf(
             "MBC 1" to "MBC1",
             "MBC 2" to "MBC2",
             "MBC 3" to "MBC3",
@@ -249,12 +249,18 @@ class MainActivity : Activity() {
             "MBC Drama" to "DRAMA",
             "MBC Masr 1" to "MASR1",
             "MBC Masr 2" to "MASR2",
+            "MBC Iraq" to "IRAQ",
+            "MBC Bollywood" to "BOLLY",
+            "National Geographic" to "NATGEO",
             "قناة عربية 1" to "AR",
             "قناة عربية 2" to "A2",
             "قناة عربية 3" to "A3",
             "قناة عربية 4" to "A4"
         ),
         "القنوات الإخبارية" to listOf(
+            "Sky News Arabia" to "SKY",
+            "العربية" to "ALAR",
+            "الجزيرة" to "JAZ",
             "أخبار 1" to "N1",
             "أخبار 2" to "N2",
             "أخبار 3" to "N3"
@@ -658,7 +664,7 @@ class MainActivity : Activity() {
 
             val iconText = when (category) {
                 "القنوات الرياضية" -> "⚽"
-                "القنوات العربية" -> "📺"
+                "القنوات العربية والثقافية" -> "📺"
                 "القنوات الإخبارية" -> "🌍"
                 "قنوات الأطفال" -> "🧸"
                 "قنوات الترفيه" -> "🎭"
@@ -767,7 +773,7 @@ class MainActivity : Activity() {
         val icon = TextView(this).apply {
             text = when (category) {
                 "القنوات الرياضية" -> "beIN\nSPORTS"
-                "القنوات العربية" -> "📺"
+                "القنوات العربية والثقافية" -> "📺"
                 "القنوات الإخبارية" -> "🌍"
                 "قنوات الأطفال" -> "🧸"
                 else -> "🎭"
@@ -1029,7 +1035,7 @@ class MainActivity : Activity() {
         addText(category, 23f, white, true)
         addText("القنوات المتاحة في هذا القسم", 14f, gray, false)
 
-        val isArabicCategory = category == "القنوات العربية"
+        val isArabicCategory = category == "القنوات العربية والثقافية"
 
         val predefinedChannels = channelGroups.values.flatten().distinctBy { it.first }
         val configuredChannels = sources.map { it.channel.trim() }
@@ -1045,7 +1051,7 @@ class MainActivity : Activity() {
             .filter { (name, _) ->
                 val belongsToCategory =
                     (builtInBrandCategoryFor(name) ?: channelCategories[name] ?: defaultCategoryFor(name)) == category
-                belongsToCategory && !(category == "القنوات العربية" &&
+                belongsToCategory && !(category == "القنوات العربية والثقافية" &&
                     (isMbcChannel(name) || isArabicPlaceholderChannel(name) || isSportsChannel(name)))
             }
 
@@ -1159,7 +1165,7 @@ class MainActivity : Activity() {
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
         ))
         card.addView(TextView(this).apply {
-            text = "10 قنوات"
+            text = "12 قناة"
             textSize = 11f
             gravity = Gravity.CENTER
             setTextColor(Color.rgb(158, 160, 169))
@@ -1180,7 +1186,7 @@ class MainActivity : Activity() {
         addText("قنوات MBC", 23f, white, true)
         addText("اختر القناة التي تريد مشاهدتها", 14f, gray, false, 12)
 
-        val channels = channelGroups["القنوات العربية"].orEmpty().filter { isMbcChannel(it.first) }
+        val channels = channelGroups["القنوات العربية والثقافية"].orEmpty().filter { isMbcChannel(it.first) }
         val grid = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         var index = 0
         while (index < channels.size) {
@@ -1198,8 +1204,8 @@ class MainActivity : Activity() {
             index += 2
         }
         content.addView(grid)
-        val back = makeButton("العودة إلى القنوات العربية")
-        back.setOnClickListener { showChannels("القنوات العربية") }
+        val back = makeButton("العودة إلى القنوات العربية والثقافية")
+        back.setOnClickListener { showChannels("القنوات العربية والثقافية") }
         content.addView(back, fullWidthParams().apply { topMargin = dp(18) })
     }
 
@@ -1322,6 +1328,8 @@ class MainActivity : Activity() {
             key.contains("mbc max") -> intArrayOf(Color.rgb(117, 72, 37), Color.rgb(51, 32, 29), Color.rgb(17, 16, 23))
             key.contains("mbc drama") -> intArrayOf(Color.rgb(83, 43, 112), Color.rgb(38, 24, 53), Color.rgb(17, 16, 24))
             key.contains("mbc masr 2") -> intArrayOf(Color.rgb(112, 26, 39), Color.rgb(53, 17, 28), Color.rgb(18, 15, 22))
+            key.contains("mbc iraq") -> intArrayOf(Color.rgb(24, 112, 91), Color.rgb(16, 54, 49), Color.rgb(15, 19, 27))
+            key.contains("mbc bollywood") -> intArrayOf(Color.rgb(151, 42, 54), Color.rgb(70, 23, 44), Color.rgb(20, 15, 28))
             key.contains("mbc masr") -> intArrayOf(Color.rgb(176, 28, 39), Color.rgb(67, 17, 28), Color.rgb(18, 15, 22))
             key.contains("bein") -> intArrayOf(Color.rgb(79, 34, 123), Color.rgb(34, 10, 57), Color.rgb(15, 12, 28))
             key.contains("alwan") || key.contains("ألوان") -> intArrayOf(Color.rgb(12, 102, 103), Color.rgb(5, 57, 60), Color.rgb(7, 27, 37))
@@ -1330,7 +1338,7 @@ class MainActivity : Activity() {
             key.contains("mbc") || key.contains("روتانا") -> intArrayOf(Color.rgb(94, 47, 54), Color.rgb(44, 27, 34), Color.rgb(20, 19, 24))
             key.contains("طفل") || key.contains("كرتون") || key.contains("kids") || key.contains("toons") -> intArrayOf(Color.rgb(103, 39, 127), Color.rgb(53, 23, 76), Color.rgb(24, 18, 37))
             key.contains("news") || key.contains("أخبار") || key.contains("الجزيرة") || key.contains("dw") -> intArrayOf(Color.rgb(83, 48, 54), Color.rgb(39, 30, 37), Color.rgb(19, 22, 28))
-            key.contains("جيوغرافيك") || key.contains("document") || key.contains("nat geo") -> intArrayOf(Color.rgb(24, 79, 82), Color.rgb(20, 43, 48), Color.rgb(13, 22, 29))
+            key.contains("national geographic") || key.contains("جيوغرافيك") || key.contains("document") || key.contains("nat geo") -> intArrayOf(Color.rgb(25, 96, 83), Color.rgb(18, 49, 48), Color.rgb(13, 22, 29))
             key.contains("دبي") || key.contains("أبو ظبي") || key.contains("الكأس") || key.contains("رياض") -> intArrayOf(Color.rgb(26, 67, 99), Color.rgb(20, 34, 53), Color.rgb(14, 19, 30))
             else -> {
                 val palettes = arrayOf(
@@ -2628,15 +2636,20 @@ private fun isDashStreamUrl(url: String): Boolean {
     }
 
 
+    private fun normalizeCategoryName(category: String): String =
+        if (category.trim() == "القنوات العربية") "القنوات العربية والثقافية" else category.trim()
+
     private fun allCategories(): List<String> {
-        val defaults = channelGroups.keys.toList()
-        val remote = channelCategories.values.map { it.trim() }.filter { it.isNotBlank() }
+        val defaults = channelGroups.keys.map { normalizeCategoryName(it) }
+        val remote = channelCategories.values.map { normalizeCategoryName(it) }.filter { it.isNotBlank() }
         return (remote + defaults).distinct()
     }
 
     private fun builtInBrandCategoryFor(channelName: String): String? = when (channelName) {
         "MBC 1", "MBC 2", "MBC 3", "MBC 4", "MBC 5", "MBC Action", "MBC Max",
-        "MBC Drama", "MBC Masr 1", "MBC Masr 2" -> "القنوات العربية"
+        "MBC Drama", "MBC Masr 1", "MBC Masr 2", "MBC Iraq", "MBC Bollywood" -> "القنوات العربية والثقافية"
+        "National Geographic" -> "القنوات العربية والثقافية"
+        "Sky News Arabia", "العربية", "الجزيرة" -> "القنوات الإخبارية"
         "ثمانية 1", "ثمانية 2", "ثمانية 3" -> "ثمانية"
         "STARZPLAY 1", "STARZPLAY 2", "STARZPLAY 3" -> "STARZPLAY"
         "ALWAN 1", "ALWAN 2", "ALWAN 3", "ALWAN 4", "ALWAN 5",
@@ -2654,7 +2667,7 @@ private fun isDashStreamUrl(url: String): Boolean {
 
     private fun ensureBuiltInBrandChannels() {
         val builtIns = linkedMapOf(
-            "القنوات العربية" to listOf(
+            "القنوات العربية والثقافية" to listOf(
                 "MBC 1" to "MBC1",
                 "MBC 2" to "MBC2",
                 "MBC 3" to "MBC3",
@@ -2664,7 +2677,15 @@ private fun isDashStreamUrl(url: String): Boolean {
                 "MBC Max" to "MAX",
                 "MBC Drama" to "DRAMA",
                 "MBC Masr 1" to "MASR1",
-                "MBC Masr 2" to "MASR2"
+                "MBC Masr 2" to "MASR2",
+                "MBC Iraq" to "IRAQ",
+                "MBC Bollywood" to "BOLLY",
+                "National Geographic" to "NATGEO"
+            ),
+            "القنوات الإخبارية" to listOf(
+                "Sky News Arabia" to "SKY",
+                "العربية" to "ALAR",
+                "الجزيرة" to "JAZ"
             ),
             "ثمانية" to listOf(
                 "ثمانية 1" to "T1",
@@ -2722,7 +2743,7 @@ private fun isDashStreamUrl(url: String): Boolean {
     private fun defaultCategoryFor(channelName: String): String =
         builtInBrandCategoryFor(channelName)
             ?: channelGroups.entries.firstOrNull { entry -> entry.value.any { it.first == channelName } }?.key
-            ?: "القنوات العربية"
+            ?: "القنوات العربية والثقافية"
 
     private fun showChannelImageManager() {
         showingServerManager = true
@@ -2994,6 +3015,10 @@ private fun isDashStreamUrl(url: String): Boolean {
             channelName.equals("MBC Drama", ignoreCase = true) -> R.drawable.mbc_drama
             channelName.equals("MBC Masr 1", ignoreCase = true) -> R.drawable.mbc_masr
             channelName.equals("MBC Masr 2", ignoreCase = true) -> R.drawable.mbc_masr_2
+            channelName.equals("National Geographic", ignoreCase = true) -> R.drawable.national_geographic
+            channelName.equals("Sky News Arabia", ignoreCase = true) -> R.drawable.skynewsarabia
+            channelName.equals("العربية", ignoreCase = true) -> R.drawable.alarabiya
+            channelName.equals("الجزيرة", ignoreCase = true) -> R.drawable.aljazeera
             channelName.contains("ثمانية", ignoreCase = true) ||
                 channelName.contains("thmanyah", ignoreCase = true) -> R.drawable.thamania
             channelName.contains("STARZPLAY", ignoreCase = true) -> R.drawable.logo_starzplay
@@ -3091,6 +3116,8 @@ private fun isDashStreamUrl(url: String): Boolean {
             // Built-in wordmark fallbacks keep every channel card branded even before
             // an administrator supplies an official image URL from the image manager.
             val logoText = when {
+                channelName.equals("MBC Iraq", ignoreCase = true) -> "MBC\nIRAQ"
+                channelName.equals("MBC Bollywood", ignoreCase = true) -> "MBC\nBOLLYWOOD"
                 channelName.contains("ثمانية", ignoreCase = true) -> "ثمانية"
                 channelName.contains("STARZPLAY", ignoreCase = true) && plainBrandFallback -> "STARZPLAY\nSPORTS ③"
                 channelName.contains("STARZPLAY", ignoreCase = true) -> "STARZPLAY"
@@ -3103,6 +3130,7 @@ private fun isDashStreamUrl(url: String): Boolean {
                 channelName.contains("STARZPLAY", ignoreCase = true) -> Color.rgb(90, 205, 225)
                 channelName.contains("ALWAN", ignoreCase = true) -> Color.rgb(88, 220, 150)
                 channelName.contains("bein", ignoreCase = true) -> Color.rgb(171, 105, 235)
+                channelName.contains("MBC", ignoreCase = true) -> Color.rgb(245, 225, 230)
                 else -> Color.rgb(177, 145, 255)
             }
             val logo = TextView(this).apply {
@@ -3565,7 +3593,7 @@ private fun isDashStreamUrl(url: String): Boolean {
                         if (source.channel.isNotBlank() && !remoteChannelNames.contains(source.channel)) {
                             remoteChannelNames.add(source.channel)
                             if (!downloadedCategories.containsKey(source.channel)) {
-                                downloadedCategories[source.channel] = "القنوات العربية"
+                                downloadedCategories[source.channel] = "القنوات العربية والثقافية"
                             }
                             remoteChannelOrder[source.channel] = remoteChannelOrder.size
                         }
@@ -3579,6 +3607,9 @@ private fun isDashStreamUrl(url: String): Boolean {
                         if (channelArray.length() > 0 || remoteChannelNames.isNotEmpty()) {
                             channelImageUrls.clear()
                             channelImageUrls.putAll(downloadedImages)
+                            downloadedCategories.keys.toList().forEach { key ->
+                                downloadedCategories[key] = normalizeCategoryName(downloadedCategories[key].orEmpty())
+                            }
                             channelCategories.clear()
                             channelCategories.putAll(downloadedCategories)
 
@@ -3590,8 +3621,10 @@ private fun isDashStreamUrl(url: String): Boolean {
                                     .distinct()
                                     .sortedBy { remoteChannelOrder[it] ?: Int.MAX_VALUE }
                                     .forEach { name ->
-                                        val category = downloadedCategories[name]?.takeIf { it.isNotBlank() }
-                                            ?: "القنوات العربية"
+                                        val category = normalizeCategoryName(
+                                            downloadedCategories[name]?.takeIf { it.isNotBlank() }
+                                                ?: "القنوات العربية والثقافية"
+                                        )
                                         val fallback = name.filter { it.isLetterOrDigit() }.take(3)
                                             .ifBlank { "TV" }.uppercase(java.util.Locale.ROOT)
                                         grouped.getOrPut(category) { mutableListOf() }.add(name to fallback)
