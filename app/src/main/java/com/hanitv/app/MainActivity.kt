@@ -592,7 +592,10 @@ class MainActivity : Activity() {
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     dp(20),
                     Gravity.BOTTOM
-                ))
+                ).apply {
+                    // Raise the Thamania label to align with the other brand labels.
+                    bottomMargin = dp(10)
+                })
                 brandCard.addView(
                     thamaniaStage,
                     LinearLayout.LayoutParams(
