@@ -2480,51 +2480,72 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
 
 
     /**
-     * Detect HLS even when a proxy URL hides the real playlist path in a
-     * Base64 "stream" query parameter, for example proxy.php?stream=...
+     * Detect HLS/DASH even when a proxy URL wraps the actual manifest in a query
+     * parameter, e.g. worker.php?url=https%3A%2F%2Fhost%2Flive%2Findex.m3u8.
+     * Android Uri.getQueryParameter() already percent-decodes query values.
      */
     private fun isHlsStreamUrl(url: String): Boolean {
-        val uri = try {
-            android.net.Uri.parse(url)
-        } catch (_: Exception) {
+        fun inspect(candidate: String, depth: Int): Boolean {
+            if (depth > 4) return false
+            val uri = try {
+                android.net.Uri.parse(candidate)
+            } catch (_: Exception) {
+                return false
+            }
+
+            val path = uri.path.orEmpty().lowercase(java.util.Locale.ROOT)
+            if (path.endsWith(".m3u8") || path.endsWith(".css")) return true
+
+            // Common proxy/wrapper parameter names. Keep the original URL for playback;
+            // this is format detection only, not URL rewriting.
+            for (name in listOf("url", "stream", "src", "file", "source", "link", "target", "playlist", "m3u8")) {
+                val nested = uri.getQueryParameter(name)?.trim().orEmpty()
+                if (nested.isBlank()) continue
+                if (inspect(nested, depth + 1)) return true
+
+                // Some proxy endpoints put a Base64-encoded manifest URL in `stream`.
+                if (name == "stream") {
+                    val decoded = sequenceOf(
+                        android.util.Base64.URL_SAFE or android.util.Base64.NO_WRAP or android.util.Base64.NO_PADDING,
+                        android.util.Base64.DEFAULT
+                    ).mapNotNull { flags ->
+                        try {
+                            String(android.util.Base64.decode(nested, flags), Charsets.UTF_8)
+                        } catch (_: Exception) {
+                            null
+                        }
+                    }.firstOrNull { it.isNotBlank() }
+                    if (!decoded.isNullOrBlank() && inspect(decoded, depth + 1)) return true
+                }
+            }
             return false
         }
+        return inspect(url, 0)
+    }
 
-        val path = uri.path.orEmpty().lowercase(java.util.Locale.ROOT)
-        if (path.endsWith(".m3u8") || path.endsWith(".css")) return true
-
-        val encodedStream = uri.getQueryParameter("stream")?.trim().orEmpty()
-        if (encodedStream.isBlank()) return false
-
-        val decoded = sequenceOf(
-            android.util.Base64.URL_SAFE or android.util.Base64.NO_WRAP or android.util.Base64.NO_PADDING,
-            android.util.Base64.DEFAULT
-        ).mapNotNull { flags ->
-            try {
-                String(android.util.Base64.decode(encodedStream, flags), Charsets.UTF_8)
+    private fun isDashStreamUrl(url: String): Boolean {
+        fun inspect(candidate: String, depth: Int): Boolean {
+            if (depth > 4) return false
+            val uri = try {
+                android.net.Uri.parse(candidate)
             } catch (_: Exception) {
-                null
+                return false
             }
-        }.firstOrNull { it.isNotBlank() }.orEmpty()
+            val path = uri.path.orEmpty().lowercase(java.util.Locale.ROOT)
+            if (path.endsWith(".mpd") ||
+                uri.getQueryParameter("type")?.equals("mpd", ignoreCase = true) == true ||
+                uri.getQueryParameter("format")?.equals("mpd", ignoreCase = true) == true
+            ) return true
 
-        return decoded.substringBefore('?').substringBefore('#')
-            .lowercase(java.util.Locale.ROOT).endsWith(".m3u8")
+            for (name in listOf("url", "stream", "src", "file", "source", "link", "target", "playlist", "mpd")) {
+                val nested = uri.getQueryParameter(name)?.trim().orEmpty()
+                if (nested.isNotBlank() && inspect(nested, depth + 1)) return true
+            }
+            return false
+        }
+        return inspect(url, 0)
     }
-private fun isDashStreamUrl(url: String): Boolean {
-    return try {
-        val uri = android.net.Uri.parse(url)
-        val path = uri.path.orEmpty()
-            .lowercase(java.util.Locale.ROOT)
 
-        path.endsWith(".mpd") ||
-            uri.getQueryParameter("type")
-                ?.equals("mpd", ignoreCase = true) == true ||
-            uri.getQueryParameter("format")
-                ?.equals("mpd", ignoreCase = true) == true
-    } catch (_: Exception) {
-        false
-    }
-}
     // A stable per-source media ID prevents two server rows that share a URL from
     // accidentally using each other's DRM credentials.
     private fun sourceMediaId(source: StreamSource): String = listOf(
