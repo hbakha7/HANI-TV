@@ -1573,53 +1573,84 @@ class MainActivity : Activity() {
             }
         }
 
-        /** Update the artwork palette from the actual logo pixels, without modifying the logo. */
+        /**
+         * Builds a restrained, premium background palette from the logo's own pixels.
+         * The source logo is never changed; only its background palette is generated.
+         */
         fun updateFromLogo(bitmap: android.graphics.Bitmap) {
             if (bitmap.width <= 0 || bitmap.height <= 0) return
-            // Keep National Geographic's emerald/graphite palette fixed. Sampling the
-            // logo would incorrectly pick up its signature yellow frame as the background.
-            if (key.contains("national geographic") || key.contains("جيوغرافيك") || key.contains("nat geo")) return
-            val hueCounts = IntArray(24)
-            val hueSums = FloatArray(24)
-            val satSums = FloatArray(24)
-            val valSums = FloatArray(24)
-            val xStep = maxOf(1, bitmap.width / 64)
-            val yStep = maxOf(1, bitmap.height / 64)
+
+            // Bounded sampling keeps palette extraction inexpensive for large assets.
+            val hueBins = 36
+            val weights = FloatArray(hueBins)
+            val hueSin = FloatArray(hueBins)
+            val hueCos = FloatArray(hueBins)
+            val saturationSum = FloatArray(hueBins)
+            val sampleStepX = maxOf(1, bitmap.width / 72)
+            val sampleStepY = maxOf(1, bitmap.height / 72)
+            val hsv = FloatArray(3)
+
             var y = 0
             while (y < bitmap.height) {
                 var x = 0
                 while (x < bitmap.width) {
                     val pixel = bitmap.getPixel(x, y)
-                    if (Color.alpha(pixel) >= 100) {
-                        val hsv = FloatArray(3)
+                    val alpha = Color.alpha(pixel)
+                    if (alpha >= 150) {
                         Color.colorToHSV(pixel, hsv)
-                        // Ignore transparent, near-gray, near-black and near-white pixels so
-                        // a logo's true brand color, rather than its blank canvas, drives the art.
-                        if (hsv[1] >= 0.28f && hsv[2] in 0.18f..0.94f) {
-                            val bucket = ((hsv[0] / 360f) * hueCounts.size).toInt().coerceIn(0, hueCounts.lastIndex)
-                            hueCounts[bucket]++
-                            hueSums[bucket] += hsv[0]
-                            satSums[bucket] += hsv[1]
-                            valSums[bucket] += hsv[2]
+                        val saturation = hsv[1]
+                        val value = hsv[2]
+
+                        // Ignore transparent pixels, neutral text, highlights and deep shadows.
+                        if (saturation >= 0.22f && value in 0.16f..0.92f) {
+                            val bin = ((hsv[0] / 360f) * hueBins)
+                                .toInt().coerceIn(0, hueBins - 1)
+                            val chromaWeight = 0.35f + saturation * 0.65f
+                            val midToneWeight = (1f - kotlin.math.abs(value - 0.53f) * 0.75f)
+                                .coerceIn(0.35f, 1f)
+                            val weight = (alpha / 255f) * chromaWeight * midToneWeight
+
+                            weights[bin] += weight
+                            val angle = Math.toRadians(hsv[0].toDouble())
+                            hueSin[bin] += kotlin.math.sin(angle).toFloat() * weight
+                            hueCos[bin] += kotlin.math.cos(angle).toFloat() * weight
+                            saturationSum[bin] += saturation * weight
                         }
                     }
-                    x += xStep
+                    x += sampleStepX
                 }
-                y += yStep
+                y += sampleStepY
             }
-            val best = hueCounts.indices.maxByOrNull { hueCounts[it] } ?: return
-            if (hueCounts[best] < 2) return
-            val hue = hueSums[best] / hueCounts[best]
-            // Tone down vivid logo colors so the background feels calm and premium.
-            val saturation = ((satSums[best] / hueCounts[best]) * 0.68f).coerceIn(0.24f, 0.56f)
-            val hsv = floatArrayOf(hue, saturation, 0.34f)
-            val primary = Color.HSVToColor(hsv)
-            hsv[1] = (saturation * 0.82f).coerceIn(0.20f, 0.46f)
-            hsv[2] = 0.205f
-            val secondary = Color.HSVToColor(hsv)
-            hsv[1] = (saturation * 0.66f).coerceIn(0.16f, 0.36f)
-            hsv[2] = 0.085f
-            val deep = Color.HSVToColor(hsv)
+
+            val best = weights.indices.maxByOrNull { weights[it] } ?: return
+            if (weights[best] < 1.5f) return
+
+            // Circular hue averaging handles colors near the red / 360-degree boundary.
+            val hue = (Math.toDegrees(
+                kotlin.math.atan2(hueSin[best].toDouble(), hueCos[best].toDouble())
+            ) + 360.0) % 360.0
+            val sampledSaturation = saturationSum[best] / weights[best]
+
+            // Preserve the logo's color identity while making it calm and cinematic.
+            val backgroundSaturation = (sampledSaturation * 0.56f).coerceIn(0.18f, 0.40f)
+            val primary = Color.HSVToColor(
+                floatArrayOf(hue.toFloat(), backgroundSaturation, 0.31f)
+            )
+            val secondary = Color.HSVToColor(
+                floatArrayOf(
+                    hue.toFloat(),
+                    (backgroundSaturation * 0.88f).coerceIn(0.16f, 0.35f),
+                    0.205f
+                )
+            )
+            val deep = Color.HSVToColor(
+                floatArrayOf(
+                    hue.toFloat(),
+                    (backgroundSaturation * 0.72f).coerceIn(0.12f, 0.29f),
+                    0.085f
+                )
+            )
+
             palette = intArrayOf(primary, secondary, deep)
             invalidateSelf()
         }
@@ -1655,13 +1686,8 @@ class MainActivity : Activity() {
             paint.shader = null
 
             // A very soft central glow adds depth without decorative lines or patterns.
-            val isNatGeo = key.contains("national geographic") ||
-                key.contains("جيوغرافيك") || key.contains("nat geo")
-            val glowColor = if (isNatGeo) {
-                Color.argb(25, 170, 218, 190)
-            } else {
-                Color.argb(19, 245, 245, 255)
-            }
+            // A consistent, subtle neutral glow complements the extracted logo color.
+            val glowColor = Color.argb(18, 245, 245, 255)
             paint.shader = RadialGradient(
                 b.left + w * 0.48f,
                 b.top + h * 0.42f,
