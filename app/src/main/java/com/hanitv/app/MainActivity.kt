@@ -250,6 +250,10 @@ class MainActivity : Activity() {
             "Algeria 6" to "ALGERIA6",
             "Algeria 3" to "ALGERIA3"
         ),
+        "القنوات المغربية" to listOf(
+            "Al Aoula" to "ALAOULA",
+            "Laayoune" to "LAAYOUNE"
+        ),
         "القنوات العربية والثقافية" to listOf(
             "MBC 1" to "MBC1",
             "MBC 2" to "MBC2",
@@ -1007,12 +1011,8 @@ class MainActivity : Activity() {
         addText(brand, 23f, white, true)
         addText("القنوات المتاحة في هذا القسم", 14f, gray, false)
 
-        val allChannels = (channelGroups["القنوات الرياضية"].orEmpty() + sources
-            .map { it.channel.trim() }
-            .filter { it.isNotBlank() }
-            .distinct()
-            .map { name -> name to name.take(3).ifBlank { "TV" } })
-            .distinctBy { it.first }
+        // Sports channel names are defined in the app, not inferred from server rows.
+        val allChannels = channelGroups["القنوات الرياضية"].orEmpty().distinctBy { it.first }
 
         val channels = allChannels.filter { (name, _) ->
             when (brand) {
@@ -1062,14 +1062,6 @@ class MainActivity : Activity() {
         val isArabicCategory = category == "القنوات العربية والثقافية"
 
         val predefinedChannels = channelGroups.values.flatten().distinctBy { it.first }
-        val configuredChannels = sources.map { it.channel.trim() }
-            .filter { it.isNotBlank() }
-            .distinct()
-            .map { name ->
-                val fallback = channelGroups.values.flatten().firstOrNull { it.first == name }?.second
-                    ?: name.take(3).ifBlank { "TV" }
-                name to fallback
-            }
         // Entertainment has its own mixed lineup. The three MBC channels also remain
         // available in the Arabic/MBC section; listing them here does not move or remove them.
         val entertainmentChannels = listOf(
@@ -1082,8 +1074,7 @@ class MainActivity : Activity() {
             "Star Action" to "STARACTION"
         )
         val channels = when (category) {
-            // Keep these two built-in channels visible even when the cloud category map
-            // has not synced yet or contains a different category label.
+            // Keep the built-in country channels visible regardless of server settings.
             "القنوات الجزائرية" -> listOf(
                 // Deliberately mixed rather than numerically sorted, as requested.
                 "Ennahar" to "ENNAHAR",
@@ -1101,8 +1092,7 @@ class MainActivity : Activity() {
             )
             "قنوات الترفيه" -> entertainmentChannels
             else -> {
-                (predefinedChannels + configuredChannels)
-                    .distinctBy { it.first }
+                predefinedChannels
                     .filter { (name, _) ->
                         val belongsToCategory =
                             (builtInBrandCategoryFor(name) ?: channelCategories[name] ?: defaultCategoryFor(name)) == category
@@ -2745,7 +2735,9 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
             addView(TextView(this@MainActivity).apply { text = label; textSize = 11f; setTextColor(purple) })
         }
         stats.addView(stat("الفئات", allCategories().size.toString()), LinearLayout.LayoutParams(0, -2, 1f).apply { setMargins(0, 0, dp(5), 0) })
-        stats.addView(stat("القنوات", sources.map { it.channel }.distinct().size.toString()), LinearLayout.LayoutParams(0, -2, 1f).apply { setMargins(dp(3), 0, dp(3), 0) })
+        val managedChannelCount = (channelGroups.values.flatten().map { it.first } + sources.map { it.channel.trim() })
+            .filter { it.isNotBlank() }.distinct().size
+        stats.addView(stat("القنوات", managedChannelCount.toString()), LinearLayout.LayoutParams(0, -2, 1f).apply { setMargins(dp(3), 0, dp(3), 0) })
         stats.addView(stat("السيرفرات", sources.size.toString()), LinearLayout.LayoutParams(0, -2, 1f).apply { setMargins(dp(5), 0, 0, 0) })
         content.addView(stats, fullWidthParams().apply { topMargin = dp(10); bottomMargin = dp(10) })
 
@@ -2792,19 +2784,44 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
             }
             listHost.removeAllViews()
             val query = search.text.toString().trim().lowercase(java.util.Locale.ROOT)
-            val filtered = sources.withIndex().filter { (_, item) ->
-                val cat = channelCategories[item.channel] ?: defaultCategoryFor(item.channel)
+            // Include every channel compiled into the app, plus any channel that already
+            // has a saved source row. A channel remains manageable even before a server is added.
+            val allKnownChannels = (
+                channelGroups.values.flatten().map { it.first } + sources.map { it.channel.trim() }
+            ).filter { it.isNotBlank() }.distinct()
+
+            fun categoryForManager(channel: String): String =
+                channelGroups.entries.firstOrNull { entry -> entry.value.any { it.first == channel } }?.key
+                    ?: channelCategories[channel]
+                    ?: defaultCategoryFor(channel)
+
+            val channelOrder = allKnownChannels.filter { channel ->
+                val cat = categoryForManager(channel)
+                val nameMatches = query.isBlank() || channel.lowercase(java.util.Locale.ROOT).contains(query) ||
+                    cat.lowercase(java.util.Locale.ROOT).contains(query)
+                val sourceMatches = sources.any { item ->
+                    item.channel.equals(channel, ignoreCase = true) &&
+                        (item.serverName.lowercase(java.util.Locale.ROOT).contains(query) ||
+                         item.displayName.lowercase(java.util.Locale.ROOT).contains(query) ||
+                         item.url.lowercase(java.util.Locale.ROOT).contains(query))
+                }
                 (selectedCategory == "الكل" || cat == selectedCategory) &&
-                    (query.isBlank() || item.channel.lowercase().contains(query) || item.serverName.lowercase().contains(query) || item.displayName.lowercase().contains(query) || item.url.lowercase().contains(query) || cat.lowercase().contains(query))
+                    (query.isBlank() || nameMatches || sourceMatches)
             }
-            if (filtered.isEmpty()) {
-                listHost.addView(TextView(this).apply { text = if (sources.isEmpty()) "لا توجد سيرفرات محفوظة بعد." else "لا توجد نتائج مطابقة."; setTextColor(gray); textSize = 14f; setPadding(dp(8), dp(18), dp(8), dp(18)) })
+            if (channelOrder.isEmpty()) {
+                listHost.addView(TextView(this).apply { text = "لا توجد نتائج مطابقة."; setTextColor(gray); textSize = 14f; setPadding(dp(8), dp(18), dp(8), dp(18)) })
                 return
             }
-            val channelOrder = filtered.map { it.value.channel }.distinct()
             channelOrder.forEach { channel ->
-                val channelItems = filtered.filter { it.value.channel == channel }
-                val category = channelCategories[channel] ?: defaultCategoryFor(channel)
+                val category = categoryForManager(channel)
+                val channelNameMatches = query.isBlank() || channel.lowercase(java.util.Locale.ROOT).contains(query) ||
+                    category.lowercase(java.util.Locale.ROOT).contains(query)
+                val channelItems = sources.withIndex().filter { (_, item) ->
+                    item.channel.equals(channel, ignoreCase = true) &&
+                        (channelNameMatches || item.serverName.lowercase(java.util.Locale.ROOT).contains(query) ||
+                         item.displayName.lowercase(java.util.Locale.ROOT).contains(query) ||
+                         item.url.lowercase(java.util.Locale.ROOT).contains(query))
+                }
                 val channelCard = LinearLayout(this).apply {
                     orientation = LinearLayout.VERTICAL; setPadding(dp(12), dp(10), dp(12), dp(10))
                     background = GradientDrawable().apply { setColor(darkCard); cornerRadius = dp(12).toFloat(); setStroke(dp(1), lineColor) }
@@ -2895,9 +2912,14 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
                         channelCard.addView(row)
                         channelCard.addView(View(this).apply { setBackgroundColor(lineColor) }, LinearLayout.LayoutParams(-1, dp(1)))
                     }
-                    val addForChannel = TextView(this).apply { text = "＋ إضافة سيرفر لهذه القناة"; textSize = 12f; gravity = Gravity.CENTER; setTextColor(purple); setPadding(dp(8), dp(10), dp(8), dp(4)); setOnClickListener { requireAdmin { showAddSourceDialog(channelName = channel) } } }
-                    channelCard.addView(addForChannel)
                 }
+                val addForChannel = TextView(this).apply {
+                    text = "＋ إضافة سيرفر لهذه القناة"
+                    textSize = 12f; gravity = Gravity.CENTER; setTextColor(purple)
+                    setPadding(dp(8), dp(10), dp(8), dp(4))
+                    setOnClickListener { requireAdmin { showAddSourceDialog(channelName = channel) } }
+                }
+                channelCard.addView(addForChannel)
                 listHost.addView(channelCard, fullWidthParams().apply { bottomMargin = dp(8) })
             }
         }
@@ -2917,7 +2939,7 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
         val defaults = channelGroups.keys.map { normalizeCategoryName(it) }
         val remote = channelCategories.values.map { normalizeCategoryName(it) }.filter { it.isNotBlank() }
         val available = (defaults + remote)
-            .filter { it.isNotBlank() && it != "القنوات الجزائرية" }
+            .filter { it.isNotBlank() }
             .distinct()
 
         // Keep the home screen's main sections in a stable order even when the cloud
@@ -2925,6 +2947,8 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
         val preferredOrder = listOf(
             "القنوات الرياضية",
             "القنوات العربية والثقافية",
+            "القنوات الجزائرية",
+            "القنوات المغربية",
             "القنوات الإخبارية",
             "قنوات الأطفال",
             "قنوات الترفيه",
@@ -3549,10 +3573,11 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
             }.also { box.addView(it) }
         }
         // Choose a channel from the app's actual channel list instead of free typing.
-        // Include channels already received from Hostinger so custom channel names remain selectable.
+        // The selector is based on the app's built-in channel catalogue.
         val channelNames = (
             channelGroups.values.flatten().map { it.first } +
-            sources.map { it.channel.trim() } +
+            // Keep the currently edited/selected source channel available without
+            // importing the server list as a channel catalogue.
             listOfNotNull(existing?.channel?.trim(), channelName?.trim())
         ).filter { it.isNotBlank() }.distinct()
 
@@ -3783,7 +3808,7 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
         }
     }
 
-    /** Read the shared channel/server list from Hostinger PHP API. */
+    /** Read shared server/source settings from Hostinger PHP API. Channel catalogue stays local. */
     private fun syncFromCloud(silent: Boolean = false, onComplete: ((Boolean) -> Unit)? = null) {
         networkExecutor.execute {
             var errorMessage: String? = null
@@ -3808,23 +3833,6 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
                     val remoteUpdateApkUrl = remoteSettings.optString("updateApkUrl", "")
                     val array = json.optJSONArray("sources") ?: JSONArray()
                     val downloaded = mutableListOf<StreamSource>()
-                    val channelArray = json.optJSONArray("channels") ?: JSONArray()
-                    val downloadedImages = linkedMapOf<String, String>()
-                    val downloadedCategories = linkedMapOf<String, String>()
-                    val remoteChannelOrder = linkedMapOf<String, Int>()
-                    val remoteChannelNames = mutableListOf<String>()
-                    for (j in 0 until channelArray.length()) {
-                        val channelItem = channelArray.optJSONObject(j) ?: continue
-                        val name = channelItem.optString("channel", "").trim()
-                        if (name.isNotBlank()) {
-                            if (!remoteChannelNames.contains(name)) remoteChannelNames.add(name)
-                            val image = channelItem.optString("imageUrl", "").trim()
-                            if (image.isNotBlank()) downloadedImages[name] = image
-                            val category = channelItem.optString("category", "").trim()
-                            if (category.isNotBlank()) downloadedCategories[name] = category
-                            remoteChannelOrder[name] = channelItem.optInt("sort_order", j)
-                        }
-                    }
                     for (i in 0 until array.length()) {
                         val item = array.optJSONObject(i) ?: continue
                         val channel = item.optString("channel", "").trim()
@@ -3866,52 +3874,14 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
                         )
                     }
 
-                    // If a channel has sources but no separate channel_settings row yet, still show it.
-                    downloaded.forEach { source ->
-                        if (source.channel.isNotBlank() && !remoteChannelNames.contains(source.channel)) {
-                            remoteChannelNames.add(source.channel)
-                            if (!downloadedCategories.containsKey(source.channel)) {
-                                downloadedCategories[source.channel] = "القنوات العربية والثقافية"
-                            }
-                            remoteChannelOrder[source.channel] = remoteChannelOrder.size
-                        }
-                    }
-
                     runOnUiThread {
                         updateBannerEnabled = remoteUpdateBannerEnabled
                         updateBannerText = remoteUpdateBannerText
                         updateVersion = remoteUpdateVersion
                         updateApkUrl = remoteUpdateApkUrl
-                        if (channelArray.length() > 0 || remoteChannelNames.isNotEmpty()) {
-                            channelImageUrls.clear()
-                            channelImageUrls.putAll(downloadedImages)
-                            downloadedCategories.keys.toList().forEach { key ->
-                                downloadedCategories[key] = normalizeCategoryName(downloadedCategories[key].orEmpty())
-                            }
-                            channelCategories.clear()
-                            channelCategories.putAll(downloadedCategories)
-
-                            // Build the visible channel groups from Hostinger instead of relying
-                            // only on the demo channels compiled into this APK.
-                            if (remoteChannelNames.isNotEmpty()) {
-                                val grouped = linkedMapOf<String, MutableList<Pair<String, String>>>()
-                                remoteChannelNames
-                                    .distinct()
-                                    .sortedBy { remoteChannelOrder[it] ?: Int.MAX_VALUE }
-                                    .forEach { name ->
-                                        val category = normalizeCategoryName(
-                                            downloadedCategories[name]?.takeIf { it.isNotBlank() }
-                                                ?: "القنوات العربية والثقافية"
-                                        )
-                                        val fallback = name.filter { it.isLetterOrDigit() }.take(3)
-                                            .ifBlank { "TV" }.uppercase(java.util.Locale.ROOT)
-                                        grouped.getOrPut(category) { mutableListOf() }.add(name to fallback)
-                                    }
-                                channelGroups.clear()
-                                grouped.forEach { (category, channels) -> channelGroups[category] = channels }
-                                ensureBuiltInBrandChannels()
-                            }
-                        }
+                        // Channel names, categories and logos are compiled into this APK.
+                        // Hostinger is only a source of stream/server settings; never let a
+                        // cloud response clear or replace the app's built-in channel catalogue.
                         // Keep the last local list if the API returns no sources; otherwise
                         // replace it with the shared Hostinger source list.
                         if (downloaded.isNotEmpty()) {
@@ -3927,7 +3897,7 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
                             showServerManager()
                         } else if (onComplete == null) {
                             // During initial startup, finishInitialSourceSync() renders
-                            // the home screen once after the remote categories are applied.
+                            // the home screen after server settings have been synchronized.
                             showHome()
                         }
                         onComplete?.invoke(true)
