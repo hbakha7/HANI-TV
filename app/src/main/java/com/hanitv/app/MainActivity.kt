@@ -1110,7 +1110,24 @@ class MainActivity : Activity() {
                 gravity = Gravity.TOP
             }
             addAlgeriaSectionCard(algeriaRow)
+            addCountrySectionCard(algeriaRow, "القنوات المغربية", R.drawable.morocco, "قنوات المغرب")
             grid.addView(algeriaRow, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { bottomMargin = dp(10) })
+
+            // Egypt gets the same two-column country card style. Pair it with the next
+            // regular channel card so the grid keeps its existing layout.
+            val egyptRow = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.TOP
+            }
+            addCountrySectionCard(egyptRow, "القنوات المصرية", R.drawable.egypt, "قنوات مصر")
+            if (index < channels.size) {
+                addChannelCard(egyptRow, channels[index])
+                index++
+            }
+            grid.addView(egyptRow, LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply { bottomMargin = dp(10) })
@@ -1270,6 +1287,76 @@ class MainActivity : Activity() {
         ))
         card.addView(TextView(this).apply {
             text = "قنوات الجزائر"
+            textSize = 11f
+            gravity = Gravity.CENTER
+            setTextColor(Color.rgb(158, 160, 169))
+            maxLines = 1
+            setPadding(dp(2), dp(3), dp(2), 0)
+        }, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ))
+        row.addView(card, LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f
+        ).apply { setMargins(dp(5), 0, dp(5), 0) })
+    }
+
+    private fun addCountrySectionCard(
+        row: LinearLayout,
+        title: String,
+        imageRes: Int,
+        subtitle: String
+    ) {
+        val card = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+            setPadding(dp(3), dp(3), dp(3), dp(8))
+            setBackgroundColor(Color.TRANSPARENT)
+            isClickable = true
+            isFocusable = true
+            contentDescription = title
+            setOnClickListener { showChannels(title) }
+        }
+
+        val poster = FrameLayout(this).apply {
+            background = ChannelPosterDrawable(title)
+            outlineProvider = object : android.view.ViewOutlineProvider() {
+                override fun getOutline(view: View, outline: android.graphics.Outline) {
+                    outline.setRoundRect(0, 0, view.width, view.height, dp(12).toFloat())
+                }
+            }
+            clipToOutline = true
+            foreground = GradientDrawable().apply {
+                cornerRadius = dp(12).toFloat()
+                setColor(Color.TRANSPARENT)
+                setStroke(dp(1), Color.argb(70, 235, 238, 245))
+            }
+            elevation = dp(2).toFloat()
+        }
+        poster.addView(ImageView(this).apply {
+            setImageResource(imageRes)
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            contentDescription = title
+            setPadding(dp(18), dp(12), dp(18), dp(12))
+        }, FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.MATCH_PARENT
+        ))
+        card.addView(poster, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, dp(108)
+        ))
+        card.addView(TextView(this).apply {
+            text = title
+            textSize = 14f
+            gravity = Gravity.CENTER
+            setTextColor(Color.rgb(245, 245, 247))
+            setTypeface(null, Typeface.BOLD)
+            maxLines = 2
+            setPadding(dp(2), dp(7), dp(2), 0)
+        }, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ))
+        card.addView(TextView(this).apply {
+            text = subtitle
             textSize = 11f
             gravity = Gravity.CENTER
             setTextColor(Color.rgb(158, 160, 169))
