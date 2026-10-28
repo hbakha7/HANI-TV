@@ -1095,6 +1095,10 @@ class MainActivity : Activity() {
                 "Algeria 6" to "ALGERIA6",
                 "Algeria 3" to "ALGERIA3"
             )
+            "القنوات المغربية" -> listOf(
+                "Al Aoula" to "ALAOULA",
+                "Laayoune" to "LAAYOUNE"
+            )
             "قنوات الترفيه" -> entertainmentChannels
             else -> {
                 (predefinedChannels + configuredChannels)
@@ -2890,6 +2894,7 @@ private fun isDashStreamUrl(url: String): Boolean {
         "National Geographic" -> "القنوات العربية والثقافية"
         "Algeria 1", "Algeria 2", "Algeria 3", "Algeria 5", "Algeria 6",
         "AL24 News", "El Heddaf", "Ennahar" -> "القنوات الجزائرية"
+        "Al Aoula", "Laayoune" -> "القنوات المغربية"
         "Sky News Arabia", "العربية", "الجزيرة" -> "القنوات الإخبارية"
         "ثمانية 1", "ثمانية 2", "ثمانية 3" -> "ثمانية"
         "STARZPLAY 1", "STARZPLAY 2", "STARZPLAY 3" -> "STARZPLAY"
@@ -3240,6 +3245,8 @@ private fun isDashStreamUrl(url: String): Boolean {
             channelName.equals("AL24 News", ignoreCase = true) -> R.drawable.al24_news
             channelName.equals("El Heddaf", ignoreCase = true) -> R.drawable.el_heddaf
             channelName.equals("Ennahar", ignoreCase = true) -> R.drawable.ennahar
+            channelName.equals("Al Aoula", ignoreCase = true) -> R.drawable.al_aoula
+            channelName.equals("Laayoune", ignoreCase = true) -> R.drawable.laayoune
             channelName.equals("Sky News Arabia", ignoreCase = true) -> R.drawable.skynewsarabia
             channelName.equals("العربية", ignoreCase = true) -> R.drawable.alarabiya
             channelName.equals("الجزيرة", ignoreCase = true) -> R.drawable.aljazeera
