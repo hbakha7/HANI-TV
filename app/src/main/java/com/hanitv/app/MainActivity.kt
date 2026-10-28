@@ -239,6 +239,10 @@ class MainActivity : Activity() {
             "ALWAN 9" to "A9",
             "ALWAN 10" to "A10"
         ),
+        "القنوات الجزائرية" to listOf(
+            "Algeria 1" to "ALGERIA1",
+            "Algeria 2" to "ALGERIA2"
+        ),
         "القنوات العربية والثقافية" to listOf(
             "MBC 1" to "MBC1",
             "MBC 2" to "MBC2",
@@ -2840,7 +2844,9 @@ private fun isDashStreamUrl(url: String): Boolean {
     private fun allCategories(): List<String> {
         val defaults = channelGroups.keys.map { normalizeCategoryName(it) }
         val remote = channelCategories.values.map { normalizeCategoryName(it) }.filter { it.isNotBlank() }
-        val available = (defaults + remote).filter { it.isNotBlank() }.distinct()
+        val available = (defaults + remote)
+            .filter { it.isNotBlank() && it != "القنوات الجزائرية" }
+            .distinct()
 
         // Keep the home screen's main sections in a stable order even when the cloud
         // API returns channels/categories in a different order during synchronization.
@@ -2861,6 +2867,7 @@ private fun isDashStreamUrl(url: String): Boolean {
         "MBC 1", "MBC 2", "MBC 3", "MBC 4", "MBC 5", "MBC Action", "MBC Max",
         "MBC Drama", "MBC Masr 1", "MBC Masr 2", "MBC Iraq", "MBC Bollywood" -> "القنوات العربية والثقافية"
         "National Geographic" -> "القنوات العربية والثقافية"
+        "Algeria 1", "Algeria 2" -> "القنوات الجزائرية"
         "Sky News Arabia", "العربية", "الجزيرة" -> "القنوات الإخبارية"
         "ثمانية 1", "ثمانية 2", "ثمانية 3" -> "ثمانية"
         "STARZPLAY 1", "STARZPLAY 2", "STARZPLAY 3" -> "STARZPLAY"
@@ -3203,6 +3210,8 @@ private fun isDashStreamUrl(url: String): Boolean {
             channelName.equals("MBC Iraq", ignoreCase = true) -> R.drawable.mbc_iraq
             channelName.equals("MBC Bollywood", ignoreCase = true) -> R.drawable.mbc_bollywood
             channelName.equals("National Geographic", ignoreCase = true) -> R.drawable.national_geographic
+            channelName.equals("Algeria 1", ignoreCase = true) -> R.drawable.algeria_1
+            channelName.equals("Algeria 2", ignoreCase = true) -> R.drawable.algeria_2
             channelName.equals("Sky News Arabia", ignoreCase = true) -> R.drawable.skynewsarabia
             channelName.equals("العربية", ignoreCase = true) -> R.drawable.alarabiya
             channelName.equals("الجزيرة", ignoreCase = true) -> R.drawable.aljazeera
