@@ -138,6 +138,9 @@ class MainActivity : Activity() {
     private var showingServerManager = false
     private var embeddedPlayer: ExoPlayer? = null
     private var embeddedQualityControl: TextView? = null
+    // Quality adaptation runs locally in HANI TV; it never calls Hostinger.
+    private var autoQualityEnabled = false
+    private var lastAutoQualitySwitchAt = 0L
     private var embeddedHttpFactory: DefaultHttpDataSource.Factory? = null
     private var embeddedPlayerView: PlayerView? = null
     private var embeddedDialog: Dialog? = null
@@ -1788,6 +1791,10 @@ private fun launchPlayer(options: List<StreamSource>, selectedIndex: Int = 0) {
     // between channel taps.
     currentOptions = options
     currentServerIndex = selectedIndex.coerceIn(0, options.lastIndex)
+    // Grouped-quality sources start in Auto mode by default. Legacy single-URL
+    // sources retain their previous behavior and use ExoPlayer's track selector.
+    autoQualityEnabled = currentOptions.getOrNull(currentServerIndex)?.qualityUrls?.isNotBlank() == true
+    lastAutoQualitySwitchAt = 0L
 
     if (playerAlreadyOpen) {
         // Update the selected channel card without rebuilding the entire player UI.
@@ -2063,23 +2070,24 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
         val soundControl = playerControl("◖))", "كتم الصوت واستعادته") {
             embeddedPlayer?.let { player -> player.volume = if (player.volume > 0f) 0f else 1f }
         }
-        val qualityControl = playerControl("…", "اختيار جودة الفيديو") {
+        val qualityControl = playerControl("Auto", "اختيار الجودة التلقائية أو اليدوية") {
             val activeSource = currentOptions.getOrNull(currentServerIndex)
             val groupedQualities = activeSource?.let { parseQualityUrls(it.qualityUrls) }.orEmpty()
             if (groupedQualities.isNotEmpty()) {
-                val labels = groupedQualities.keys.toList()
+                val labels = listOf("Auto") + groupedQualities.keys.toList()
                 AlertDialog.Builder(this)
                     .setTitle("جودة الفيديو")
-                    .setItems(labels.map { label -> "$label  ·  ${qualityResolution(label)}" }.toTypedArray()) { _, which ->
+                    .setItems(labels.map { label ->
+                        if (label == "Auto") "Auto  ·  حسب سرعة الإنترنت" else "$label  ·  ${qualityResolution(label)}"
+                    }.toTypedArray()) { _, which ->
                         val selectedLabel = labels[which]
-                        val selectedUrl = groupedQualities[selectedLabel] ?: return@setItems
-                        val original = currentOptions.getOrNull(currentServerIndex) ?: return@setItems
-                        currentOptions = currentOptions.toMutableList().also { list ->
-                            list[currentServerIndex] = original.copy(url = selectedUrl)
+                        if (selectedLabel == "Auto") {
+                            autoQualityEnabled = true
+                            applyAutomaticQuality(force = true)
+                        } else {
+                            autoQualityEnabled = false
+                            applyGroupedQuality(selectedLabel)
                         }
-                        switchServerInsidePlayer(currentServerIndex)
-                        embeddedQualityControl?.text = selectedLabel
-                        embeddedQualityControl?.contentDescription = "الجودة المحددة: $selectedLabel"
                     }
                     .setNegativeButton("إلغاء", null)
                     .show()
@@ -2361,8 +2369,10 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
         exo.addListener(object : Player.Listener {
             override fun onVideoSizeChanged(videoSize: VideoSize) {
                 val label = classifyVideoQuality(videoSize.width, videoSize.height)
-                qualityControl.text = label
-                qualityControl.contentDescription = if (label == "—") {
+                qualityControl.text = if (autoQualityEnabled) "Auto" else label
+                qualityControl.contentDescription = if (autoQualityEnabled) {
+                    "الجودة التلقائية مفعلة؛ الجودة الحالية $label"
+                } else if (label == "—") {
                     "جودة الفيديو غير محددة؛ اضغط لاختيار الجودة"
                 } else {
                     "الجودة المكتشفة $label؛ اضغط لاختيار الجودة"
@@ -2376,11 +2386,29 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
                     else -> loadingIndicator?.visibility ?: View.GONE
                 }
                 if (playbackState == Player.STATE_READY) {
+                    if (autoQualityEnabled && lastAutoQualitySwitchAt == 0L) {
+                        // Wait until the stream is ready before changing to the locally
+                        // estimated best URL, avoiding extra work during initial setup.
+                        playerHandler.postDelayed({
+                            if (embeddedPlayer === exo && embeddedDialog?.isShowing == true && autoQualityEnabled) {
+                                applyAutomaticQuality(force = true)
+                            }
+                        }, 1200L)
+                    }
                     startupTimeout?.let { playerHandler.removeCallbacks(it) }
                     startupTimeout = null
                     failoverCount = 0
                     sameServerRetryUsed = false
                 } else if (playbackState == Player.STATE_BUFFERING) {
+                    // If separate quality URLs are used, a sustained buffering event can
+                    // lower quality locally without contacting Hostinger.
+                    if (autoQualityEnabled) {
+                        playerHandler.postDelayed({
+                            if (embeddedPlayer === exo && exo.playbackState == Player.STATE_BUFFERING) {
+                                applyAutomaticQuality(force = false, preferLower = true)
+                            }
+                        }, 4500L)
+                    }
                     startupTimeout?.let { playerHandler.removeCallbacks(it) }
                     val timeout = Runnable {
                         if (embeddedPlayer === exo && exo.playbackState == Player.STATE_BUFFERING && !exo.isPlaying) {
@@ -2475,6 +2503,72 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
             }
         }
         return headers
+    }
+
+    /** Apply a user-selected quality URL; all decisions and switching stay on-device. */
+    private fun applyGroupedQuality(label: String) {
+        val source = currentOptions.getOrNull(currentServerIndex) ?: return
+        val url = parseQualityUrls(source.qualityUrls)[label] ?: return
+        if (source.url != url) {
+            currentOptions = currentOptions.toMutableList().also { it[currentServerIndex] = source.copy(url = url) }
+            switchServerInsidePlayer(currentServerIndex)
+        }
+        embeddedQualityControl?.text = label
+        embeddedQualityControl?.contentDescription = "الجودة المحددة يدويًا: $label"
+    }
+
+    /**
+     * Estimate available downstream capacity from Android's active network capabilities.
+     * This is a device-side estimate only; it performs no speed-test requests and makes
+     * no calls to Hostinger. During buffering Auto can conservatively step down a level.
+     */
+    private fun estimatedDownstreamKbps(): Int {
+        return try {
+            val cm = getSystemService(CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return 0
+            val network = cm.activeNetwork ?: return 0
+            val caps = cm.getNetworkCapabilities(network) ?: return 0
+            caps.linkDownstreamBandwidthKbps.coerceAtLeast(0)
+        } catch (_: Exception) { 0 }
+    }
+
+    private fun applyAutomaticQuality(force: Boolean = false, preferLower: Boolean = false) {
+        val source = currentOptions.getOrNull(currentServerIndex) ?: return
+        val qualities = parseQualityUrls(source.qualityUrls)
+        if (qualities.isEmpty()) return
+        val labels = supportedQualityLabels.filter { qualities.containsKey(it) }
+        if (labels.isEmpty()) return
+
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (!force && now - lastAutoQualitySwitchAt < 20_000L) return
+
+        val bandwidthKbps = estimatedDownstreamKbps()
+        // Conservative target bitrates with headroom for audio, protocol overhead and fluctuations.
+        val preferred = when {
+            bandwidthKbps >= 25000 -> "4K"
+            bandwidthKbps >= 8000 -> "FHD"
+            bandwidthKbps >= 3000 -> "HD"
+            else -> "SD"
+        }
+        val preferredIndex = supportedQualityLabels.indexOf(preferred).coerceAtLeast(0)
+        val currentLabel = labels.firstOrNull { qualities[it] == source.url }
+        val target = if (preferLower && currentLabel != null) {
+            val currentIndex = supportedQualityLabels.indexOf(currentLabel).coerceAtLeast(0)
+            labels.filter { supportedQualityLabels.indexOf(it) < currentIndex }.maxByOrNull {
+                supportedQualityLabels.indexOf(it)
+            } ?: labels.first()
+        } else {
+            labels.filter { supportedQualityLabels.indexOf(it) <= preferredIndex }.maxByOrNull {
+                supportedQualityLabels.indexOf(it)
+            } ?: labels.first()
+        }
+        val targetUrl = qualities[target] ?: return
+        if (source.url != targetUrl) {
+            currentOptions = currentOptions.toMutableList().also { it[currentServerIndex] = source.copy(url = targetUrl) }
+            lastAutoQualitySwitchAt = now
+            switchServerInsidePlayer(currentServerIndex)
+        }
+        embeddedQualityControl?.text = "Auto"
+        embeddedQualityControl?.contentDescription = "الجودة التلقائية مفعلة؛ الجودة المختارة $target"
     }
 
     private fun isUsingMobileData(): Boolean {
@@ -2745,6 +2839,8 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
         embeddedPlayer?.release()
         embeddedPlayer = null
         embeddedQualityControl = null
+        autoQualityEnabled = false
+        lastAutoQualitySwitchAt = 0L
         embeddedHttpFactory = null
         embeddedPlayerView = null
         loadingIndicator = null
