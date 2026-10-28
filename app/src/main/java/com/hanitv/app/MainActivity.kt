@@ -181,7 +181,10 @@ class MainActivity : Activity() {
         val drmScheme: String = "",
         val playerType: String = "Exo Player",
         val keyId: String = "",
-        val key: String = ""
+        val key: String = "",
+        // Optional quality-to-URL map for one server entry (SD/HD/FHD/4K).
+        // Empty means this is a legacy single-URL server and behaves exactly as before.
+        val qualityUrls: String = ""
     )
 
     private val channelGroups = linkedMapOf(
@@ -2038,12 +2041,33 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
         val soundControl = playerControl("◖))", "كتم الصوت واستعادته") {
             embeddedPlayer?.let { player -> player.volume = if (player.volume > 0f) 0f else 1f }
         }
-        val qualityControl = playerControl("…", "جودة الفيديو غير محددة؛ اضغط لاختيار الجودة") {
-            embeddedPlayer?.let { player ->
-                TrackSelectionDialogBuilder(this, "جودة الفيديو", player, C.TRACK_TYPE_VIDEO)
-                    .setAllowAdaptiveSelections(true)
-                    .build()
+        val qualityControl = playerControl("…", "اختيار جودة الفيديو") {
+            val activeSource = currentOptions.getOrNull(currentServerIndex)
+            val groupedQualities = activeSource?.let { parseQualityUrls(it.qualityUrls) }.orEmpty()
+            if (groupedQualities.isNotEmpty()) {
+                val labels = groupedQualities.keys.toList()
+                AlertDialog.Builder(this)
+                    .setTitle("جودة الفيديو")
+                    .setItems(labels.map { label -> "$label  ·  ${qualityResolution(label)}" }.toTypedArray()) { _, which ->
+                        val selectedLabel = labels[which]
+                        val selectedUrl = groupedQualities[selectedLabel] ?: return@setItems
+                        val original = currentOptions.getOrNull(currentServerIndex) ?: return@setItems
+                        currentOptions = currentOptions.toMutableList().also { list ->
+                            list[currentServerIndex] = original.copy(url = selectedUrl)
+                        }
+                        switchServerInsidePlayer(currentServerIndex)
+                        embeddedQualityControl?.text = selectedLabel
+                        embeddedQualityControl?.contentDescription = "الجودة المحددة: $selectedLabel"
+                    }
+                    .setNegativeButton("إلغاء", null)
                     .show()
+            } else {
+                embeddedPlayer?.let { player ->
+                    TrackSelectionDialogBuilder(this, "جودة الفيديو", player, C.TRACK_TYPE_VIDEO)
+                        .setAllowAdaptiveSelections(true)
+                        .build()
+                        .show()
+                }
             }
         }
         embeddedQualityControl = qualityControl
@@ -2756,7 +2780,11 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
         manageImages.setOnClickListener { requireAdmin { showChannelImageManager() } }
         actions.addView(add, LinearLayout.LayoutParams(0, -2, 1f).apply { setMargins(0, 0, dp(4), 0) })
         actions.addView(manageImages, LinearLayout.LayoutParams(0, -2, 1f).apply { setMargins(dp(4), 0, 0, 0) })
-        content.addView(actions, fullWidthParams().apply { bottomMargin = dp(10) })
+        content.addView(actions, fullWidthParams().apply { bottomMargin = dp(8) })
+
+        val addQualityGroup = makeButton("＋ إضافة سيرفر واحد بعدة جودات")
+        addQualityGroup.setOnClickListener { requireAdmin { showAddQualitySourceDialog() } }
+        content.addView(addQualityGroup, fullWidthParams().apply { bottomMargin = dp(10) })
 
         val updateBannerAdmin = makeButton("إدارة شريط التحديثات والإصدار")
         updateBannerAdmin.setOnClickListener { requireAdmin { showUpdateBannerManager() } }
@@ -2844,13 +2872,18 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
                         top.addView(TextView(this).apply { text = "⠿"; textSize = 20f; setTextColor(purple); setPadding(dp(3), 0, dp(10), 0); contentDescription = "اسحب لإعادة الترتيب" })
                         val details = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
                         details.addView(TextView(this).apply { text = source.displayName.ifBlank { source.serverName }; textSize = 13f; setTextColor(white); setTypeface(null, Typeface.BOLD) })
-                        details.addView(TextView(this).apply { text = source.url; textSize = 10f; setTextColor(gray); maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.MIDDLE })
+                        details.addView(TextView(this).apply {
+                            val qualityLabels = parseQualityUrls(source.qualityUrls).keys.joinToString(" · ")
+                            text = if (qualityLabels.isNotBlank()) "الجودات: $qualityLabels" else source.url
+                            textSize = 10f; setTextColor(gray); maxLines = 1
+                            ellipsize = android.text.TextUtils.TruncateAt.MIDDLE
+                        })
                         top.addView(details, LinearLayout.LayoutParams(0, -2, 1f))
                         val copy = TextView(this).apply { text = "نسخ"; textSize = 11f; setTextColor(purple); setPadding(dp(7), dp(8), dp(7), dp(8)); setOnClickListener { val clipboard = getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager; clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Stream URL", source.url)); Toast.makeText(this@MainActivity, "تم نسخ الرابط", Toast.LENGTH_SHORT).show() } }
                         top.addView(copy)
                         row.addView(top)
                         val rowActions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-                        val edit = TextView(this).apply { text = "تعديل الإعدادات"; textSize = 11f; setTextColor(purple); setPadding(dp(8), dp(7), dp(12), dp(4)); setOnClickListener { requireAdmin { val idx = sources.indexOf(source); if (idx >= 0) showAddSourceDialog(sources[idx], idx) } } }
+                        val edit = TextView(this).apply { text = "تعديل الإعدادات"; textSize = 11f; setTextColor(purple); setPadding(dp(8), dp(7), dp(12), dp(4)); setOnClickListener { requireAdmin { val idx = sources.indexOf(source); if (idx >= 0) { if (sources[idx].qualityUrls.isNotBlank()) showAddQualitySourceDialog(sources[idx], idx) else showAddSourceDialog(sources[idx], idx) } } } }
                         val moveUp = TextView(this).apply { text = "↑"; textSize = 18f; setTextColor(white); setPadding(dp(10), dp(4), dp(10), dp(4)); setOnClickListener { requireAdmin { val idx = sources.indexOf(source); val prev = (idx - 1).coerceAtLeast(0); if (idx > 0 && sources[prev].channel == source.channel) { java.util.Collections.swap(sources, idx, prev); saveSources(); saveSourcesToCloud(); renderList() } } } }
                         val moveDown = TextView(this).apply { text = "↓"; textSize = 18f; setTextColor(white); setPadding(dp(8), dp(4), dp(8), dp(4)); setOnClickListener { requireAdmin { val idx = sources.indexOf(source); val next = (idx + 1).coerceAtMost(sources.lastIndex); if (idx >= 0 && next < sources.size && sources[next].channel == source.channel) { java.util.Collections.swap(sources, idx, next); saveSources(); saveSourcesToCloud(); renderList() } } } }
                         val delete = TextView(this).apply { text = "حذف"; textSize = 11f; setTextColor(Color.rgb(255, 110, 125)); setPadding(dp(8), dp(7), dp(8), dp(4)); setOnClickListener { requireAdmin { AlertDialog.Builder(this@MainActivity).setMessage("حذف ${source.serverName} من $channel؟").setPositiveButton("حذف") { _, _ -> val idx = sources.indexOf(source); if (idx >= 0) { sources.removeAt(idx); saveSources(); saveSourcesToCloud(); renderList() } }.setNegativeButton("إلغاء", null).show() } } }
@@ -3551,6 +3584,156 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
         }
     }
 
+    private val supportedQualityLabels = listOf("SD", "HD", "FHD", "4K")
+
+    private fun qualityResolution(label: String): String = when (label) {
+        "SD" -> "480p"
+        "HD" -> "720p"
+        "FHD" -> "1080p"
+        "4K" -> "2160p"
+        else -> label
+    }
+
+    private fun parseQualityUrls(raw: String): LinkedHashMap<String, String> {
+        val result = linkedMapOf<String, String>()
+        if (raw.isBlank()) return result
+        try {
+            val json = JSONObject(raw)
+            supportedQualityLabels.forEach { label ->
+                val url = json.optString(label, "").trim()
+                if (url.startsWith("http://", true) || url.startsWith("https://", true)) result[label] = url
+            }
+        } catch (_: Exception) {
+            // Invalid/old data is ignored; the ordinary single URL remains usable.
+        }
+        return result
+    }
+
+    /** New, separate editor for a single server record that contains several quality URLs. */
+    private fun showAddQualitySourceDialog(existing: StreamSource? = null, editIndex: Int = -1, channelName: String? = null) {
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(8), dp(20), 0)
+        }
+        fun field(hint: String, value: String = "", multiline: Boolean = false): EditText {
+            return EditText(this).apply {
+                this.hint = hint
+                setText(value)
+                setTextColor(white)
+                setHintTextColor(gray)
+                textSize = 15f
+                setSingleLine(!multiline)
+                if (multiline) {
+                    inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
+                    minLines = 2
+                    maxLines = 4
+                    gravity = Gravity.TOP or Gravity.START
+                }
+            }.also { box.addView(it) }
+        }
+        val channelNames = (
+            channelGroups.values.flatten().map { it.first } +
+                listOfNotNull(existing?.channel?.trim(), channelName?.trim())
+            ).filter { it.isNotBlank() }.distinct()
+
+        box.addView(TextView(this).apply {
+            text = "اسم القناة — اختر من القائمة"
+            textSize = 13f
+            setTextColor(gray)
+            setPadding(0, dp(8), 0, dp(4))
+        })
+        val channelInput = Spinner(this).apply {
+            adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_item, channelNames).also {
+                it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+            }
+            val selectedName = existing?.channel ?: channelName
+            val selectedIndex = channelNames.indexOfFirst { it == selectedName }
+            setSelection(if (selectedIndex >= 0) selectedIndex else 0)
+        }
+        box.addView(channelInput, fullWidthParams())
+
+        val serverInput = field("اسم السيرفر (مثال: السيرفر متعدد الجودات)", existing?.serverName ?: "السيرفر متعدد الجودات")
+        val displayNameInput = field("الاسم الذي يظهر داخل المشغّل", existing?.displayName ?: existing?.serverName ?: "السيرفر متعدد الجودات")
+        box.addView(TextView(this).apply {
+            text = "روابط الجودات لهذا السيرفر الواحد"
+            textSize = 13f
+            setTextColor(Color.rgb(169, 112, 245))
+            setPadding(0, dp(12), 0, dp(3))
+        })
+        val oldQualities = parseQualityUrls(existing?.qualityUrls.orEmpty())
+        val qualityInputs = linkedMapOf<String, EditText>()
+        supportedQualityLabels.forEach { label ->
+            qualityInputs[label] = field("رابط $label (${qualityResolution(label)})", oldQualities[label] ?: "")
+        }
+        val refererInput = field("Referer (اختياري)", existing?.referer ?: "")
+        val userAgentInput = field("User-Agent (اختياري)", existing?.userAgent ?: "")
+        val cookieInput = field("Cookie (اختياري)", existing?.cookie ?: "")
+        val authorizationInput = field("Authorization (اختياري)", existing?.authorization ?: "")
+        val extraHeadersInput = field("Headers إضافية: اسم: قيمة (كل سطر منفصل)", existing?.extraHeaders ?: "", multiline = true)
+        val licenseUrlInput = field("License URL (اختياري)", existing?.licenseUrl ?: "")
+        val schemeInput = field("Scheme (مثال: widevine / clearkey)", existing?.scheme ?: "")
+        val keyIdInput = field("Key ID (اختياري)", existing?.keyId ?: "")
+        val keyInput = field("Key (اختياري)", existing?.key ?: "")
+        val playerTypeInput = field("نوع المشغّل: Exo Player أو Web Player", existing?.playerType ?: "Exo Player")
+        val formScroll = ScrollView(this).apply { isFillViewport = true; addView(box) }
+
+        AlertDialog.Builder(this)
+            .setTitle(if (existing == null) "إضافة سيرفر متعدد الجودات" else "تعديل السيرفر متعدد الجودات")
+            .setView(formScroll)
+            .setPositiveButton("حفظ", null)
+            .setNegativeButton("إلغاء", null)
+            .create().also { dialog ->
+                dialog.setOnShowListener {
+                    dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                        val channel = channelInput.selectedItem?.toString()?.trim().orEmpty()
+                        val server = serverInput.text.toString().trim()
+                        val displayName = displayNameInput.text.toString().trim()
+                        val qualityJson = JSONObject()
+                        for ((label, input) in qualityInputs) {
+                            val value = input.text.toString().trim()
+                            if (value.isNotBlank()) {
+                                if (!(value.startsWith("http://", true) || value.startsWith("https://", true))) {
+                                    Toast.makeText(this, "رابط جودة $label يجب أن يبدأ بـ http:// أو https://", Toast.LENGTH_LONG).show()
+                                    return@setOnClickListener
+                                }
+                                qualityJson.put(label, value)
+                            }
+                        }
+                        if (channel.isBlank() || server.isBlank() || qualityJson.length() == 0) {
+                            Toast.makeText(this, "اختر القناة واسم السيرفر وأدخل رابط جودة واحدًا على الأقل.", Toast.LENGTH_LONG).show()
+                            return@setOnClickListener
+                        }
+                        val qualities = parseQualityUrls(qualityJson.toString())
+                        val defaultUrl = qualities["HD"] ?: qualities["FHD"] ?: qualities["SD"] ?: qualities["4K"] ?: qualities.values.firstOrNull().orEmpty()
+                        val item = StreamSource(
+                            channel = channel,
+                            serverName = server,
+                            url = defaultUrl,
+                            referer = refererInput.text.toString().trim(),
+                            displayName = displayName.ifBlank { server },
+                            userAgent = userAgentInput.text.toString().trim(),
+                            cookie = cookieInput.text.toString().trim(),
+                            authorization = authorizationInput.text.toString().trim(),
+                            extraHeaders = extraHeadersInput.text.toString().trim(),
+                            licenseUrl = licenseUrlInput.text.toString().trim(),
+                            scheme = schemeInput.text.toString().trim(),
+                            drmScheme = existing?.drmScheme ?: "",
+                            playerType = playerTypeInput.text.toString().trim().ifBlank { "Exo Player" },
+                            keyId = keyIdInput.text.toString().trim(),
+                            key = keyInput.text.toString().trim(),
+                            qualityUrls = qualityJson.toString()
+                        )
+                        if (editIndex >= 0 && editIndex < sources.size) sources[editIndex] = item else sources.add(item)
+                        saveSources()
+                        saveSourcesToCloud()
+                        dialog.dismiss()
+                        showServerManager()
+                    }
+                }
+                dialog.show()
+            }
+    }
+
     private fun showAddSourceDialog(existing: StreamSource? = null, editIndex: Int = -1, channelName: String? = null) {
         val box = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -3701,7 +3884,8 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
                     item.optString("drmScheme", ""),
                     item.optString("playerType", "Exo Player"),
                     item.optString("keyId", ""),
-                    item.optString("key", "")
+                    item.optString("key", ""),
+                    item.optString("qualityUrls", "")
                 ))
             }
         } catch (_: Exception) {
@@ -3728,6 +3912,7 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
                 put("playerType", source.playerType)
                 put("keyId", source.keyId)
                 put("key", source.key)
+                put("qualityUrls", source.qualityUrls)
             })
         }
         prefs.edit().putString("sources_json", array.toString()).apply()
@@ -3852,7 +4037,8 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
                             item.optString("drmScheme", ""),
                             item.optString("playerType", "Exo Player"),
                             item.optString("keyId", ""),
-                            item.optString("key", "")
+                            item.optString("key", ""),
+                            item.optString("qualityUrls", "")
                         ))
                     }
                     // Preserve locally saved DRM fields if Hostinger still returns an older
@@ -3870,7 +4056,8 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
                             scheme = remote.scheme.ifBlank { local.scheme },
                             drmScheme = remote.drmScheme.ifBlank { local.drmScheme },
                             keyId = remote.keyId.ifBlank { local.keyId },
-                            key = remote.key.ifBlank { local.key }
+                            key = remote.key.ifBlank { local.key },
+                            qualityUrls = remote.qualityUrls.ifBlank { local.qualityUrls }
                         )
                     }
 
@@ -4039,6 +4226,7 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
                 put("playerType", source.playerType)
                 put("keyId", source.keyId)
                 put("key", source.key)
+                put("qualityUrls", source.qualityUrls)
             })
         }
         val payload = JSONObject().put("sources", list).toString()
