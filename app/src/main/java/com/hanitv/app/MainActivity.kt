@@ -255,7 +255,9 @@ class MainActivity : Activity() {
         ),
         "القنوات المغربية" to listOf(
             "Al Aoula" to "ALAOULA",
-            "Laayoune" to "LAAYOUNE"
+            "Laayoune" to "LAAYOUNE",
+            "Arryadia" to "ARRYADIA",
+            "2M" to "2M"
         ),
         "القنوات العربية والثقافية" to listOf(
             "MBC 1" to "MBC1",
@@ -271,6 +273,11 @@ class MainActivity : Activity() {
             "MBC Iraq" to "IRAQ",
             "MBC Bollywood" to "BOLLY",
             "National Geographic" to "NATGEO",
+            // Egyptian sports channels are kept in the built-in channel registry,
+            // but are displayed only inside the Egypt country section.
+            "ON Sport" to "ONSPORT",
+            "ON Sport Plus" to "ONSPORTPLUS",
+            "ON Sport Max" to "ONSPORTMAX",
             "قناة عربية 1" to "AR",
             "قناة عربية 2" to "A2",
             "قناة عربية 3" to "A3",
@@ -1091,7 +1098,14 @@ class MainActivity : Activity() {
             )
             "القنوات المغربية" -> listOf(
                 "Al Aoula" to "ALAOULA",
-                "Laayoune" to "LAAYOUNE"
+                "Laayoune" to "LAAYOUNE",
+                "Arryadia" to "ARRYADIA",
+                "2M" to "2M"
+            )
+            "القنوات المصرية" -> listOf(
+                "ON Sport" to "ONSPORT",
+                "ON Sport Plus" to "ONSPORTPLUS",
+                "ON Sport Max" to "ONSPORTMAX"
             )
             "قنوات الترفيه" -> entertainmentChannels
             else -> {
@@ -2998,7 +3012,8 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
         "National Geographic" -> "القنوات العربية والثقافية"
         "Algeria 1", "Algeria 2", "Algeria 3", "Algeria 5", "Algeria 6",
         "AL24 News", "El Heddaf", "Ennahar" -> "القنوات الجزائرية"
-        "Al Aoula", "Laayoune" -> "القنوات المغربية"
+        "Al Aoula", "Laayoune", "Arryadia", "2M" -> "القنوات المغربية"
+        "ON Sport", "ON Sport Plus", "ON Sport Max" -> "القنوات المصرية"
         "Sky News Arabia", "العربية", "الجزيرة" -> "القنوات الإخبارية"
         "ثمانية 1", "ثمانية 2", "ثمانية 3" -> "ثمانية"
         "STARZPLAY 1", "STARZPLAY 2", "STARZPLAY 3" -> "STARZPLAY"
@@ -3351,6 +3366,11 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
             channelName.equals("Ennahar", ignoreCase = true) -> R.drawable.ennahar
             channelName.equals("Al Aoula", ignoreCase = true) -> R.drawable.al_aoula
             channelName.equals("Laayoune", ignoreCase = true) -> R.drawable.laayoune
+            channelName.equals("Arryadia", ignoreCase = true) -> R.drawable.arryadia
+            channelName.equals("2M", ignoreCase = true) -> R.drawable.channel_2m
+            channelName.equals("ON Sport", ignoreCase = true) -> R.drawable.on_sport_final
+            channelName.equals("ON Sport Plus", ignoreCase = true) -> R.drawable.on_sport_plus_final
+            channelName.equals("ON Sport Max", ignoreCase = true) -> R.drawable.on_sport_max_final
             channelName.equals("Sky News Arabia", ignoreCase = true) -> R.drawable.skynewsarabia
             channelName.equals("العربية", ignoreCase = true) -> R.drawable.alarabiya
             channelName.equals("الجزيرة", ignoreCase = true) -> R.drawable.aljazeera
