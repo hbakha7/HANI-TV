@@ -1074,17 +1074,24 @@ class MainActivity : Activity() {
             "Movies Action" to "MOVIESACTION",
             "Star Action" to "STARACTION"
         )
-        val channels = if (category == "قنوات الترفيه") {
-            entertainmentChannels
-        } else {
-            (predefinedChannels + configuredChannels)
-                .distinctBy { it.first }
-                .filter { (name, _) ->
-                    val belongsToCategory =
-                        (builtInBrandCategoryFor(name) ?: channelCategories[name] ?: defaultCategoryFor(name)) == category
-                    belongsToCategory && !(category == "القنوات العربية والثقافية" &&
-                        (isMbcChannel(name) || isArabicPlaceholderChannel(name) || isSportsChannel(name)))
-                }
+        val channels = when (category) {
+            // Keep these two built-in channels visible even when the cloud category map
+            // has not synced yet or contains a different category label.
+            "القنوات الجزائرية" -> listOf(
+                "Algeria 1" to "ALGERIA1",
+                "Algeria 2" to "ALGERIA2"
+            )
+            "قنوات الترفيه" -> entertainmentChannels
+            else -> {
+                (predefinedChannels + configuredChannels)
+                    .distinctBy { it.first }
+                    .filter { (name, _) ->
+                        val belongsToCategory =
+                            (builtInBrandCategoryFor(name) ?: channelCategories[name] ?: defaultCategoryFor(name)) == category
+                        belongsToCategory && !(category == "القنوات العربية والثقافية" &&
+                            (isMbcChannel(name) || isArabicPlaceholderChannel(name) || isSportsChannel(name)))
+                    }
+            }
         }
 
         val grid = LinearLayout(this).apply {
