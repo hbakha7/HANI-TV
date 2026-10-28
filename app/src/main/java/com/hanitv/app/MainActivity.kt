@@ -292,9 +292,11 @@ class MainActivity : Activity() {
             "أخبار 3" to "N3"
         ),
         "قنوات الأطفال" to listOf(
-            "أطفال 1" to "K1",
-            "أطفال 2" to "K2",
-            "أطفال 3" to "K3"
+            "Disney OSN" to "DISNEYOSN",
+            "Spacetoon" to "SPACETOON",
+            "Cartoon Network" to "CN",
+            // MBC 3 stays in the MBC section and is also listed here for children.
+            "MBC 3" to "MBC3"
         ),
         "قنوات الترفيه" to listOf(
             "MBC Action" to "ACTION",
@@ -1108,6 +1110,9 @@ class MainActivity : Activity() {
                 "ON Sport Max" to "ONSPORTMAX"
             )
             "قنوات الترفيه" -> entertainmentChannels
+            // Explicit child lineup is needed because MBC 3 is intentionally shared
+            // with the MBC section and the global channel registry removes duplicates.
+            "قنوات الأطفال" -> channelGroups["قنوات الأطفال"].orEmpty()
             else -> {
                 predefinedChannels
                     .filter { (name, _) ->
@@ -3355,6 +3360,9 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
             channelName.equals("MBC Masr 2", ignoreCase = true) -> R.drawable.mbc_masr_2
             channelName.equals("MBC Iraq", ignoreCase = true) -> R.drawable.mbc_iraq
             channelName.equals("MBC Bollywood", ignoreCase = true) -> R.drawable.mbc_bollywood
+            channelName.equals("Disney OSN", ignoreCase = true) -> R.drawable.disney_osn
+            channelName.equals("Spacetoon", ignoreCase = true) -> R.drawable.stoon_logo
+            channelName.equals("Cartoon Network", ignoreCase = true) -> R.drawable.cn
             channelName.equals("National Geographic", ignoreCase = true) -> R.drawable.national_geographic
             channelName.equals("Algeria 1", ignoreCase = true) -> R.drawable.algeria_1
             channelName.equals("Algeria 2", ignoreCase = true) -> R.drawable.algeria_2
