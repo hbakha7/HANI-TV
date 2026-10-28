@@ -1264,9 +1264,9 @@ class MainActivity : Activity() {
         }
         poster.addView(ImageView(this).apply {
             setImageResource(R.drawable.algeria)
-            scaleType = ImageView.ScaleType.FIT_CENTER
+            scaleType = ImageView.ScaleType.CENTER_CROP
             contentDescription = "علم الجزائر"
-            setPadding(dp(18), dp(12), dp(18), dp(12))
+            setPadding(0, 0, 0, 0)
         }, FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.MATCH_PARENT
@@ -1334,9 +1334,9 @@ class MainActivity : Activity() {
         }
         poster.addView(ImageView(this).apply {
             setImageResource(imageRes)
-            scaleType = ImageView.ScaleType.FIT_CENTER
+            scaleType = ImageView.ScaleType.CENTER_CROP
             contentDescription = title
-            setPadding(dp(18), dp(12), dp(18), dp(12))
+            setPadding(0, 0, 0, 0)
         }, FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.MATCH_PARENT
