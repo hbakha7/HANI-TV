@@ -164,6 +164,7 @@ class MainActivity : Activity() {
     // Wait for the first Hostinger API read before opening a channel from stale local data.
     private var initialSourceSyncFinished = false
     private var pendingChannelToOpen: String? = null
+    private var isHomeScreenVisible = false
 
     private data class StreamSource(
         val channel: String,
@@ -353,23 +354,26 @@ class MainActivity : Activity() {
 
         setContentView(root)
         loadSources()
-        // Do not render cached/default categories before Hostinger finishes syncing.
-        // syncFromCloud() renders the home screen after applying the latest category data.
-        syncFromCloud { finishInitialSourceSync() }
+
+        // Render the home screen immediately from bundled/local data so startup never
+        // waits for a network request. The cloud sync updates the data afterward.
+        showHome()
+        syncFromCloud { syncedSuccessfully -> finishInitialSourceSync(syncedSuccessfully) }
     }
 
-    private fun finishInitialSourceSync() {
+    private fun finishInitialSourceSync(refreshHome: Boolean) {
         initialSourceSyncFinished = true
         val pendingChannel = pendingChannelToOpen
         pendingChannelToOpen = null
         if (!pendingChannel.isNullOrBlank()) {
             openChannel(pendingChannel)
-        } else {
+        } else if (refreshHome && isHomeScreenVisible) {
             showHome()
         }
     }
 
     private fun showHome() {
+        isHomeScreenVisible = true
         // Home-screen redesign only. The existing header, player, and server-management
         // functions are intentionally left unchanged.
         showingServerManager = false
@@ -751,6 +755,7 @@ class MainActivity : Activity() {
     }
 
     private fun showAllChannels() {
+        isHomeScreenVisible = false
         showingServerManager = false
         content.removeAllViews()
         applyChannelPageTheme()
@@ -829,6 +834,7 @@ class MainActivity : Activity() {
     }
 
     private fun showSportsSections() {
+        isHomeScreenVisible = false
         showingServerManager = false
         content.removeAllViews()
         applyChannelPageTheme()
@@ -982,6 +988,7 @@ class MainActivity : Activity() {
     }
 
     private fun showSportsBrandChannels(brand: String) {
+        isHomeScreenVisible = false
         ensureBuiltInBrandChannels()
         showingServerManager = false
         content.removeAllViews()
@@ -1033,6 +1040,7 @@ class MainActivity : Activity() {
     }
 
     private fun showChannels(category: String) {
+        isHomeScreenVisible = false
         ensureBuiltInBrandChannels()
         showingServerManager = false
         content.removeAllViews()
@@ -1200,6 +1208,7 @@ class MainActivity : Activity() {
     }
 
     private fun showMbcChannels() {
+        isHomeScreenVisible = false
         showingServerManager = false
         content.removeAllViews()
         applyChannelPageTheme()
@@ -2478,6 +2487,7 @@ private fun isDashStreamUrl(url: String): Boolean {
 
 
     private fun showServerManager() {
+        isHomeScreenVisible = false
         showingServerManager = true
         content.removeAllViews()
         content.setBackgroundColor(Color.TRANSPARENT)
@@ -2667,7 +2677,21 @@ private fun isDashStreamUrl(url: String): Boolean {
     private fun allCategories(): List<String> {
         val defaults = channelGroups.keys.map { normalizeCategoryName(it) }
         val remote = channelCategories.values.map { normalizeCategoryName(it) }.filter { it.isNotBlank() }
-        return (remote + defaults).distinct()
+        val available = (defaults + remote).filter { it.isNotBlank() }.distinct()
+
+        // Keep the home screen's main sections in a stable order even when the cloud
+        // API returns channels/categories in a different order during synchronization.
+        val preferredOrder = listOf(
+            "القنوات الرياضية",
+            "القنوات العربية والثقافية",
+            "القنوات الإخبارية",
+            "قنوات الأطفال",
+            "قنوات الترفيه",
+            "ثمانية",
+            "STARZPLAY",
+            "ALWAN"
+        )
+        return preferredOrder + available.filterNot { it in preferredOrder }
     }
 
     private fun builtInBrandCategoryFor(channelName: String): String? = when (channelName) {
@@ -2771,6 +2795,7 @@ private fun isDashStreamUrl(url: String): Boolean {
             ?: "القنوات العربية والثقافية"
 
     private fun showChannelImageManager() {
+        isHomeScreenVisible = false
         showingServerManager = true
         content.removeAllViews()
         content.setBackgroundColor(Color.TRANSPARENT)
@@ -3505,7 +3530,7 @@ private fun isDashStreamUrl(url: String): Boolean {
     }
 
     /** Read the shared channel/server list from Hostinger PHP API. */
-    private fun syncFromCloud(silent: Boolean = false, onComplete: (() -> Unit)? = null) {
+    private fun syncFromCloud(silent: Boolean = false, onComplete: ((Boolean) -> Unit)? = null) {
         networkExecutor.execute {
             var errorMessage: String? = null
             try {
@@ -3651,7 +3676,7 @@ private fun isDashStreamUrl(url: String): Boolean {
                             // the home screen once after the remote categories are applied.
                             showHome()
                         }
-                        onComplete?.invoke()
+                        onComplete?.invoke(true)
                     }
                 } else throw IllegalStateException(json.optString("error", "api_error"))
             } catch (e: Exception) {
@@ -3660,7 +3685,7 @@ private fun isDashStreamUrl(url: String): Boolean {
                     if (!silent) {
                         Toast.makeText(this, "تعذر تحميل القنوات حاليًا. تحقق من اتصالك بالإنترنت وحاول مجددًا.", Toast.LENGTH_LONG).show()
                     }
-                    onComplete?.invoke()
+                    onComplete?.invoke(false)
                 }
             }
         }
