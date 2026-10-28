@@ -240,8 +240,15 @@ class MainActivity : Activity() {
             "ALWAN 10" to "A10"
         ),
         "القنوات الجزائرية" to listOf(
+            // Mixed lineup by design; keep all Algerian channels in this section.
+            "Ennahar" to "ENNAHAR",
+            "Algeria 5" to "ALGERIA5",
+            "AL24 News" to "AL24",
+            "Algeria 2" to "ALGERIA2",
+            "El Heddaf" to "ELHEDDAF",
             "Algeria 1" to "ALGERIA1",
-            "Algeria 2" to "ALGERIA2"
+            "Algeria 6" to "ALGERIA6",
+            "Algeria 3" to "ALGERIA3"
         ),
         "القنوات العربية والثقافية" to listOf(
             "MBC 1" to "MBC1",
@@ -1078,8 +1085,15 @@ class MainActivity : Activity() {
             // Keep these two built-in channels visible even when the cloud category map
             // has not synced yet or contains a different category label.
             "القنوات الجزائرية" -> listOf(
+                // Deliberately mixed rather than numerically sorted, as requested.
+                "Ennahar" to "ENNAHAR",
+                "Algeria 5" to "ALGERIA5",
+                "AL24 News" to "AL24",
+                "Algeria 2" to "ALGERIA2",
+                "El Heddaf" to "ELHEDDAF",
                 "Algeria 1" to "ALGERIA1",
-                "Algeria 2" to "ALGERIA2"
+                "Algeria 6" to "ALGERIA6",
+                "Algeria 3" to "ALGERIA3"
             )
             "قنوات الترفيه" -> entertainmentChannels
             else -> {
@@ -2874,7 +2888,8 @@ private fun isDashStreamUrl(url: String): Boolean {
         "MBC 1", "MBC 2", "MBC 3", "MBC 4", "MBC 5", "MBC Action", "MBC Max",
         "MBC Drama", "MBC Masr 1", "MBC Masr 2", "MBC Iraq", "MBC Bollywood" -> "القنوات العربية والثقافية"
         "National Geographic" -> "القنوات العربية والثقافية"
-        "Algeria 1", "Algeria 2" -> "القنوات الجزائرية"
+        "Algeria 1", "Algeria 2", "Algeria 3", "Algeria 5", "Algeria 6",
+        "AL24 News", "El Heddaf", "Ennahar" -> "القنوات الجزائرية"
         "Sky News Arabia", "العربية", "الجزيرة" -> "القنوات الإخبارية"
         "ثمانية 1", "ثمانية 2", "ثمانية 3" -> "ثمانية"
         "STARZPLAY 1", "STARZPLAY 2", "STARZPLAY 3" -> "STARZPLAY"
@@ -3219,6 +3234,12 @@ private fun isDashStreamUrl(url: String): Boolean {
             channelName.equals("National Geographic", ignoreCase = true) -> R.drawable.national_geographic
             channelName.equals("Algeria 1", ignoreCase = true) -> R.drawable.algeria_1
             channelName.equals("Algeria 2", ignoreCase = true) -> R.drawable.algeria_2
+            channelName.equals("Algeria 3", ignoreCase = true) -> R.drawable.algeria_3
+            channelName.equals("Algeria 5", ignoreCase = true) -> R.drawable.algeria_5
+            channelName.equals("Algeria 6", ignoreCase = true) -> R.drawable.algeria_6
+            channelName.equals("AL24 News", ignoreCase = true) -> R.drawable.al24_news
+            channelName.equals("El Heddaf", ignoreCase = true) -> R.drawable.el_heddaf
+            channelName.equals("Ennahar", ignoreCase = true) -> R.drawable.ennahar
             channelName.equals("Sky News Arabia", ignoreCase = true) -> R.drawable.skynewsarabia
             channelName.equals("العربية", ignoreCase = true) -> R.drawable.alarabiya
             channelName.equals("الجزيرة", ignoreCase = true) -> R.drawable.aljazeera
