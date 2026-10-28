@@ -273,6 +273,7 @@ class MainActivity : Activity() {
             "MBC Iraq" to "IRAQ",
             "MBC Bollywood" to "BOLLY",
             "National Geographic" to "NATGEO",
+            "Al Jazeera Documentary" to "AJDOC",
             // Egyptian sports channels are kept in the built-in channel registry,
             // but are displayed only inside the Egypt country section.
             "ON Sport" to "ONSPORT",
@@ -287,6 +288,8 @@ class MainActivity : Activity() {
             "Sky News Arabia" to "SKY",
             "العربية" to "ALAR",
             "الجزيرة" to "JAZ",
+            "DW" to "DW",
+            "BBC News عربي" to "BBCNA",
             "أخبار 1" to "N1",
             "أخبار 2" to "N2",
             "أخبار 3" to "N3"
@@ -3014,7 +3017,8 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
     private fun builtInBrandCategoryFor(channelName: String): String? = when (channelName) {
         "MBC 1", "MBC 2", "MBC 3", "MBC 4", "MBC 5", "MBC Action", "MBC Max",
         "MBC Drama", "MBC Masr 1", "MBC Masr 2", "MBC Iraq", "MBC Bollywood" -> "القنوات العربية والثقافية"
-        "National Geographic" -> "القنوات العربية والثقافية"
+        "National Geographic", "Al Jazeera Documentary" -> "القنوات العربية والثقافية"
+        "DW", "BBC News عربي" -> "القنوات الإخبارية"
         "Algeria 1", "Algeria 2", "Algeria 3", "Algeria 5", "Algeria 6",
         "AL24 News", "El Heddaf", "Ennahar" -> "القنوات الجزائرية"
         "Al Aoula", "Laayoune", "Arryadia", "2M" -> "القنوات المغربية"
@@ -3050,12 +3054,15 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
                 "MBC Masr 2" to "MASR2",
                 "MBC Iraq" to "IRAQ",
                 "MBC Bollywood" to "BOLLY",
-                "National Geographic" to "NATGEO"
+                "National Geographic" to "NATGEO",
+                "Al Jazeera Documentary" to "AJDOC"
             ),
             "القنوات الإخبارية" to listOf(
                 "Sky News Arabia" to "SKY",
                 "العربية" to "ALAR",
-                "الجزيرة" to "JAZ"
+                "الجزيرة" to "JAZ",
+                "DW" to "DW",
+                "BBC News عربي" to "BBCNA"
             ),
             "ثمانية" to listOf(
                 "ثمانية 1" to "T1",
@@ -3364,6 +3371,9 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
             channelName.equals("Spacetoon", ignoreCase = true) -> R.drawable.stoon_logo
             channelName.equals("Cartoon Network", ignoreCase = true) -> R.drawable.cn
             channelName.equals("National Geographic", ignoreCase = true) -> R.drawable.national_geographic
+            channelName.equals("Al Jazeera Documentary", ignoreCase = true) -> R.drawable.al_jazeera_documentary
+            channelName.equals("DW", ignoreCase = true) -> R.drawable.dw
+            channelName.equals("BBC News عربي", ignoreCase = true) -> R.drawable.bbc_news_arabi
             channelName.equals("Algeria 1", ignoreCase = true) -> R.drawable.algeria_1
             channelName.equals("Algeria 2", ignoreCase = true) -> R.drawable.algeria_2
             channelName.equals("Algeria 3", ignoreCase = true) -> R.drawable.algeria_3
