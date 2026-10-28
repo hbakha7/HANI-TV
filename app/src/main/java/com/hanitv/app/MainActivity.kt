@@ -1103,6 +1103,17 @@ class MainActivity : Activity() {
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply { bottomMargin = dp(10) })
+
+            // Dedicated Algeria section, displayed as the next matching two-column poster card.
+            val algeriaRow = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.TOP
+            }
+            addAlgeriaSectionCard(algeriaRow)
+            grid.addView(algeriaRow, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { bottomMargin = dp(10) })
         }
 
         while (index < channels.size) {
@@ -1194,6 +1205,71 @@ class MainActivity : Activity() {
         ))
         card.addView(TextView(this).apply {
             text = "12 قناة"
+            textSize = 11f
+            gravity = Gravity.CENTER
+            setTextColor(Color.rgb(158, 160, 169))
+            maxLines = 1
+            setPadding(dp(2), dp(3), dp(2), 0)
+        }, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ))
+        row.addView(card, LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f
+        ).apply { setMargins(dp(5), 0, dp(5), 0) })
+    }
+
+    private fun addAlgeriaSectionCard(row: LinearLayout) {
+        val card = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+            setPadding(dp(3), dp(3), dp(3), dp(8))
+            setBackgroundColor(Color.TRANSPARENT)
+            isClickable = true
+            isFocusable = true
+            contentDescription = "القنوات الجزائرية"
+            setOnClickListener { showChannels("القنوات الجزائرية") }
+        }
+
+        val poster = FrameLayout(this).apply {
+            background = ChannelPosterDrawable("القنوات الجزائرية")
+            outlineProvider = object : android.view.ViewOutlineProvider() {
+                override fun getOutline(view: View, outline: android.graphics.Outline) {
+                    outline.setRoundRect(0, 0, view.width, view.height, dp(12).toFloat())
+                }
+            }
+            clipToOutline = true
+            foreground = GradientDrawable().apply {
+                cornerRadius = dp(12).toFloat()
+                setColor(Color.TRANSPARENT)
+                setStroke(dp(1), Color.argb(70, 235, 238, 245))
+            }
+            elevation = dp(2).toFloat()
+        }
+        poster.addView(ImageView(this).apply {
+            setImageResource(R.drawable.algeria)
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            contentDescription = "علم الجزائر"
+            setPadding(dp(18), dp(12), dp(18), dp(12))
+        }, FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.MATCH_PARENT
+        ))
+        card.addView(poster, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, dp(108)
+        ))
+        card.addView(TextView(this).apply {
+            text = "القنوات الجزائرية"
+            textSize = 14f
+            gravity = Gravity.CENTER
+            setTextColor(Color.rgb(245, 245, 247))
+            setTypeface(null, Typeface.BOLD)
+            maxLines = 2
+            setPadding(dp(2), dp(7), dp(2), 0)
+        }, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ))
+        card.addView(TextView(this).apply {
+            text = "قنوات الجزائر"
             textSize = 11f
             gravity = Gravity.CENTER
             setTextColor(Color.rgb(158, 160, 169))
