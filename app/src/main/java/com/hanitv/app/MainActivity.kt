@@ -4219,9 +4219,16 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
                         // Channel names, categories and logos are compiled into this APK.
                         // Hostinger is only a source of stream/server settings; never let a
                         // cloud response clear or replace the app's built-in channel catalogue.
-                        // Keep the last local list if the API returns no sources; otherwise
-                        // replace it with the shared Hostinger source list.
-                        if (downloaded.isNotEmpty()) {
+                        // SAFETY: if a local server edit has not yet been confirmed by
+                        // Hostinger, never replace that local list with an older cloud list.
+                        // This protects the admin's edits across app restarts.
+                        val hasPendingLocalSourceChanges =
+                            prefs.getBoolean("pending_sources_cloud_save", false)
+
+                        // Keep the local list if the API returns no sources, or while there
+                        // are unsynchronized local edits. Once a save succeeds, normal cloud
+                        // synchronization resumes for every app installation.
+                        if (downloaded.isNotEmpty() && !hasPendingLocalSourceChanges) {
                             val changed = downloaded != sources
                             if (changed) {
                                 sources.clear()
@@ -4354,8 +4361,11 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
     private fun saveSourcesToCloud(onComplete: (() -> Unit)? = null) {
         val key = adminApiKey
         if (key.isNullOrBlank()) {
+            // The local copy has already been saved by the caller. Mark it as pending
+            // so a later cloud read cannot overwrite it before an admin retries saving.
+            prefs.edit().putBoolean("pending_sources_cloud_save", true).apply()
             onComplete?.invoke()
-            Toast.makeText(this, "سجّل دخول الإدارة أولاً لحفظ التعديلات المشتركة.", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "حُفظت التعديلات على هذا الجهاز. أدخل مفتاح الإدارة عند التعديل التالي لإرسالها إلى جميع المستخدمين.", Toast.LENGTH_LONG).show()
             return
         }
         val list = JSONArray()
@@ -4406,12 +4416,17 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
             }
             runOnUiThread {
                 if (success) {
-                    Toast.makeText(this, "تم حفظ روابط القنوات بنجاح.", Toast.LENGTH_SHORT).show()
+                    // Only clear the pending marker after the API explicitly confirms
+                    // a successful response. The server list is now shared via Hostinger.
+                    prefs.edit().putBoolean("pending_sources_cloud_save", false).apply()
+                    Toast.makeText(this, "تم حفظ روابط القنوات على الخادم بنجاح، وستظهر للمستخدمين بعد المزامنة.", Toast.LENGTH_LONG).show()
                     onComplete?.invoke()
                 } else {
+                    // Keep local edits protected from a stale cloud download.
+                    prefs.edit().putBoolean("pending_sources_cloud_save", true).apply()
                     Toast.makeText(
                         this,
-                        "تم الاحتفاظ بالتعديلات على هذا الجهاز، لكن تعذر حفظها على الخادم. ستبقى البيانات المحلية محفوظة؛ تحقق من الاتصال وإعدادات API في Hostinger.",
+                        "حُفظت التعديلات على هذا الجهاز، لكن لم يؤكد الخادم حفظها. لن نستبدلها بالقائمة القديمة. تحقق من API ومفتاح الإدارة ثم أعد الحفظ.",
                         Toast.LENGTH_LONG
                     ).show()
                     onComplete?.invoke()
