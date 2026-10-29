@@ -2074,13 +2074,24 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
             val activeSource = currentOptions.getOrNull(currentServerIndex)
             val groupedQualities = activeSource?.let { parseQualityUrls(it.qualityUrls) }.orEmpty()
             if (groupedQualities.isNotEmpty()) {
-                val labels = listOf("Auto") + groupedQualities.keys.toList()
+                // Use a native, track-selection-style dialog (title, selectable rows,
+                // and explicit OK/Cancel actions) instead of the old plain text list.
+                val labels = listOf("Auto") + supportedQualityLabels.filter { groupedQualities.containsKey(it) }
+                val displayLabels = labels.map { label ->
+                    if (label == "Auto") "Auto  ·  حسب سرعة الإنترنت" else "$label  ·  ${qualityResolution(label)}"
+                }.toTypedArray()
+                val activeUrl = activeSource?.url.orEmpty()
+                val selectedIndex = if (autoQualityEnabled) 0 else labels.indexOfFirst { label ->
+                    label != "Auto" && groupedQualities[label] == activeUrl
+                }.let { if (it >= 0) it else 0 }
+                var pendingSelection = selectedIndex
                 AlertDialog.Builder(this)
                     .setTitle("جودة الفيديو")
-                    .setItems(labels.map { label ->
-                        if (label == "Auto") "Auto  ·  حسب سرعة الإنترنت" else "$label  ·  ${qualityResolution(label)}"
-                    }.toTypedArray()) { _, which ->
-                        val selectedLabel = labels[which]
+                    .setSingleChoiceItems(displayLabels, selectedIndex) { _, which ->
+                        pendingSelection = which
+                    }
+                    .setPositiveButton("OK") { _, _ ->
+                        val selectedLabel = labels.getOrNull(pendingSelection) ?: "Auto"
                         if (selectedLabel == "Auto") {
                             autoQualityEnabled = true
                             applyAutomaticQuality(force = true)
@@ -2547,7 +2558,9 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
             bandwidthKbps >= 25000 -> "4K"
             bandwidthKbps >= 8000 -> "FHD"
             bandwidthKbps >= 3000 -> "HD"
-            else -> "SD"
+            bandwidthKbps >= 1200 -> "SD"
+            bandwidthKbps >= 600 -> "360p"
+            else -> "240p"
         }
         val preferredIndex = supportedQualityLabels.indexOf(preferred).coerceAtLeast(0)
         val currentLabel = labels.firstOrNull { qualities[it] == source.url }
@@ -3718,9 +3731,12 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
         }
     }
 
-    private val supportedQualityLabels = listOf("SD", "HD", "FHD", "4K")
+    // Keep the quality order low-to-high so Auto can step down gradually.
+    private val supportedQualityLabels = listOf("240p", "360p", "SD", "HD", "FHD", "4K")
 
     private fun qualityResolution(label: String): String = when (label) {
+        "240p" -> "240p"
+        "360p" -> "360p"
         "SD" -> "480p"
         "HD" -> "720p"
         "FHD" -> "1080p"
@@ -3838,7 +3854,7 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
                             return@setOnClickListener
                         }
                         val qualities = parseQualityUrls(qualityJson.toString())
-                        val defaultUrl = qualities["HD"] ?: qualities["FHD"] ?: qualities["SD"] ?: qualities["4K"] ?: qualities.values.firstOrNull().orEmpty()
+                        val defaultUrl = qualities["HD"] ?: qualities["FHD"] ?: qualities["SD"] ?: qualities["360p"] ?: qualities["240p"] ?: qualities["4K"] ?: qualities.values.firstOrNull().orEmpty()
                         val item = StreamSource(
                             channel = channel,
                             serverName = server,
