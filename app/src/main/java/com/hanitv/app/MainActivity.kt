@@ -291,8 +291,15 @@ class MainActivity : Activity() {
             "قناة عربية 4" to "A4"
         ),
         "القنوات الأجنبية" to listOf(
+            // France channels
             "TF1" to "TF1",
-            "M6" to "M6"
+            "M6" to "M6",
+            "L'Équipe" to "LEQUIPE",
+            "TV5 Monde" to "TV5MONDE",
+            // Germany channels
+            "ZDF" to "ZDF",
+            "DAZN 1" to "DAZN1",
+            "DAZN 2" to "DAZN2"
         ),
         "القنوات الإخبارية" to listOf(
             "Sky News Arabia" to "SKY",
@@ -691,7 +698,7 @@ class MainActivity : Activity() {
             setPadding(0, dp(22), 0, dp(12))
         })
 
-        allCategories().forEach { category ->
+        homeCategories().forEach { category ->
             val categoryCard = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
@@ -1127,7 +1134,12 @@ class MainActivity : Activity() {
                 "Al Ahly TV" to "ALAHLYTV"
             )
             "القنوات الأجنبية" -> channelGroups["القنوات الأجنبية"].orEmpty()
-            "فرنسا" -> channelGroups["القنوات الأجنبية"].orEmpty()
+            "فرنسا" -> channelGroups["القنوات الأجنبية"].orEmpty().filter {
+                it.first in setOf("TF1", "M6", "L'Équipe", "TV5 Monde")
+            }
+            "ألمانيا" -> channelGroups["القنوات الأجنبية"].orEmpty().filter {
+                it.first in setOf("ZDF", "DAZN 1", "DAZN 2")
+            }
             "قنوات الترفيه" -> entertainmentChannels
             // Explicit child lineup is needed because MBC 3 is intentionally shared
             // with the MBC section and the global channel registry removes duplicates.
@@ -1155,6 +1167,7 @@ class MainActivity : Activity() {
                 gravity = Gravity.TOP
             }
             addCountrySectionCard(franceRow, "فرنسا", R.drawable.france, "القنوات الفرنسية")
+            addCountrySectionCard(franceRow, "ألمانيا", R.drawable.germany, "القنوات الألمانية")
             grid.addView(franceRow, LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
@@ -3156,6 +3169,17 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
     private fun normalizeCategoryName(category: String): String =
         if (category.trim() == "القنوات العربية") "القنوات العربية والثقافية" else category.trim()
 
+    // Only these six sections are shown as main categories on the home screen.
+    // Country-specific channels remain nested inside "القنوات الأجنبية".
+    private fun homeCategories(): List<String> = listOf(
+        "القنوات الرياضية",
+        "القنوات العربية والثقافية",
+        "القنوات الإخبارية",
+        "القنوات الأجنبية",
+        "قنوات الأطفال",
+        "قنوات الترفيه"
+    )
+
     private fun allCategories(): List<String> {
         val defaults = channelGroups.keys.map { normalizeCategoryName(it) }
         val remote = channelCategories.values.map { normalizeCategoryName(it) }.filter { it.isNotBlank() }
@@ -3545,6 +3569,12 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
             channelName.equals("BBC News عربي", ignoreCase = true) -> R.drawable.bbc_news_arabi
             channelName.equals("TF1", ignoreCase = true) -> R.drawable.tf1
             channelName.equals("M6", ignoreCase = true) -> R.drawable.m6
+            channelName.equals("L'Équipe", ignoreCase = true) ||
+                channelName.equals("L'Equipe", ignoreCase = true) -> R.drawable.lequipe
+            channelName.equals("TV5 Monde", ignoreCase = true) -> R.drawable.tv5_monde
+            channelName.equals("ZDF", ignoreCase = true) -> R.drawable.zdf
+            channelName.equals("DAZN 1", ignoreCase = true) -> R.drawable.dazn_1
+            channelName.equals("DAZN 2", ignoreCase = true) -> R.drawable.dazn_2
             channelName.equals("Echorouk News", ignoreCase = true) -> R.drawable.echourouk_news
             channelName.equals("Echorouk TV", ignoreCase = true) -> R.drawable.echourouk_tv
             channelName.equals("Al Ahly TV", ignoreCase = true) -> R.drawable.alahly_tv
