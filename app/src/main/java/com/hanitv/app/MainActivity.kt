@@ -254,7 +254,9 @@ class MainActivity : Activity() {
             "El Heddaf" to "ELHEDDAF",
             "Algeria 1" to "ALGERIA1",
             "Algeria 6" to "ALGERIA6",
-            "Algeria 3" to "ALGERIA3"
+            "Algeria 3" to "ALGERIA3",
+            "Echorouk News" to "ECHOROUKNEWS",
+            "Echorouk TV" to "ECHOUROUKTV"
         ),
         "القنوات المغربية" to listOf(
             "Al Aoula" to "ALAOULA",
@@ -282,10 +284,15 @@ class MainActivity : Activity() {
             "ON Sport" to "ONSPORT",
             "ON Sport Plus" to "ONSPORTPLUS",
             "ON Sport Max" to "ONSPORTMAX",
+            "Al Ahly TV" to "ALAHLYTV",
             "قناة عربية 1" to "AR",
             "قناة عربية 2" to "A2",
             "قناة عربية 3" to "A3",
             "قناة عربية 4" to "A4"
+        ),
+        "القنوات الأجنبية" to listOf(
+            "TF1" to "TF1",
+            "M6" to "M6"
         ),
         "القنوات الإخبارية" to listOf(
             "Sky News Arabia" to "SKY",
@@ -708,6 +715,7 @@ class MainActivity : Activity() {
                 "القنوات الرياضية" -> "⚽"
                 "القنوات العربية والثقافية" -> "📺"
                 "القنوات الإخبارية" -> "🌍"
+                "القنوات الأجنبية" -> "🇫🇷"
                 "قنوات الأطفال" -> "🧸"
                 "قنوات الترفيه" -> "🎭"
                 else -> "📡"
@@ -1102,7 +1110,9 @@ class MainActivity : Activity() {
                 "El Heddaf" to "ELHEDDAF",
                 "Algeria 1" to "ALGERIA1",
                 "Algeria 6" to "ALGERIA6",
-                "Algeria 3" to "ALGERIA3"
+                "Algeria 3" to "ALGERIA3",
+                "Echorouk News" to "ECHOROUKNEWS",
+                "Echorouk TV" to "ECHOUROUKTV"
             )
             "القنوات المغربية" -> listOf(
                 "Al Aoula" to "ALAOULA",
@@ -1113,8 +1123,11 @@ class MainActivity : Activity() {
             "القنوات المصرية" -> listOf(
                 "ON Sport" to "ONSPORT",
                 "ON Sport Plus" to "ONSPORTPLUS",
-                "ON Sport Max" to "ONSPORTMAX"
+                "ON Sport Max" to "ONSPORTMAX",
+                "Al Ahly TV" to "ALAHLYTV"
             )
+            "القنوات الأجنبية" -> channelGroups["القنوات الأجنبية"].orEmpty()
+            "فرنسا" -> channelGroups["القنوات الأجنبية"].orEmpty()
             "قنوات الترفيه" -> entertainmentChannels
             // Explicit child lineup is needed because MBC 3 is intentionally shared
             // with the MBC section and the global channel registry removes duplicates.
@@ -1132,6 +1145,23 @@ class MainActivity : Activity() {
 
         val grid = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
+        }
+
+        // The foreign-channels section starts with a France flag card, matching the
+        // existing Algeria/Morocco/Egypt country cards. TF1 and M6 are shown inside France.
+        if (category == "القنوات الأجنبية") {
+            val franceRow = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.TOP
+            }
+            addCountrySectionCard(franceRow, "فرنسا", R.drawable.france, "القنوات الفرنسية")
+            grid.addView(franceRow, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { bottomMargin = dp(10) })
+            content.addView(grid)
+            addBackButton()
+            return
         }
 
         var index = 0
@@ -3141,6 +3171,7 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
             "القنوات الجزائرية",
             "القنوات المغربية",
             "القنوات الإخبارية",
+            "القنوات الأجنبية",
             "قنوات الأطفال",
             "قنوات الترفيه",
             "ثمانية",
@@ -3158,7 +3189,9 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
         "Algeria 1", "Algeria 2", "Algeria 3", "Algeria 5", "Algeria 6",
         "AL24 News", "El Heddaf", "Ennahar" -> "القنوات الجزائرية"
         "Al Aoula", "Laayoune", "Arryadia", "2M" -> "القنوات المغربية"
-        "ON Sport", "ON Sport Plus", "ON Sport Max" -> "القنوات المصرية"
+        "ON Sport", "ON Sport Plus", "ON Sport Max", "Al Ahly TV" -> "القنوات المصرية"
+        "Echorouk News", "Echorouk TV" -> "القنوات الجزائرية"
+        "TF1", "M6" -> "القنوات الأجنبية"
         "Sky News Arabia", "العربية", "الجزيرة" -> "القنوات الإخبارية"
         "ثمانية 1", "ثمانية 2", "ثمانية 3" -> "ثمانية"
         "STARZPLAY 1", "STARZPLAY 2", "STARZPLAY 3" -> "STARZPLAY"
@@ -3510,6 +3543,11 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
             channelName.equals("Al Jazeera Documentary", ignoreCase = true) -> R.drawable.al_jazeera_documentary
             channelName.equals("DW", ignoreCase = true) -> R.drawable.dw
             channelName.equals("BBC News عربي", ignoreCase = true) -> R.drawable.bbc_news_arabi
+            channelName.equals("TF1", ignoreCase = true) -> R.drawable.tf1
+            channelName.equals("M6", ignoreCase = true) -> R.drawable.m6
+            channelName.equals("Echorouk News", ignoreCase = true) -> R.drawable.echourouk_news
+            channelName.equals("Echorouk TV", ignoreCase = true) -> R.drawable.echourouk_tv
+            channelName.equals("Al Ahly TV", ignoreCase = true) -> R.drawable.alahly_tv
             channelName.equals("Algeria 1", ignoreCase = true) -> R.drawable.algeria_1
             channelName.equals("Algeria 2", ignoreCase = true) -> R.drawable.algeria_2
             channelName.equals("Algeria 3", ignoreCase = true) -> R.drawable.algeria_3
