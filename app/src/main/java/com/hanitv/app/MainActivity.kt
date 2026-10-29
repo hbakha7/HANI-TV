@@ -4178,11 +4178,50 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
         }
     }
 
-    /** Read shared server/source settings from Hostinger PHP API. Channel catalogue stays local. */
+    /** Read shared server/source settings from Hostinger. A tiny revision check avoids
+     * downloading the full source list unless the cloud data has actually changed.
+     * Channel catalogue stays local and all existing fields (including DRM/quality URLs) remain intact.
+     */
     private fun syncFromCloud(silent: Boolean = false, onComplete: ((Boolean) -> Unit)? = null) {
         networkExecutor.execute {
-            var errorMessage: String? = null
             try {
+                val revisionUrl = apiUrl + if (apiUrl.contains("?")) "&action=revision" else "?action=revision"
+                var remoteRevision = ""
+                var revisionCheckSucceeded = false
+                try {
+                    val revisionConnection = (URL(revisionUrl).openConnection() as HttpURLConnection).apply {
+                        requestMethod = "GET"
+                        connectTimeout = 10000
+                        readTimeout = 10000
+                        setRequestProperty("Accept", "application/json")
+                    }
+                    val revisionCode = revisionConnection.responseCode
+                    val revisionStream = if (revisionCode in 200..299) revisionConnection.inputStream else revisionConnection.errorStream
+                    val revisionResponse = BufferedReader(InputStreamReader(revisionStream, Charsets.UTF_8)).use { it.readText() }
+                    revisionConnection.disconnect()
+                    if (revisionCode in 200..299) {
+                        val revisionJson = JSONObject(revisionResponse)
+                        remoteRevision = revisionJson.optString("revision", "")
+                        revisionCheckSucceeded = revisionJson.optBoolean("ok") && remoteRevision.isNotBlank()
+                    }
+                } catch (_: Exception) {
+                    // Backward-compatible fallback: if revision checking is unavailable,
+                    // use the original full GET behavior instead of blocking synchronization.
+                }
+
+                val cachedRevision = prefs.getString("cloud_sources_revision", "") ?: ""
+                if (revisionCheckSucceeded && remoteRevision == cachedRevision && cachedRevision.isNotBlank()) {
+                    runOnUiThread {
+                        if (showingServerManager) {
+                            showServerManager()
+                        } else if (onComplete == null) {
+                            showHome()
+                        }
+                        onComplete?.invoke(true)
+                    }
+                    return@execute
+                }
+
                 val connection = (URL(apiUrl).openConnection() as HttpURLConnection).apply {
                     requestMethod = "GET"
                     connectTimeout = 10000
@@ -4195,101 +4234,94 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
                 connection.disconnect()
                 if (code !in 200..299) throw IllegalStateException("HTTP $code: $response")
                 val json = JSONObject(response)
-                if (json.optBoolean("ok")) {
-                    val remoteSettings = json.optJSONObject("settings") ?: JSONObject()
-                    val remoteUpdateBannerEnabled = remoteSettings.optString("updateBannerEnabled", "0") == "1"
-                    val remoteUpdateBannerText = remoteSettings.optString("updateBannerText", "يتوفر إصدار جديد من HANI TV — اضغط للتحميل")
-                    val remoteUpdateVersion = remoteSettings.optString("updateVersion", "")
-                    val remoteUpdateApkUrl = remoteSettings.optString("updateApkUrl", "")
-                    val remoteSourcesArray = json.optJSONArray("sources")
-                    val hasRemoteSourcesArray = remoteSourcesArray != null
-                    val array = remoteSourcesArray ?: JSONArray()
-                    val downloaded = mutableListOf<StreamSource>()
-                    for (i in 0 until array.length()) {
-                        val item = array.optJSONObject(i) ?: continue
-                        val channel = item.optString("channel", "").trim()
-                        val url = item.optString("url", "").trim()
-                        if (channel.isBlank() || url.isBlank()) continue
-                        val server = item.optString("serverName", "السيرفر")
-                        downloaded.add(StreamSource(
-                            channel, server, url,
-                            item.optString("referer", ""),
-                            item.optString("displayName", server),
-                            item.optString("userAgent", ""),
-                            item.optString("cookie", ""),
-                            item.optString("authorization", ""),
-                            item.optString("extraHeaders", ""),
-                            item.optString("licenseUrl", ""),
-                            item.optString("scheme", ""),
-                            item.optString("drmScheme", ""),
-                            item.optString("playerType", "Exo Player"),
-                            item.optString("keyId", ""),
-                            item.optString("key", ""),
-                            item.optString("qualityUrls", "")
-                        ))
-                    }
-                    // Preserve locally saved DRM fields if Hostinger still returns an older
-                    // source row without those fields (for example after a failed cloud save).
-                    // Match by channel plus server name, with channel plus URL as a fallback.
-                    for (index in downloaded.indices) {
-                        val remote = downloaded[index]
-                        val local = sources.firstOrNull { candidate ->
-                            candidate.channel.equals(remote.channel, ignoreCase = true) &&
-                                (candidate.serverName.equals(remote.serverName, ignoreCase = true) ||
-                                 candidate.url.equals(remote.url, ignoreCase = true))
-                        } ?: continue
-                        downloaded[index] = remote.copy(
-                            licenseUrl = remote.licenseUrl.ifBlank { local.licenseUrl },
-                            scheme = remote.scheme.ifBlank { local.scheme },
-                            drmScheme = remote.drmScheme.ifBlank { local.drmScheme },
-                            keyId = remote.keyId.ifBlank { local.keyId },
-                            key = remote.key.ifBlank { local.key },
-                            qualityUrls = remote.qualityUrls.ifBlank { local.qualityUrls }
-                        )
-                    }
+                if (!json.optBoolean("ok")) throw IllegalStateException(json.optString("error", "api_error"))
 
-                    runOnUiThread {
-                        updateBannerEnabled = remoteUpdateBannerEnabled
-                        updateBannerText = remoteUpdateBannerText
-                        updateVersion = remoteUpdateVersion
-                        updateApkUrl = remoteUpdateApkUrl
-                        // Channel names, categories and logos are compiled into this APK.
-                        // Hostinger is only a source of stream/server settings; never let a
-                        // cloud response clear or replace the app's built-in channel catalogue.
-                        // SAFETY: if a local server edit has not yet been confirmed by
-                        // Hostinger, never replace that local list with an older cloud list.
-                        // This protects the admin's edits across app restarts.
-                        val hasPendingLocalSourceChanges =
-                            prefs.getBoolean("pending_sources_cloud_save", false)
+                val remoteSettings = json.optJSONObject("settings") ?: JSONObject()
+                val remoteUpdateBannerEnabled = remoteSettings.optString("updateBannerEnabled", "0") == "1"
+                val remoteUpdateBannerText = remoteSettings.optString("updateBannerText", "يتوفر إصدار جديد من HANI TV — اضغط للتحميل")
+                val remoteUpdateVersion = remoteSettings.optString("updateVersion", "")
+                val remoteUpdateApkUrl = remoteSettings.optString("updateApkUrl", "")
+                val remoteSourcesArray = json.optJSONArray("sources")
+                val hasRemoteSourcesArray = remoteSourcesArray != null
+                val array = remoteSourcesArray ?: JSONArray()
+                val downloaded = mutableListOf<StreamSource>()
+                for (i in 0 until array.length()) {
+                    val item = array.optJSONObject(i) ?: continue
+                    val channel = item.optString("channel", "").trim()
+                    val url = item.optString("url", "").trim()
+                    if (channel.isBlank() || url.isBlank()) continue
+                    val server = item.optString("serverName", "السيرفر")
+                    downloaded.add(StreamSource(
+                        channel, server, url,
+                        item.optString("referer", ""),
+                        item.optString("displayName", server),
+                        item.optString("userAgent", ""),
+                        item.optString("cookie", ""),
+                        item.optString("authorization", ""),
+                        item.optString("extraHeaders", ""),
+                        item.optString("licenseUrl", ""),
+                        item.optString("scheme", ""),
+                        item.optString("drmScheme", ""),
+                        item.optString("playerType", "Exo Player"),
+                        item.optString("keyId", ""),
+                        item.optString("key", ""),
+                        item.optString("qualityUrls", "")
+                    ))
+                }
+                // Preserve locally saved DRM/quality fields if an older cloud row omits them.
+                for (index in downloaded.indices) {
+                    val remote = downloaded[index]
+                    val local = sources.firstOrNull { candidate ->
+                        candidate.channel.equals(remote.channel, ignoreCase = true) &&
+                            (candidate.serverName.equals(remote.serverName, ignoreCase = true) ||
+                             candidate.url.equals(remote.url, ignoreCase = true))
+                    } ?: continue
+                    downloaded[index] = remote.copy(
+                        licenseUrl = remote.licenseUrl.ifBlank { local.licenseUrl },
+                        scheme = remote.scheme.ifBlank { local.scheme },
+                        drmScheme = remote.drmScheme.ifBlank { local.drmScheme },
+                        keyId = remote.keyId.ifBlank { local.keyId },
+                        key = remote.key.ifBlank { local.key },
+                        qualityUrls = remote.qualityUrls.ifBlank { local.qualityUrls }
+                    )
+                }
 
-                        // Apply a valid cloud list, including an explicitly empty list, unless
-                        // this device has local edits awaiting confirmation. If the API omits
-                        // the field or returns only malformed rows, retain the current local list.
-                        val remoteListIsValid = downloaded.isNotEmpty() || array.length() == 0
-                        if (hasRemoteSourcesArray && remoteListIsValid && !hasPendingLocalSourceChanges) {
-                            // An explicitly present but empty array is a valid cloud state:
-                            // allow it to clear stale local rows. If the API omits "sources",
-                            // keep the existing local copy rather than treating it as deletion.
-                            val changed = downloaded != sources
-                            if (changed) {
-                                sources.clear()
-                                sources.addAll(downloaded)
-                                saveSources()
-                                refreshEmbeddedServerOptions()
-                            }
+                // Save the revision only after a valid full response. The next check can then
+                // skip the large response until the server list/settings change again.
+                if (revisionCheckSucceeded) {
+                    prefs.edit().putString("cloud_sources_revision", remoteRevision).apply()
+                } else {
+                    // Without a revision, do not cache a value that could suppress later refreshes.
+                    prefs.edit().remove("cloud_sources_revision").apply()
+                }
+
+                runOnUiThread {
+                    updateBannerEnabled = remoteUpdateBannerEnabled
+                    updateBannerText = remoteUpdateBannerText
+                    updateVersion = remoteUpdateVersion
+                    updateApkUrl = remoteUpdateApkUrl
+                    // Channel names, categories and logos are compiled into this APK.
+                    // Never let Hostinger replace or clear the built-in channel catalogue.
+                    val hasPendingLocalSourceChanges =
+                        prefs.getBoolean("pending_sources_cloud_save", false)
+                    val remoteListIsValid = downloaded.isNotEmpty() || array.length() == 0
+                    if (hasRemoteSourcesArray && remoteListIsValid && !hasPendingLocalSourceChanges) {
+                        val changed = downloaded != sources
+                        if (changed) {
+                            sources.clear()
+                            sources.addAll(downloaded)
+                            saveSources()
+                            refreshEmbeddedServerOptions()
                         }
-                        if (showingServerManager) {
-                            showServerManager()
-                        } else if (onComplete == null) {
-                            // During initial startup, finishInitialSourceSync() renders
-                            // the home screen after server settings have been synchronized.
-                            showHome()
-                        }
-                        onComplete?.invoke(true)
                     }
-                } else throw IllegalStateException(json.optString("error", "api_error"))
+                    if (showingServerManager) {
+                        showServerManager()
+                    } else if (onComplete == null) {
+                        showHome()
+                    }
+                    onComplete?.invoke(true)
+                }
             } catch (e: Exception) {
-                errorMessage = e.message ?: "network_error"
                 runOnUiThread {
                     if (!silent) {
                         Toast.makeText(this, "تعذر تحميل القنوات حاليًا. تحقق من اتصالك بالإنترنت وحاول مجددًا.", Toast.LENGTH_LONG).show()
