@@ -2682,7 +2682,21 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
 
             for (name in listOf("url", "stream", "src", "file", "source", "link", "target", "playlist", "mpd")) {
                 val nested = uri.getQueryParameter(name)?.trim().orEmpty()
-                if (nested.isNotBlank() && inspect(nested, depth + 1)) return true
+                if (nested.isBlank()) continue
+                if (inspect(nested, depth + 1)) return true
+                if (name == "stream") {
+                    val decoded = sequenceOf(
+                        android.util.Base64.URL_SAFE or android.util.Base64.NO_WRAP or android.util.Base64.NO_PADDING,
+                        android.util.Base64.DEFAULT
+                    ).mapNotNull { flags ->
+                        try {
+                            String(android.util.Base64.decode(nested, flags), Charsets.UTF_8)
+                        } catch (_: Exception) {
+                            null
+                        }
+                    }.firstOrNull { it.isNotBlank() }
+                    if (!decoded.isNullOrBlank() && inspect(decoded, depth + 1)) return true
+                }
             }
             return false
         }
@@ -4095,16 +4109,24 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
     private fun refreshEmbeddedServerOptions() {
         if (embeddedDialog?.isShowing != true || embeddedPlayer == null) return
 
-        val channelName = currentOptions.firstOrNull()?.channel ?: return
-        val updatedOptions = sources.filter { it.channel == channelName }
-        if (updatedOptions.isEmpty()) return
+        val previousSelected = currentOptions.getOrNull(currentServerIndex)
+        val channelName = previousSelected?.channel ?: currentOptions.firstOrNull()?.channel ?: return
+        fun channelKey(value: String) = value.trim()
+            .replace(Regex("\\s+"), " ")
+            .lowercase(java.util.Locale.ROOT)
+        val updatedOptions = sources.filter { channelKey(it.channel) == channelKey(channelName) }
 
         val playingUrl = embeddedPlayer?.currentMediaItem
             ?.localConfiguration?.uri?.toString()
-        val previousSelectedUrl = currentOptions.getOrNull(currentServerIndex)?.url
+        val previousSelectedUrl = previousSelected?.url
         currentOptions = updatedOptions
-        currentServerIndex = updatedOptions.indexOfFirst {
-            it.url == playingUrl || it.url == previousSelectedUrl
+        currentServerIndex = updatedOptions.indexOfFirst { candidate ->
+            previousSelected != null &&
+                candidate.serverName.equals(previousSelected.serverName, ignoreCase = true) &&
+                candidate.displayName.equals(previousSelected.displayName, ignoreCase = true)
+        }.takeIf { it >= 0 } ?: updatedOptions.indexOfFirst { candidate ->
+            candidate.url == playingUrl || candidate.url == previousSelectedUrl ||
+                parseQualityUrls(candidate.qualityUrls).values.any { it == playingUrl }
         }.let { if (it >= 0) it else 0 }
 
         val serverContent = embeddedServerContent ?: return
@@ -4123,7 +4145,7 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
                 .replace("السيرفر الأساسي", "السيرفر")
                 .take(8)
             val button = TextView(this).apply {
-                text = "${index + 1}\\n$label"
+                text = "${index + 1}\n$label"
                 textSize = 9f
                 gravity = Gravity.CENTER
                 setTextColor(Color.WHITE)
@@ -4166,7 +4188,9 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
                     val remoteUpdateBannerText = remoteSettings.optString("updateBannerText", "يتوفر إصدار جديد من HANI TV — اضغط للتحميل")
                     val remoteUpdateVersion = remoteSettings.optString("updateVersion", "")
                     val remoteUpdateApkUrl = remoteSettings.optString("updateApkUrl", "")
-                    val array = json.optJSONArray("sources") ?: JSONArray()
+                    val remoteSourcesArray = json.optJSONArray("sources")
+                    val hasRemoteSourcesArray = remoteSourcesArray != null
+                    val array = remoteSourcesArray ?: JSONArray()
                     val downloaded = mutableListOf<StreamSource>()
                     for (i in 0 until array.length()) {
                         val item = array.optJSONObject(i) ?: continue
@@ -4225,10 +4249,14 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
                         val hasPendingLocalSourceChanges =
                             prefs.getBoolean("pending_sources_cloud_save", false)
 
-                        // Keep the local list if the API returns no sources, or while there
-                        // are unsynchronized local edits. Once a save succeeds, normal cloud
-                        // synchronization resumes for every app installation.
-                        if (downloaded.isNotEmpty() && !hasPendingLocalSourceChanges) {
+                        // Apply a valid cloud list, including an explicitly empty list, unless
+                        // this device has local edits awaiting confirmation. If the API omits
+                        // the field or returns only malformed rows, retain the current local list.
+                        val remoteListIsValid = downloaded.isNotEmpty() || array.length() == 0
+                        if (hasRemoteSourcesArray && remoteListIsValid && !hasPendingLocalSourceChanges) {
+                            // An explicitly present but empty array is a valid cloud state:
+                            // allow it to clear stale local rows. If the API omits "sources",
+                            // keep the existing local copy rather than treating it as deletion.
                             val changed = downloaded != sources
                             if (changed) {
                                 sources.clear()
@@ -4390,6 +4418,9 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
             })
         }
         val payload = JSONObject().put("sources", list).toString()
+        // Protect the local edit from an overlapping cloud GET until the POST is confirmed.
+        // On success the marker is cleared; on failure it deliberately remains set.
+        prefs.edit().putBoolean("pending_sources_cloud_save", true).apply()
         networkExecutor.execute {
             var message: String? = null
             var success = false
