@@ -1752,8 +1752,6 @@ private fun displayChannelName(name: String): String {
 
 
     private fun openChannel(channelName: String) {
-        // Use cached Hostinger sources immediately; never wait for the cloud refresh
-        // when this channel already has locally saved server links.
         fun channelKey(value: String): String = value.trim()
             .replace(Regex("\\s+"), " ")
             .lowercase(java.util.Locale.ROOT)
@@ -1763,19 +1761,34 @@ private fun displayChannelName(name: String): String {
 
         if (options.isNotEmpty()) {
             pendingChannelToOpen = null
+            // Open immediately from the local cache, then refresh the server list in
+            // the background. Passing a callback prevents this refresh from rebuilding
+            // the home screen while the player is open. If Hostinger has a newer list,
+            // syncFromCloud() updates the server buttons without restarting playback.
             launchPlayer(options, 0)
+            syncFromCloud(silent = true) { _ -> }
             return
         }
 
-        // If this channel is missing locally, allow the initial Hostinger sync
-        // to finish and then retry opening the requested channel.
+        // If the channel has no cached server (for example, it was added on another
+        // device), fetch Hostinger before reporting that no server is available.
         if (!initialSourceSyncFinished) {
             pendingChannelToOpen = channelName
             Toast.makeText(this, "جارٍ تحميل روابط القناة…", Toast.LENGTH_SHORT).show()
             return
         }
 
-        Toast.makeText(this, "لا تتوفر روابط لهذه القناة حاليًا.", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, "جارٍ تحديث السيرفرات…", Toast.LENGTH_SHORT).show()
+        syncFromCloud(silent = true) { syncedSuccessfully ->
+            if (!syncedSuccessfully) return@syncFromCloud
+            val refreshedOptions = sources.filter { channelKey(it.channel) == requestedKey }
+            if (refreshedOptions.isNotEmpty()) {
+                pendingChannelToOpen = null
+                launchPlayer(refreshedOptions, 0)
+            } else {
+                Toast.makeText(this, "لا تتوفر روابط لهذه القناة حاليًا.", Toast.LENGTH_SHORT).show()
+            }
+        }
     }
 
     
