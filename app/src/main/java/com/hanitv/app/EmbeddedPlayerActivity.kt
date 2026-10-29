@@ -1804,20 +1804,66 @@ private fun isHlsStreamUrl(url: String): Boolean {
         .lowercase(java.util.Locale.ROOT).endsWith(".m3u8")
 }
 
+private fun isDashStreamUrl(url: String): Boolean {
+    fun inspect(candidate: String, depth: Int): Boolean {
+        if (depth > 4) return false
+        val uri = try {
+            android.net.Uri.parse(candidate)
+        } catch (_: Exception) {
+            return false
+        }
+        val path = uri.path.orEmpty().lowercase(java.util.Locale.ROOT)
+        if (path.endsWith(".mpd") ||
+            uri.getQueryParameter("type")?.equals("mpd", ignoreCase = true) == true ||
+            uri.getQueryParameter("format")?.equals("mpd", ignoreCase = true) == true
+        ) return true
+
+        for (name in listOf("url", "stream", "src", "file", "source", "link", "target", "playlist", "mpd")) {
+            val nested = uri.getQueryParameter(name)?.trim().orEmpty()
+            if (nested.isBlank()) continue
+            if (inspect(nested, depth + 1)) return true
+            if (name == "stream") {
+                val decoded = sequenceOf(
+                    Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING,
+                    Base64.DEFAULT
+                ).mapNotNull { flags ->
+                    try {
+                        String(Base64.decode(nested, flags), Charsets.UTF_8)
+                    } catch (_: Exception) {
+                        null
+                    }
+                }.firstOrNull { it.isNotBlank() }
+                if (!decoded.isNullOrBlank() && inspect(decoded, depth + 1)) return true
+            }
+        }
+        return false
+    }
+    return inspect(url, 0)
+}
+
 private fun play(ch: Channel) {
 try {
 // Allow one fresh HLS fallback attempt for each new playback request.
 hlsFallbackAttemptedUrl = ""
 // Select the DRM values that belong to this exact server button, when supplied.
-val serverIndex = incomingServerUrls.indexOf(ch.url)
-val serverDrmName = incomingServerDrmSchemes.getOrNull(serverIndex).orEmpty()
-    .ifBlank { incomingServerSchemes.getOrNull(serverIndex).orEmpty() }
-    .ifBlank { prefs.getString("add_drm_scheme", "بدون DRM").orEmpty() }
-    .trim().lowercase(java.util.Locale.ROOT)
-val serverLicenseValue = incomingServerLicenses.getOrNull(serverIndex).orEmpty()
-    .ifBlank { prefs.getString("add_license", "").orEmpty() }.trim()
-val serverKeyId = incomingServerKeyIds.getOrNull(serverIndex).orEmpty().trim()
-val serverKey = incomingServerKeys.getOrNull(serverIndex).orEmpty().trim()
+// Prefer the explicitly selected index when URLs repeat across server rows;
+    // different rows may carry different DRM settings even when their URLs match.
+    val serverIndex = if (incomingServerUrls.getOrNull(incomingSelectedServer) == ch.url) {
+        incomingSelectedServer
+    } else {
+        incomingServerUrls.indexOf(ch.url)
+    }
+    val hasMatchingIncomingServer = serverIndex >= 0
+    val savedDrmScheme = if (hasMatchingIncomingServer) "" else prefs.getString("add_drm_scheme", "بدون DRM").orEmpty()
+    val serverDrmName = incomingServerDrmSchemes.getOrNull(serverIndex).orEmpty()
+        .ifBlank { incomingServerSchemes.getOrNull(serverIndex).orEmpty() }
+        .ifBlank { savedDrmScheme }
+        .trim().lowercase(java.util.Locale.ROOT)
+    val savedLicense = if (hasMatchingIncomingServer) "" else prefs.getString("add_license", "").orEmpty()
+    val serverLicenseValue = incomingServerLicenses.getOrNull(serverIndex).orEmpty()
+        .ifBlank { savedLicense }.trim()
+    val serverKeyId = incomingServerKeyIds.getOrNull(serverIndex).orEmpty().trim()
+    val serverKey = incomingServerKeys.getOrNull(serverIndex).orEmpty().trim()
 val serverInlineKeys = if (serverDrmName.contains("clearkey") || serverDrmName.contains("clear key")) {
     parseInlineClearKey("$serverKeyId:$serverKey") ?: parseInlineClearKey(serverLicenseValue)
 } else null
@@ -1851,7 +1897,7 @@ if (playerView == null) {
     // reliably detected by URI sniffing, so tell Media3 to use its DASH source.
     // This only affects DASH URLs and leaves the existing HLS handling unchanged.
     when {
-        normalizedPath.endsWith(".mpd") -> {
+        isDashStreamUrl(ch.url) -> {
             itemBuilder.setMimeType(MimeTypes.APPLICATION_MPD)
         }
         isHlsStreamUrl(ch.url) || normalizedPath.endsWith(".css") ||
@@ -1863,13 +1909,17 @@ if (playerView == null) {
     val drmName = serverDrmName
     val licenseValue = serverLicenseValue
     if (drmName != "بدون drm" && drmName.isNotBlank()) {
-        val drmUuid: UUID = when (drmName) {
-            "clearkey" -> C.CLEARKEY_UUID
-            "widevine" -> C.WIDEVINE_UUID
-            "playready" -> C.PLAYREADY_UUID
-            else -> {
-                message("نوع DRM غير معروف")
-                return
+        val drmUuid: UUID = try {
+            UUID.fromString(drmName)
+        } catch (_: IllegalArgumentException) {
+            when {
+                drmName.contains("clearkey") || drmName.contains("clear key") -> C.CLEARKEY_UUID
+                drmName.contains("widevine") -> C.WIDEVINE_UUID
+                drmName.contains("playready") -> C.PLAYREADY_UUID
+                else -> {
+                    message("نوع DRM غير معروف")
+                    return
+                }
             }
         }
 
@@ -2467,13 +2517,18 @@ private fun message(value: String) {
         .show()  
 }  
 
-override fun onDestroy() {  
-    fullscreenDialog?.dismiss()  
-    playerView?.player = null  
-    fullscreenView?.player = null  
-    player?.release()  
-    player = null  
-    super.onDestroy()  
+override fun onDestroy() {
+    // Cancel delayed failover work before releasing the player/activity.
+    serverStartupTimeout?.let { serverFailoverHandler.removeCallbacks(it) }
+    serverStartupTimeout = null
+    serverFailoverHandler.removeCallbacksAndMessages(null)
+    serverFailoverPending = false
+    fullscreenDialog?.dismiss()
+    playerView?.player = null
+    fullscreenView?.player = null
+    player?.release()
+    player = null
+    super.onDestroy()
 }
 
 }
