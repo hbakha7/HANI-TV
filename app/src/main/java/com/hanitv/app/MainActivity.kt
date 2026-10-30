@@ -202,6 +202,9 @@ class MainActivity : Activity() {
             "beIN SPORTS 8" to "B8",
             "beIN SPORTS 9" to "B9",
             "beIN SPORTS 10" to "B10",
+            "beIN SPORTS HD" to "BHD",
+            "beIN SPORTS MAX 1" to "BMAX1",
+            "beIN SPORTS MAX 2" to "BMAX2",
             "beIN SPORTS NEWS" to "BN",
             "قنوات الكأس 1" to "KAS1",
             "قنوات الكأس 2" to "KAS2",
@@ -306,10 +309,7 @@ class MainActivity : Activity() {
             "العربية" to "ALAR",
             "الجزيرة" to "JAZ",
             "DW" to "DW",
-            "BBC News عربي" to "BBCNA",
-            "أخبار 1" to "N1",
-            "أخبار 2" to "N2",
-            "أخبار 3" to "N3"
+            "BBC News عربي" to "BBCNA"
         ),
         "قنوات الأطفال" to listOf(
             "Disney OSN" to "DISNEYOSN",
@@ -1000,17 +1000,6 @@ class MainActivity : Activity() {
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.WRAP_CONTENT
                 ))
-                card.addView(TextView(this).apply {
-                    text = "قنوات رياضية"
-                    textSize = 11f
-                    gravity = Gravity.CENTER
-                    setTextColor(Color.rgb(158, 160, 169))
-                    maxLines = 1
-                    setPadding(dp(2), dp(3), dp(2), 0)
-                }, LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT
-                ))
                 row.addView(
                     card,
                     LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
@@ -1166,8 +1155,8 @@ class MainActivity : Activity() {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.TOP
             }
-            addCountrySectionCard(franceRow, "فرنسا", R.drawable.france, "القنوات الفرنسية")
-            addCountrySectionCard(franceRow, "ألمانيا", R.drawable.germany, "القنوات الألمانية")
+            addCountrySectionCard(franceRow, "فرنسا", R.drawable.france)
+            addCountrySectionCard(franceRow, "ألمانيا", R.drawable.germany)
             grid.addView(franceRow, LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
@@ -1200,7 +1189,7 @@ class MainActivity : Activity() {
                 gravity = Gravity.TOP
             }
             addAlgeriaSectionCard(algeriaRow)
-            addCountrySectionCard(algeriaRow, "القنوات المغربية", R.drawable.morocco, "قنوات المغرب")
+            addCountrySectionCard(algeriaRow, "القنوات المغربية", R.drawable.morocco)
             grid.addView(algeriaRow, LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
@@ -1212,7 +1201,7 @@ class MainActivity : Activity() {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.TOP
             }
-            addCountrySectionCard(egyptRow, "القنوات المصرية", R.drawable.egypt, "قنوات مصر")
+            addCountrySectionCard(egyptRow, "القنوات المصرية", R.drawable.egypt)
             if (index < channels.size) {
                 addChannelCard(egyptRow, channels[index])
                 index++
@@ -1310,16 +1299,6 @@ class MainActivity : Activity() {
         }, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
         ))
-        card.addView(TextView(this).apply {
-            text = "12 قناة"
-            textSize = 11f
-            gravity = Gravity.CENTER
-            setTextColor(Color.rgb(158, 160, 169))
-            maxLines = 1
-            setPadding(dp(2), dp(3), dp(2), 0)
-        }, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-        ))
         row.addView(card, LinearLayout.LayoutParams(
             0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f
         ).apply { setMargins(dp(5), 0, dp(5), 0) })
@@ -1375,16 +1354,6 @@ class MainActivity : Activity() {
         }, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
         ))
-        card.addView(TextView(this).apply {
-            text = "قنوات الجزائر"
-            textSize = 11f
-            gravity = Gravity.CENTER
-            setTextColor(Color.rgb(158, 160, 169))
-            maxLines = 1
-            setPadding(dp(2), dp(3), dp(2), 0)
-        }, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-        ))
         row.addView(card, LinearLayout.LayoutParams(
             0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f
         ).apply { setMargins(dp(5), 0, dp(5), 0) })
@@ -1393,8 +1362,7 @@ class MainActivity : Activity() {
     private fun addCountrySectionCard(
         row: LinearLayout,
         title: String,
-        imageRes: Int,
-        subtitle: String
+        imageRes: Int
     ) {
         val card = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -1442,16 +1410,6 @@ class MainActivity : Activity() {
             setTypeface(null, Typeface.BOLD)
             maxLines = 2
             setPadding(dp(2), dp(7), dp(2), 0)
-        }, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-        ))
-        card.addView(TextView(this).apply {
-            text = subtitle
-            textSize = 11f
-            gravity = Gravity.CENTER
-            setTextColor(Color.rgb(158, 160, 169))
-            maxLines = 1
-            setPadding(dp(2), dp(3), dp(2), 0)
         }, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
         ))
@@ -1561,40 +1519,12 @@ class MainActivity : Activity() {
             setPadding(dp(2), dp(7), dp(2), 0)
         }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
 
-        card.addView(TextView(this).apply {
-            text = channelPosterSubtitle(name)
-            textSize = 11f
-            gravity = Gravity.CENTER
-            setTextColor(Color.rgb(158, 160, 169))
-            maxLines = 1
-            ellipsize = android.text.TextUtils.TruncateAt.END
-            setPadding(dp(2), dp(3), dp(2), 0)
-        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-
         row.addView(
             card,
             LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
                 setMargins(dp(5), 0, dp(5), 0)
             }
         )
-    }
-
-    private fun channelPosterSubtitle(name: String): String {
-        val value = name.lowercase(java.util.Locale.ROOT)
-        return when {
-            value.contains("bein") || value.contains("رياض") || value.contains("sports") ||
-                value.contains("الكأس") || value.contains("ثمانية") || value.contains("shahid sports") -> "رياضة"
-            value.contains("mbc") || value.contains("روتانا") || value.contains("العربية") -> "قنوات عربية"
-            value.contains("طفل") || value.contains("كرتون") || value.contains("kids") ||
-                value.contains("toons") || value.contains("spacetoon") -> "الأطفال"
-            value.contains("news") || value.contains("أخبار") || value.contains("الجزيرة") ||
-                value.contains("dw") || value.contains("العراقية") -> "إخباري وثقافي"
-            value.contains("document") || value.contains("جيوغرافيك") || value.contains("nat geo") -> "وثائقي"
-            value.contains("starzplay") || value.contains("max") || value.contains("film") ||
-                value.contains("movies") || value.contains("star action") ||
-                value.contains("سينما") || value.contains("أفلام") -> "أفلام وترفيه"
-            else -> defaultCategoryFor(name).takeIf { it.isNotBlank() } ?: "قنوات مباشرة"
-        }
     }
 
     /** Artwork-only thumbnail background: channel logo assets remain unchanged and on top. */
@@ -1783,7 +1713,7 @@ private fun displayChannelName(name: String): String {
     }
 
     val match = Regex(
-        """(?i)bein\s*[-_ ]*sports\s*([1-9])"""
+        """(?i)bein\s*[-_ ]*sports\s*([0-9]{1,2})\b"""
     ).find(value)
 
     if (match != null) {
