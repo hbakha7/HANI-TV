@@ -3059,28 +3059,162 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
                     return@runOnUiThread
                 }
                 val daily = json.optJSONArray("daily") ?: JSONArray()
-                val details = StringBuilder()
+                val dailyRows = ArrayList<JSONObject>()
                 for (i in 0 until daily.length()) {
-                    val row = daily.optJSONObject(i) ?: continue
-                    details.append("\\n")
-                        .append(row.optString("visit_date", row.optString("date", "")))
-                        .append(" — الزيارات: ").append(row.optInt("visits"))
-                        .append(" — أجهزة جديدة: ").append(row.optInt("new_devices"))
+                    daily.optJSONObject(i)?.let { dailyRows.add(it) }
                 }
                 val titleText = when (period) {
                     "day" -> "إحصائيات يوم ${date ?: analyticsDateOffset(0)}"
                     "month" -> "إحصائيات شهر ${month ?: analyticsMonthOffset(0)}"
                     else -> "إحصائيات ${start ?: ""} إلى ${end ?: ""}"
                 }
+
+                val bgColor = Color.rgb(16, 16, 20)
+                val cardColor = Color.rgb(30, 29, 37)
+                val accent = Color.rgb(169, 112, 245)
+                val green = Color.rgb(54, 190, 125)
+                val muted = Color.rgb(175, 171, 184)
+                val whiteText = Color.rgb(245, 243, 248)
+                val density = resources.displayMetrics.density
+                fun px(value: Int): Int = (value * density).toInt()
+                fun makeLabel(text: String, size: Float, color: Int, bold: Boolean = false): TextView =
+                    TextView(this).apply {
+                        this.text = text
+                        textSize = size
+                        setTextColor(color)
+                        if (bold) setTypeface(typeface, android.graphics.Typeface.BOLD)
+                        gravity = Gravity.CENTER_VERTICAL
+                    }
+                fun makeCard(label: String, value: String, valueColor: Int): LinearLayout =
+                    LinearLayout(this).apply {
+                        orientation = LinearLayout.VERTICAL
+                        setPadding(px(14), px(12), px(14), px(12))
+                        background = GradientDrawable().apply {
+                            setColor(cardColor)
+                            cornerRadius = px(14).toFloat()
+                        }
+                        addView(makeLabel(label, 12f, muted))
+                        addView(makeLabel(value, 25f, valueColor, true).apply {
+                            setPadding(0, px(5), 0, 0)
+                        })
+                    }
+
+                val root = LinearLayout(this).apply {
+                    orientation = LinearLayout.VERTICAL
+                    setPadding(px(16), px(8), px(16), px(12))
+                    setBackgroundColor(bgColor)
+                }
+                val summaryRow = LinearLayout(this).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = Gravity.CENTER_VERTICAL
+                }
+                val visitsCard = makeCard("إجمالي الزيارات", json.optInt("totalVisits").toString(), accent)
+                val newCard = makeCard("الأجهزة الجديدة", json.optInt("newDevices").toString(), green)
+                summaryRow.addView(visitsCard, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginEnd = px(6) })
+                summaryRow.addView(newCard, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = px(6) })
+                root.addView(summaryRow)
+                root.addView(makeLabel("منحنى الزيارات اليومية", 16f, whiteText, true).apply {
+                    setPadding(0, px(18), 0, px(8))
+                })
+
+                val chart = object : View(this) {
+                    private val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        color = accent
+                        strokeWidth = px(3).toFloat()
+                        style = Paint.Style.STROKE
+                        strokeCap = Paint.Cap.ROUND
+                        strokeJoin = Paint.Join.ROUND
+                    }
+                    private val dotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        color = green
+                        style = Paint.Style.FILL
+                    }
+                    private val gridPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        color = Color.rgb(55, 52, 64)
+                        strokeWidth = px(1).toFloat()
+                    }
+                    override fun onDraw(canvas: Canvas) {
+                        super.onDraw(canvas)
+                        val left = px(10).toFloat()
+                        val right = width - px(10).toFloat()
+                        val top = px(12).toFloat()
+                        val bottom = height - px(12).toFloat()
+                        for (g in 0..3) {
+                            val y = top + (bottom - top) * g / 3f
+                            canvas.drawLine(left, y, right, y, gridPaint)
+                        }
+                        if (dailyRows.isEmpty()) return
+                        val maxValue = (dailyRows.maxOfOrNull { it.optInt("visits") } ?: 0).coerceAtLeast(1)
+                        val step = if (dailyRows.size <= 1) 0f else (right - left) / (dailyRows.size - 1)
+                        val path = android.graphics.Path()
+                        dailyRows.forEachIndexed { index, row ->
+                            val x = if (dailyRows.size <= 1) (left + right) / 2f else left + step * index
+                            val y = bottom - (bottom - top) * row.optInt("visits").toFloat() / maxValue
+                            if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
+                            canvas.drawCircle(x, y, px(4).toFloat(), dotPaint)
+                        }
+                        canvas.drawPath(path, linePaint)
+                    }
+                }.apply {
+                    setBackgroundColor(cardColor)
+                    contentDescription = "رسم بياني للزيارات اليومية"
+                }
+                root.addView(chart, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, px(150)).apply {
+                    topMargin = px(2)
+                })
+                root.addView(makeLabel("جدول التفاصيل اليومية", 16f, whiteText, true).apply {
+                    setPadding(0, px(18), 0, px(8))
+                })
+
+                val table = LinearLayout(this).apply {
+                    orientation = LinearLayout.VERTICAL
+                    background = GradientDrawable().apply {
+                        setColor(cardColor)
+                        cornerRadius = px(12).toFloat()
+                    }
+                    setPadding(px(10), px(5), px(10), px(5))
+                }
+                fun addTableRow(dateText: String, visitText: String, newText: String, header: Boolean = false) {
+                    val rowLayout = LinearLayout(this).apply {
+                        orientation = LinearLayout.HORIZONTAL
+                        gravity = Gravity.CENTER_VERTICAL
+                        setPadding(0, px(10), 0, px(10))
+                    }
+                    val color = if (header) accent else whiteText
+                    rowLayout.addView(makeLabel(dateText, 12f, color, header), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.35f))
+                    rowLayout.addView(makeLabel(visitText, 12f, color, header), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 0.8f).apply { marginStart = px(4) })
+                    rowLayout.addView(makeLabel(newText, 12f, color, header), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = px(4) })
+                    table.addView(rowLayout)
+                    if (!header) table.addView(View(this).apply { setBackgroundColor(Color.rgb(55, 52, 64)) }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, px(1)))
+                }
+                addTableRow("التاريخ", "الزيارات", "أجهزة جديدة", true)
+                dailyRows.asReversed().forEach { row ->
+                    addTableRow(
+                        row.optString("visit_date", row.optString("date", "—")),
+                        row.optInt("visits").toString(),
+                        row.optInt("new_devices").toString()
+                    )
+                }
+                if (dailyRows.isEmpty()) {
+                    table.addView(makeLabel("لا توجد بيانات للفترة المحددة.", 13f, muted).apply {
+                        gravity = Gravity.CENTER
+                        setPadding(0, px(18), 0, px(18))
+                    })
+                }
+                val tableScroll = ScrollView(this).apply {
+                    isFillViewport = true
+                    addView(table)
+                }
+                root.addView(tableScroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, px(180)))
+                val dialogScroll = ScrollView(this).apply {
+                    addView(root)
+                }
                 AlertDialog.Builder(this)
                     .setTitle(titleText)
-                    .setMessage(
-                        "إجمالي الزيارات اليومية: ${json.optInt("totalVisits")}\\n" +
-                        "الأجهزة الجديدة: ${json.optInt("newDevices")}" +
-                        if (details.isNotEmpty()) "\\n\\nالتفصيل اليومي:$details" else "\\n\\nلا توجد بيانات للفترة المحددة."
-                    )
-                    .setPositiveButton("الفترات", null)
+                    .setView(dialogScroll)
+                    .setPositiveButton("الفترات") { _, _ -> showAnalyticsOptions() }
                     .setNeutralButton("اختيار فترة أخرى") { _, _ -> showAnalyticsOptions() }
+                    .setNegativeButton("إغلاق", null)
                     .show()
             }
         }
