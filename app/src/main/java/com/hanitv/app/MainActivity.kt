@@ -128,6 +128,8 @@ class MainActivity : Activity() {
     private val channelCategories = linkedMapOf<String, String>()
     private val apiUrl = "https://103service.store/api.php"
     private val networkExecutor = Executors.newSingleThreadExecutor()
+    // Analytics uses its own worker so tracking can never delay server synchronization.
+    private val analyticsExecutor = Executors.newSingleThreadExecutor()
     private val brandImageExecutor = Executors.newFixedThreadPool(3)
     private var adminApiKey: String? = null
     private var updateBannerEnabled = false
@@ -409,6 +411,7 @@ class MainActivity : Activity() {
         // Render the home screen immediately from bundled/local data so startup never
         // waits for a network request. The cloud sync updates the data afterward.
         showHome()
+        trackAppVisitIfEnabled()
         syncFromCloud { syncedSuccessfully -> finishInitialSourceSync(syncedSuccessfully) }
     }
 
@@ -2888,6 +2891,201 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
     }
 
 
+    private fun isDeveloperModeEnabled(): Boolean =
+        prefs.getBoolean("analytics_developer_mode", false)
+
+    /**
+     * Sends one lightweight event per app process start. The API deduplicates by
+     * stable installation ID and local calendar day; this worker is separate from cloud sync.
+     */
+    private fun trackAppVisitIfEnabled() {
+        if (isDeveloperModeEnabled()) return
+
+        val deviceId = prefs.getString("analytics_installation_id", null)
+            ?: java.util.UUID.randomUUID().toString().also {
+                prefs.edit().putString("analytics_installation_id", it).apply()
+            }
+
+        analyticsExecutor.execute {
+            var connection: HttpURLConnection? = null
+            try {
+                val endpoint = "$apiUrl?action=track"
+                connection = (URL(endpoint).openConnection() as HttpURLConnection).apply {
+                    requestMethod = "POST"
+                    connectTimeout = 5000
+                    readTimeout = 5000
+                    doOutput = true
+                    setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                    setRequestProperty("Accept", "application/json")
+                }
+                val payload = JSONObject()
+                    .put("deviceId", deviceId)
+                    .put("developerMode", false)
+                    .toString()
+                OutputStreamWriter(connection.outputStream, Charsets.UTF_8).use { it.write(payload) }
+                // Read response to release the connection; tracking errors should stay silent.
+                val stream = if (connection.responseCode in 200..299) connection.inputStream else connection.errorStream
+                stream?.use { it.readBytes() }
+            } catch (_: Exception) {
+                // Analytics must never interrupt app startup or playback.
+            } finally {
+                connection?.disconnect()
+            }
+        }
+    }
+
+    private fun showAnalyticsOptions() {
+        val options = arrayOf(
+            "اليوم",
+            "أمس",
+            "آخر 7 أيام",
+            "هذا الشهر",
+            "الشهر الماضي",
+            "اختيار يوم محدد",
+            "اختيار شهر محدد"
+        )
+        AlertDialog.Builder(this)
+            .setTitle("إحصائيات استخدام HANI TV")
+            .setItems(options) { _, which ->
+                when (which) {
+                    0 -> loadAnalytics("day", date = analyticsDateOffset(0))
+                    1 -> loadAnalytics("day", date = analyticsDateOffset(-1))
+                    2 -> loadAnalytics("range", start = analyticsDateOffset(-6), end = analyticsDateOffset(0))
+                    3 -> loadAnalytics("month", month = analyticsMonthOffset(0))
+                    4 -> loadAnalytics("month", month = analyticsMonthOffset(-1))
+                    5 -> promptAnalyticsValue(
+                        "اختيار يوم (YYYY-MM-DD)",
+                        analyticsDateOffset(0),
+                        Regex("^\\d{4}-\\d{2}-\\d{2}$")
+                    ) { value -> loadAnalytics("day", date = value) }
+                    6 -> promptAnalyticsValue(
+                        "اختيار شهر (YYYY-MM)",
+                        analyticsMonthOffset(0),
+                        Regex("^\\d{4}-\\d{2}$")
+                    ) { value -> loadAnalytics("month", month = value) }
+                }
+            }
+            .setNegativeButton("إغلاق", null)
+            .show()
+    }
+
+    private fun analyticsDateOffset(offsetDays: Int): String {
+        val calendar = java.util.Calendar.getInstance()
+        calendar.add(java.util.Calendar.DAY_OF_YEAR, offsetDays)
+        return java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(calendar.time)
+    }
+
+    private fun analyticsMonthOffset(offsetMonths: Int): String {
+        val calendar = java.util.Calendar.getInstance()
+        calendar.set(java.util.Calendar.DAY_OF_MONTH, 1)
+        calendar.add(java.util.Calendar.MONTH, offsetMonths)
+        return java.text.SimpleDateFormat("yyyy-MM", java.util.Locale.US).format(calendar.time)
+    }
+
+    private fun promptAnalyticsValue(
+        hintText: String,
+        defaultValue: String,
+        validation: Regex,
+        onChosen: (String) -> Unit
+    ) {
+        val input = EditText(this).apply {
+            hint = hintText
+            setSingleLine(true)
+            setText(defaultValue)
+            inputType = InputType.TYPE_CLASS_TEXT
+        }
+        AlertDialog.Builder(this)
+            .setTitle(hintText)
+            .setView(input)
+            .setPositiveButton("عرض") { _, _ ->
+                val value = input.text.toString().trim()
+                if (!validation.matches(value)) {
+                    Toast.makeText(this, "الصيغة غير صحيحة. استخدم $hintText", Toast.LENGTH_LONG).show()
+                } else {
+                    onChosen(value)
+                }
+            }
+            .setNegativeButton("إلغاء", null)
+            .show()
+    }
+
+    private fun loadAnalytics(
+        period: String,
+        date: String? = null,
+        month: String? = null,
+        start: String? = null,
+        end: String? = null
+    ) {
+        val key = adminApiKey
+        if (key.isNullOrBlank()) {
+            Toast.makeText(this, "سجّل دخول الإدارة أولاً.", Toast.LENGTH_LONG).show()
+            return
+        }
+        val query = when (period) {
+            "day" -> "period=day&date=${android.net.Uri.encode(date ?: analyticsDateOffset(0))}"
+            "month" -> "period=month&month=${android.net.Uri.encode(month ?: analyticsMonthOffset(0))}"
+            else -> "period=range&start=${android.net.Uri.encode(start ?: analyticsDateOffset(-6))}&end=${android.net.Uri.encode(end ?: analyticsDateOffset(0))}"
+        }
+        analyticsExecutor.execute {
+            var result: JSONObject? = null
+            var error = ""
+            var connection: HttpURLConnection? = null
+            try {
+                connection = (URL("$apiUrl?action=stats&$query").openConnection() as HttpURLConnection).apply {
+                    requestMethod = "GET"
+                    connectTimeout = 8000
+                    readTimeout = 10000
+                    setRequestProperty("Accept", "application/json")
+                    setRequestProperty("X-ADMIN-KEY", key)
+                }
+                val code = connection.responseCode
+                val stream = if (code in 200..299) connection.inputStream else connection.errorStream
+                val body = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
+                if (code in 200..299) {
+                    result = JSONObject(body)
+                    if (result?.optBoolean("ok") != true) error = result?.optString("error", "api_error") ?: "api_error"
+                } else {
+                    error = "HTTP $code: $body"
+                }
+            } catch (_: Exception) {
+                error = "تعذر الاتصال بخدمة الإحصائيات."
+            } finally {
+                connection?.disconnect()
+            }
+            runOnUiThread {
+                val json = result
+                if (json == null || !json.optBoolean("ok")) {
+                    Toast.makeText(this, error.ifBlank { "تعذر تحميل الإحصائيات." }, Toast.LENGTH_LONG).show()
+                    return@runOnUiThread
+                }
+                val daily = json.optJSONArray("daily") ?: JSONArray()
+                val details = StringBuilder()
+                for (i in 0 until daily.length()) {
+                    val row = daily.optJSONObject(i) ?: continue
+                    details.append("\\n")
+                        .append(row.optString("visit_date", row.optString("date", "")))
+                        .append(" — الزيارات: ").append(row.optInt("visits"))
+                        .append(" — أجهزة جديدة: ").append(row.optInt("new_devices"))
+                }
+                val titleText = when (period) {
+                    "day" -> "إحصائيات يوم ${date ?: analyticsDateOffset(0)}"
+                    "month" -> "إحصائيات شهر ${month ?: analyticsMonthOffset(0)}"
+                    else -> "إحصائيات ${start ?: ""} إلى ${end ?: ""}"
+                }
+                AlertDialog.Builder(this)
+                    .setTitle(titleText)
+                    .setMessage(
+                        "إجمالي الزيارات اليومية: ${json.optInt("totalVisits")}\\n" +
+                        "الأجهزة الجديدة: ${json.optInt("newDevices")}" +
+                        if (details.isNotEmpty()) "\\n\\nالتفصيل اليومي:$details" else "\\n\\nلا توجد بيانات للفترة المحددة."
+                    )
+                    .setPositiveButton("الفترات", null)
+                    .setNeutralButton("اختيار فترة أخرى") { _, _ -> showAnalyticsOptions() }
+                    .show()
+            }
+        }
+    }
+
     private fun showServerManager() {
         isHomeScreenVisible = false
         showingServerManager = true
@@ -2938,6 +3136,32 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
         val updateBannerAdmin = makeButton("إدارة شريط التحديثات والإصدار")
         updateBannerAdmin.setOnClickListener { requireAdmin { showUpdateBannerManager() } }
         content.addView(updateBannerAdmin, fullWidthParams().apply { bottomMargin = dp(10) })
+
+        val developerModeButton = makeButton(
+            if (isDeveloperModeEnabled()) "وضع المطوّر: مفعّل (لا تُحتسب الزيارات)" else "وضع المطوّر: متوقف (تُحتسب الزيارات)"
+        )
+        developerModeButton.setOnClickListener {
+            requireAdmin {
+                val enabled = !isDeveloperModeEnabled()
+                prefs.edit().putBoolean("analytics_developer_mode", enabled).apply()
+                developerModeButton.text = if (enabled) {
+                    "وضع المطوّر: مفعّل (لا تُحتسب الزيارات)"
+                } else {
+                    "وضع المطوّر: متوقف (تُحتسب الزيارات)"
+                }
+                Toast.makeText(
+                    this,
+                    if (enabled) "تم تفعيل وضع المطوّر على هذا الجهاز فقط." else "تم إيقاف وضع المطوّر؛ ستُحتسب الزيارات من هذا الجهاز.",
+                    Toast.LENGTH_LONG
+                ).show()
+                if (!enabled) trackAppVisitIfEnabled()
+            }
+        }
+        content.addView(developerModeButton, fullWidthParams().apply { bottomMargin = dp(8) })
+
+        val analyticsButton = makeButton("📊 إحصائيات استخدام التطبيق")
+        analyticsButton.setOnClickListener { requireAdmin { showAnalyticsOptions() } }
+        content.addView(analyticsButton, fullWidthParams().apply { bottomMargin = dp(10) })
 
         val categoryRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         val categoryScroll = HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false; addView(categoryRow) }
