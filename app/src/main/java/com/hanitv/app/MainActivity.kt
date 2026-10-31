@@ -304,6 +304,10 @@ class MainActivity : Activity() {
             "DAZN 1" to "DAZN1",
             "DAZN 2" to "DAZN2"
         ),
+        "القنوات الإسبانية" to listOf(
+            "Real Madrid" to "REALMADRID",
+            "Barcelona" to "BARCELONA"
+        ),
         "القنوات الإخبارية" to listOf(
             "Sky News Arabia" to "SKY",
             "العربية" to "ALAR",
@@ -722,7 +726,7 @@ class MainActivity : Activity() {
                 "القنوات الرياضية" -> "⚽"
                 "القنوات العربية والثقافية" -> "📺"
                 "القنوات الإخبارية" -> "🌍"
-                "القنوات الأجنبية" -> "🇫🇷"
+                "القنوات الأجنبية" -> "🇪🇸"
                 "قنوات الأطفال" -> "🧸"
                 "قنوات الترفيه" -> "🎭"
                 else -> "📡"
@@ -1078,7 +1082,8 @@ class MainActivity : Activity() {
         showingServerManager = false
         content.removeAllViews()
         applyChannelPageTheme()
-        addText(category, 23f, white, true)
+        val pageTitle = if (category == "إسبانيا") "القنوات الإسبانية" else category
+        addText(pageTitle, 23f, white, true)
         addText("القنوات المتاحة في هذا القسم", 14f, gray, false)
 
         val isArabicCategory = category == "القنوات العربية والثقافية"
@@ -1123,6 +1128,7 @@ class MainActivity : Activity() {
                 "Al Ahly TV" to "ALAHLYTV"
             )
             "القنوات الأجنبية" -> channelGroups["القنوات الأجنبية"].orEmpty()
+            "إسبانيا" -> channelGroups["القنوات الإسبانية"].orEmpty()
             "فرنسا" -> channelGroups["القنوات الأجنبية"].orEmpty().filter {
                 it.first in setOf("TF1", "M6", "L'Équipe", "TV5 Monde")
             }
@@ -1158,6 +1164,18 @@ class MainActivity : Activity() {
             addCountrySectionCard(franceRow, "فرنسا", R.drawable.france)
             addCountrySectionCard(franceRow, "ألمانيا", R.drawable.germany)
             grid.addView(franceRow, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { bottomMargin = dp(10) })
+            val spainRow = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.TOP
+            }
+            addCountrySectionCard(spainRow, "إسبانيا", R.drawable.spain)
+            spainRow.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f).apply {
+                setMargins(dp(5), 0, dp(5), 0)
+            })
+            grid.addView(spainRow, LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply { bottomMargin = dp(10) })
@@ -3146,6 +3164,7 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
         "ON Sport", "ON Sport Plus", "ON Sport Max", "Al Ahly TV" -> "القنوات المصرية"
         "Echorouk News", "Echorouk TV" -> "القنوات الجزائرية"
         "TF1", "M6" -> "القنوات الأجنبية"
+        "Real Madrid", "Barcelona" -> "القنوات الإسبانية"
         "Sky News Arabia", "العربية", "الجزيرة" -> "القنوات الإخبارية"
         "ثمانية 1", "ثمانية 2", "ثمانية 3" -> "ثمانية"
         "STARZPLAY 1", "STARZPLAY 2", "STARZPLAY 3" -> "STARZPLAY"
@@ -3505,6 +3524,8 @@ fun playerControl(symbol: String, description: String, action: () -> Unit): Text
             channelName.equals("ZDF", ignoreCase = true) -> R.drawable.zdf
             channelName.equals("DAZN 1", ignoreCase = true) -> R.drawable.dazn_1
             channelName.equals("DAZN 2", ignoreCase = true) -> R.drawable.dazn_2
+            channelName.equals("Real Madrid", ignoreCase = true) -> R.drawable.real_madrid
+            channelName.equals("Barcelona", ignoreCase = true) -> R.drawable.barcelona
             channelName.equals("Echorouk News", ignoreCase = true) -> R.drawable.echourouk_news
             channelName.equals("Echorouk TV", ignoreCase = true) -> R.drawable.echourouk_tv
             channelName.equals("Al Ahly TV", ignoreCase = true) -> R.drawable.alahly_tv
